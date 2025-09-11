@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -17,6 +16,7 @@ interface ImageUploadProps {
 export function ImageUpload({ onImageUploaded, currentImage, className }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState<string | null>(currentImage || null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -66,9 +66,16 @@ export function ImageUpload({ onImageUploaded, currentImage, className }: ImageU
     }
   }
 
+  const handleButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
   const removeImage = () => {
     setPreview(null)
     onImageUploaded("")
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }
 
   return (
@@ -100,19 +107,23 @@ export function ImageUpload({ onImageUploaded, currentImage, className }: ImageU
 
         <div className="mt-2">
           <Input
-            id="image-upload"
+            ref={fileInputRef}
             type="file"
             accept="image/*"
             onChange={handleFileChange}
             disabled={uploading}
             className="hidden"
           />
-          <Label htmlFor="image-upload" asChild>
-            <Button type="button" variant="outline" disabled={uploading} className="cursor-pointer bg-transparent">
-              <Upload className="h-4 w-4 mr-2" />
-              {uploading ? "Subiendo..." : "Seleccionar Imagen"}
-            </Button>
-          </Label>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={uploading}
+            onClick={handleButtonClick}
+            className="cursor-pointer bg-transparent"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {uploading ? "Subiendo..." : "Seleccionar Imagen"}
+          </Button>
         </div>
       </div>
     </div>
