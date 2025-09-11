@@ -347,116 +347,109 @@ export default function POSPage() {
     <style>
         body { 
             font-family: 'Courier New', monospace; 
-            font-size: 14px; 
+            font-size: 12px; 
             margin: 0; 
-            padding: 20px;
+            padding: 5px;
             background: white;
-            color: #333;
-            line-height: 1.4;
+            color: #000;
+            line-height: 1.3;
+            max-width: 48mm;
         }
         .header { 
             text-align: center; 
-            border-bottom: 2px solid #333; 
-            padding-bottom: 15px; 
-            margin-bottom: 15px;
-        }
-        .logo { 
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #7c3aed;
+            border-bottom: 1px dashed #000; 
+            padding-bottom: 5px; 
             margin-bottom: 5px;
         }
+        .logo { 
+            font-size: 14px; 
+            font-weight: bold; 
+            margin-bottom: 2px;
+        }
         .subtitle { 
-            font-size: 12px; 
-            color: #666;
-            margin-bottom: 10px;
+            font-size: 10px; 
+            margin-bottom: 5px;
         }
         .info-line { 
             display: flex; 
             justify-content: space-between; 
-            margin: 3px 0;
+            margin: 2px 0;
+            font-size: 11px;
         }
         .items { 
-            margin: 15px 0; 
-            border-top: 1px dashed #333;
-            border-bottom: 1px dashed #333;
-            padding: 10px 0;
+            margin: 8px 0; 
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 5px 0;
         }
         .item { 
-            margin: 8px 0; 
+            margin: 3px 0; 
         }
         .item-name { 
             font-weight: bold; 
         }
         .item-details { 
-            font-size: 12px; 
-            color: #666;
+            font-size: 11px;
         }
         .total-section { 
-            margin-top: 15px; 
-            border-top: 2px solid #333;
-            padding-top: 10px;
+            margin-top: 8px; 
+            border-top: 1px dashed #000;
+            padding-top: 5px;
         }
         .total { 
-            font-size: 18px; 
+            font-size: 14px; 
             font-weight: bold; 
             text-align: center;
-            background: #f0f0f0;
-            padding: 10px;
-            margin: 10px 0;
+            margin: 5px 0;
         }
         .payment-info { 
-            background: #f9f9f9; 
-            padding: 10px; 
-            margin: 10px 0;
-            border: 1px solid #ddd;
+            margin: 8px 0;
+            font-size: 11px;
         }
         .footer { 
             text-align: center; 
-            margin-top: 20px; 
-            border-top: 1px dashed #333;
-            padding-top: 15px;
-            font-size: 12px;
-            color: #666;
+            margin-top: 10px; 
+            border-top: 1px dashed #000;
+            padding-top: 5px;
+            font-size: 10px;
         }
         .thank-you { 
-            font-size: 16px; 
+            font-size: 12px; 
             font-weight: bold; 
-            color: #16a34a;
-            margin: 10px 0;
+            margin: 5px 0;
         }
         @media print {
-            body { margin: 0; padding: 10px; }
+            body { margin: 0; padding: 0; }
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="logo">💊 FARMACIA SOLIDARIA</div>
+        <div class="logo">FARMACIA SOLIDARIA</div>
         <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
-        <div style="font-size: 10px; color: #888;">
-            📍 Dirección: Calle Principal #123<br>
-            📞 Teléfono: (555) 123-4567<br>
-            🌐 www.farmaciasolidaria.com
+        <div style="font-size: 9px;">
+            Dirección: Calle Principal #123<br>
+            Tel: (555) 123-4567<br>
+            www.farmaciasolidaria.com
         </div>
     </div>
 
     <div class="info-line">
-        <span><strong>📅 Fecha:</strong></span>
+        <span>Fecha:</span>
         <span>${new Date().toLocaleString("es-ES")}</span>
     </div>
     <div class="info-line">
-        <span><strong>👤 Cajero:</strong></span>
+        <span>Cajero:</span>
         <span>${currentUser.full_name}</span>
     </div>
     <div class="info-line">
-        <span><strong>🧾 Ticket #:</strong></span>
+        <span>Ticket #:</span>
         <span>${sale.id.slice(-8).toUpperCase()}</span>
     </div>
 
     <div class="items">
-        <div style="font-weight: bold; margin-bottom: 10px; text-align: center;">
-            🛒 PRODUCTOS VENDIDOS
+        <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">
+            PRODUCTOS VENDIDOS
         </div>
         ${items
           .map(
@@ -466,39 +459,39 @@ export default function POSPage() {
             <div class="item-details">
                 ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
             </div>
-        </div>`,
+        </div>`
           )
           .join("")}
     </div>
 
     <div class="total-section">
         <div class="info-line">
-            <span><strong>Subtotal:</strong></span>
+            <span>Subtotal:</span>
             <span>$${total.toFixed(2)}</span>
         </div>
         <div class="info-line">
-            <span><strong>Impuestos:</strong></span>
+            <span>Impuestos:</span>
             <span>$0.00</span>
         </div>
         <div class="total">
-            💰 TOTAL: $${total.toFixed(2)}
+            TOTAL: $${total.toFixed(2)}
         </div>
     </div>
 
     <div class="payment-info">
         <div class="info-line">
-            <span><strong>💳 Método de pago:</strong></span>
-            <span>${paymentMethod === "efectivo" ? "💵 EFECTIVO" : "💳 TARJETA"}</span>
+            <span>Método de pago:</span>
+            <span>${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
         </div>
         ${
           paymentMethod === "efectivo"
             ? `
         <div class="info-line">
-            <span><strong>💵 Recibido:</strong></span>
+            <span>Recibido:</span>
             <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
         </div>
         <div class="info-line">
-            <span><strong>💰 Cambio:</strong></span>
+            <span>Cambio:</span>
             <span>$${change.toFixed(2)}</span>
         </div>`
             : ""
@@ -506,20 +499,20 @@ export default function POSPage() {
     </div>
 
     <div class="footer">
-        <div class="thank-you">¡Gracias por su compra! 🙏</div>
+        <div class="thank-you">¡Gracias por su compra!</div>
         <div>
-            ✨ Su salud es nuestra prioridad ✨<br>
-            📋 Conserve este ticket para cualquier consulta<br>
-            🔄 Cambios y devoluciones: 30 días<br><br>
-            <strong>¡Que tenga un excelente día! 😊</strong>
+            Conserve este ticket<br>
+            Cambios y devoluciones: 30 días<br>
+            ¡Que tenga un excelente día!
         </div>
-        <div style="margin-top: 15px; font-size: 10px;">
+        <div style="margin-top: 8px; font-size: 9px;">
             Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
             Sistema POS - Farmacia Solidaria v1.0
         </div>
     </div>
 </body>
 </html>
+
     `
 
     // Create a new window for printing
