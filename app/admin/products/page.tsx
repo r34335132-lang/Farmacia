@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Plus, Search, Edit, Trash2, Package, QrCode, Camera, Keyboard } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { ImageUpload } from "@/components/image-upload"
 
 interface Product {
   id: string
@@ -35,6 +36,7 @@ interface Product {
   category: string
   is_active: boolean
   created_at: string
+  image_url?: string
 }
 
 export default function ProductsPage() {
@@ -58,6 +60,7 @@ export default function ProductsPage() {
     stock_quantity: "",
     min_stock_level: "10",
     category: "",
+    image_url: "",
   })
 
   useEffect(() => {
@@ -117,6 +120,7 @@ export default function ProductsPage() {
         stock_quantity: Number.parseInt(formData.stock_quantity),
         min_stock_level: Number.parseInt(formData.min_stock_level),
         category: formData.category,
+        image_url: formData.image_url || null,
       }
 
       if (editingProduct) {
@@ -140,6 +144,7 @@ export default function ProductsPage() {
         stock_quantity: "",
         min_stock_level: "10",
         category: "",
+        image_url: "",
       })
       setIsAddDialogOpen(false)
       setEditingProduct(null)
@@ -159,6 +164,7 @@ export default function ProductsPage() {
       stock_quantity: product.stock_quantity.toString(),
       min_stock_level: product.min_stock_level.toString(),
       category: product.category || "",
+      image_url: product.image_url || "",
     })
     setEditingProduct(product)
     setIsAddDialogOpen(true)
@@ -181,6 +187,10 @@ export default function ProductsPage() {
   const generateBarcode = () => {
     const barcode = Date.now().toString()
     setFormData({ ...formData, barcode })
+  }
+
+  const handleImageUploaded = (url: string) => {
+    setFormData({ ...formData, image_url: url })
   }
 
   const handleQrScan = (scannedCode: string) => {
@@ -249,6 +259,7 @@ export default function ProductsPage() {
                     stock_quantity: "",
                     min_stock_level: "10",
                     category: "",
+                    image_url: "",
                   })
                 }}
               >
@@ -256,7 +267,7 @@ export default function ProductsPage() {
                 Agregar Producto
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
                 <DialogDescription>
@@ -264,6 +275,12 @@ export default function ProductsPage() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
+                <ImageUpload
+                  onImageUploaded={handleImageUploaded}
+                  currentImage={formData.image_url}
+                  className="space-y-2"
+                />
+
                 <div className="space-y-2">
                   <Label htmlFor="name">Nombre del producto *</Label>
                   <Input
@@ -295,7 +312,6 @@ export default function ProductsPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && formData.barcode) {
                           e.preventDefault()
-                          // Auto-submit when scanner inputs code
                         }
                       }}
                     />
@@ -443,6 +459,7 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Imagen</TableHead>
                   <TableHead>Producto</TableHead>
                   <TableHead>Código</TableHead>
                   <TableHead>Precio</TableHead>
@@ -455,6 +472,19 @@ export default function ProductsPage() {
               <TableBody>
                 {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
+                    <TableCell>
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url || "/placeholder.svg"}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6 text-gray-400" />
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-medium">{product.name}</p>

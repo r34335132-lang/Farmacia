@@ -38,6 +38,7 @@ interface Product {
   price: number
   stock_quantity: number
   barcode?: string
+  image_url?: string
 }
 
 interface CartItem {
@@ -152,7 +153,7 @@ export default function POSPage() {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, price, stock_quantity, barcode")
+        .select("id, name, price, stock_quantity, barcode, image_url")
         .eq("is_active", true)
         .gt("stock_quantity", 0)
         .order("name")
@@ -345,65 +346,48 @@ export default function POSPage() {
 <head>
     <title>Ticket de Venta - Farmacia Solidaria</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
         body { 
             font-family: 'Courier New', monospace; 
             font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
+            margin: 0; 
+            padding: 0;
+            width: 55mm; /* exactamente 5.5 cm */
             background: white;
             color: #000;
             line-height: 1.4;
         }
         .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm; /* Padding mínimo interno para evitar que el texto toque los bordes */
-            box-sizing: border-box;
+            width: 55mm; /* usar todo el ancho, sin márgenes */
         }
         .header { 
-            text-align: left; 
+            text-align: center; 
             border-bottom: 1px dashed #000; 
             padding-bottom: 5px; 
             margin-bottom: 5px;
-            width: 100%;
         }
         .logo-text { 
             font-size: 15px; 
             font-weight: bold; 
             margin-bottom: 2px;
-            width: 100%;
         }
         .subtitle { 
             font-size: 11px; 
             margin-bottom: 5px;
-            width: 100%;
         }
         .info-line { 
             display: flex; 
             justify-content: space-between; 
             margin: 2px 0;
-            font-size: 13px;
-            width: 100%;
+            font-size: 12px;
         }
         .items { 
             margin: 8px 0; 
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
             padding: 5px 0;
-            text-align: left;
-            width: 100%;
         }
         .item { 
             margin: 3px 0; 
-            width: 100%;
         }
         .item-name { 
             font-weight: bold; 
@@ -415,19 +399,16 @@ export default function POSPage() {
             margin-top: 8px; 
             border-top: 1px dashed #000;
             padding-top: 5px;
-            width: 100%;
         }
         .total { 
             font-size: 15px; 
             font-weight: bold; 
-            text-align: right;
+            text-align: center;
             margin: 5px 0;
-            width: 100%;
         }
         .payment-info { 
             margin: 8px 0;
             font-size: 12px;
-            width: 100%;
         }
         .footer { 
             text-align: center; 
@@ -435,7 +416,6 @@ export default function POSPage() {
             border-top: 1px dashed #000;
             padding-top: 5px;
             font-size: 11px;
-            width: 100%;
         }
         .thank-you { 
             font-size: 13px; 
@@ -445,37 +425,15 @@ export default function POSPage() {
         .footer-logo {
             margin-top: 10px;
             text-align: center;
-            width: 100%;
         }
         .footer-logo img {
-            width: 100%; /* Cambiado de 55mm a 100% para usar todo el ancho disponible */
-            max-width: 51mm; /* Máximo ancho considerando el padding interno */
+            width: 55mm; /* ocupa todo el ancho del ticket */
             height: auto;
             display: block;
-            margin: 0 auto;
         }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important; /* Padding mínimo para impresión */
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto; /* Configuración específica del tamaño de página */
-                margin: 0 !important;
-            }
+            body { margin: 0; padding: 0; width: 55mm; }
+            .content { width: 55mm; }
         }
     </style>
 </head>
@@ -575,7 +533,6 @@ export default function POSPage() {
     </div>
 </body>
 </html>
-
 
 
 
@@ -721,14 +678,21 @@ export default function POSPage() {
               >
                 <CardContent className="p-6">
                   <div className="space-y-4">
-                    {/* Image placeholder for product */}
-                    <div className="w-full h-32 bg-gradient-to-br from-purple-100 to-green-100 rounded-lg flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-green-400 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <span className="text-2xl">💊</span>
+                    <div className="w-full h-32 bg-gradient-to-br from-purple-100 to-green-100 rounded-lg flex items-center justify-center overflow-hidden">
+                      {product.image_url ? (
+                        <img
+                          src={product.image_url || "/placeholder.svg"}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-green-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                            <span className="text-2xl">💊</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">Sin imagen</span>
                         </div>
-                        <span className="text-xs text-muted-foreground">Imagen del producto</span>
-                      </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
