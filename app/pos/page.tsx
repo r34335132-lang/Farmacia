@@ -347,16 +347,16 @@ export default function POSPage() {
     <style>
         body { 
             font-family: 'Courier New', monospace; 
-            font-size: 13px; /* un poco más grande para legibilidad */
+            font-size: 13px;
             margin: 0; 
             padding: 0;
+            width: 55mm; /* exactamente 5.5 cm */
             background: white;
             color: #000;
             line-height: 1.4;
-            width: 55mm; /* ancho completo del ticket */
         }
         .content {
-            padding: 0 1.5mm; /* margen lateral pequeño */
+            width: 55mm; /* usar todo el ancho, sin márgenes */
         }
         .header { 
             text-align: center; 
@@ -426,11 +426,13 @@ export default function POSPage() {
             text-align: center;
         }
         .footer-logo img {
-            width: 100%; /* ocupa todo el ancho del ticket */
+            width: 55mm; /* ocupa todo el ancho del ticket */
             height: auto;
+            display: block;
         }
         @media print {
-            body { margin: 0; padding: 0; }
+            body { margin: 0; padding: 0; width: 55mm; }
+            .content { width: 55mm; }
         }
     </style>
 </head>
@@ -530,6 +532,7 @@ export default function POSPage() {
     </div>
 </body>
 </html>
+
 
 
 
