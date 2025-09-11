@@ -347,14 +347,16 @@ export default function POSPage() {
     <style>
         body { 
             font-family: 'Courier New', monospace; 
-            font-size: 12px; 
+            font-size: 13px; /* un poco más grande para legibilidad */
             margin: 0; 
-            padding: 5px;
+            padding: 0;
             background: white;
             color: #000;
-            line-height: 1.3;
-            max-width: 55mm; /* ancho real del ticket */
-            height: 210mm;
+            line-height: 1.4;
+            width: 55mm; /* ancho completo del ticket */
+        }
+        .content {
+            padding: 0 1.5mm; /* margen lateral pequeño */
         }
         .header { 
             text-align: center; 
@@ -363,19 +365,19 @@ export default function POSPage() {
             margin-bottom: 5px;
         }
         .logo-text { 
-            font-size: 14px; 
+            font-size: 15px; 
             font-weight: bold; 
             margin-bottom: 2px;
         }
         .subtitle { 
-            font-size: 10px; 
+            font-size: 11px; 
             margin-bottom: 5px;
         }
         .info-line { 
             display: flex; 
             justify-content: space-between; 
             margin: 2px 0;
-            font-size: 11px;
+            font-size: 12px;
         }
         .items { 
             margin: 8px 0; 
@@ -390,7 +392,7 @@ export default function POSPage() {
             font-weight: bold; 
         }
         .item-details { 
-            font-size: 11px;
+            font-size: 12px;
         }
         .total-section { 
             margin-top: 8px; 
@@ -398,33 +400,33 @@ export default function POSPage() {
             padding-top: 5px;
         }
         .total { 
-            font-size: 14px; 
+            font-size: 15px; 
             font-weight: bold; 
             text-align: center;
             margin: 5px 0;
         }
         .payment-info { 
             margin: 8px 0;
-            font-size: 11px;
+            font-size: 12px;
         }
         .footer { 
             text-align: center; 
             margin-top: 10px; 
             border-top: 1px dashed #000;
             padding-top: 5px;
-            font-size: 10px;
+            font-size: 11px;
         }
         .thank-you { 
-            font-size: 12px; 
+            font-size: 13px; 
             font-weight: bold; 
             margin: 5px 0;
         }
         .footer-logo {
-            margin-top: 8px;
+            margin-top: 10px;
             text-align: center;
         }
         .footer-logo img {
-            max-width: 100%;
+            width: 100%; /* ocupa todo el ancho del ticket */
             height: auto;
         }
         @media print {
@@ -437,7 +439,7 @@ export default function POSPage() {
         <div class="header">
             <div class="logo-text">FARMACIA SOLIDARIA</div>
             <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
-            <div style="font-size: 9px;">
+            <div style="font-size: 10px;">
                 Dirección: Calle Principal #123<br>
                 Tel: (555) 123-4567<br>
                 www.farmaciasolidaria.com
@@ -515,7 +517,7 @@ export default function POSPage() {
                 Cambios y devoluciones: 30 días<br>
                 ¡Que tenga un excelente día!
             </div>
-            <div style="margin-top: 8px; font-size: 9px;">
+            <div style="margin-top: 8px; font-size: 10px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
                 Sistema POS - Farmacia Solidaria v1.0
             </div>
@@ -528,6 +530,7 @@ export default function POSPage() {
     </div>
 </body>
 </html>
+
 
 
     `
