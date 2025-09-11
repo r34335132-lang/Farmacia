@@ -353,23 +353,8 @@ export default function POSPage() {
             background: white;
             color: #000;
             line-height: 1.3;
-            max-width: 44mm;
+            max-width: 55mm; /* ancho real del ticket */
             height: 210mm;
-            position: relative;
-        }
-        /* Marca de agua (logo) */
-        .watermark {
-            position: absolute;
-            top: 25%;
-            left: 50%;
-            transform: translate(-50%, -25%);
-            width: 120%;
-            opacity: 0.08; /* transparente */
-            z-index: 0;
-        }
-        .content {
-            position: relative;
-            z-index: 1;
         }
         .header { 
             text-align: center; 
@@ -434,15 +419,20 @@ export default function POSPage() {
             font-weight: bold; 
             margin: 5px 0;
         }
+        .footer-logo {
+            margin-top: 8px;
+            text-align: center;
+        }
+        .footer-logo img {
+            max-width: 100%;
+            height: auto;
+        }
         @media print {
             body { margin: 0; padding: 0; }
         }
     </style>
 </head>
 <body>
-    <!-- Marca de agua -->
-    <img src="/solidaria.jpg" alt="Logo Solidaria Salud" class="watermark" />
-
     <div class="content">
         <div class="header">
             <div class="logo-text">FARMACIA SOLIDARIA</div>
@@ -528,6 +518,11 @@ export default function POSPage() {
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
                 Sistema POS - Farmacia Solidaria v1.0
+            </div>
+
+            <!-- Logo al final -->
+            <div class="footer-logo">
+                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
             </div>
         </div>
     </div>
