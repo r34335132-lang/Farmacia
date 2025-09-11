@@ -353,7 +353,23 @@ export default function POSPage() {
             background: white;
             color: #000;
             line-height: 1.3;
-            max-width: 48mm;
+            max-width: 44mm;
+            height: 210mm;
+            position: relative;
+        }
+        /* Marca de agua (logo) */
+        .watermark {
+            position: absolute;
+            top: 25%;
+            left: 50%;
+            transform: translate(-50%, -25%);
+            width: 120%;
+            opacity: 0.08; /* transparente */
+            z-index: 0;
+        }
+        .content {
+            position: relative;
+            z-index: 1;
         }
         .header { 
             text-align: center; 
@@ -361,7 +377,7 @@ export default function POSPage() {
             padding-bottom: 5px; 
             margin-bottom: 5px;
         }
-        .logo { 
+        .logo-text { 
             font-size: 14px; 
             font-weight: bold; 
             margin-bottom: 2px;
@@ -424,94 +440,100 @@ export default function POSPage() {
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo">FARMACIA SOLIDARIA</div>
-        <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
-        <div style="font-size: 9px;">
-            Dirección: Calle Principal #123<br>
-            Tel: (555) 123-4567<br>
-            www.farmaciasolidaria.com
-        </div>
-    </div>
+    <!-- Marca de agua -->
+    <img src="/solidaria.jpg" alt="Logo Solidaria Salud" class="watermark" />
 
-    <div class="info-line">
-        <span>Fecha:</span>
-        <span>${new Date().toLocaleString("es-ES")}</span>
-    </div>
-    <div class="info-line">
-        <span>Cajero:</span>
-        <span>${currentUser.full_name}</span>
-    </div>
-    <div class="info-line">
-        <span>Ticket #:</span>
-        <span>${sale.id.slice(-8).toUpperCase()}</span>
-    </div>
-
-    <div class="items">
-        <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">
-            PRODUCTOS VENDIDOS
-        </div>
-        ${items
-          .map(
-            (item) => `
-        <div class="item">
-            <div class="item-name">${item.product.name}</div>
-            <div class="item-details">
-                ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
+    <div class="content">
+        <div class="header">
+            <div class="logo-text">FARMACIA SOLIDARIA</div>
+            <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
+            <div style="font-size: 9px;">
+                Dirección: Calle Principal #123<br>
+                Tel: (555) 123-4567<br>
+                www.farmaciasolidaria.com
             </div>
-        </div>`
-          )
-          .join("")}
-    </div>
+        </div>
 
-    <div class="total-section">
         <div class="info-line">
-            <span>Subtotal:</span>
-            <span>$${total.toFixed(2)}</span>
+            <span>Fecha:</span>
+            <span>${new Date().toLocaleString("es-ES")}</span>
         </div>
         <div class="info-line">
-            <span>Impuestos:</span>
-            <span>$0.00</span>
+            <span>Cajero:</span>
+            <span>${currentUser.full_name}</span>
         </div>
-        <div class="total">
-            TOTAL: $${total.toFixed(2)}
+        <div class="info-line">
+            <span>Ticket #:</span>
+            <span>${sale.id.slice(-8).toUpperCase()}</span>
         </div>
-    </div>
 
-    <div class="payment-info">
-        <div class="info-line">
-            <span>Método de pago:</span>
-            <span>${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+        <div class="items">
+            <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">
+                PRODUCTOS VENDIDOS
+            </div>
+            ${items
+              .map(
+                (item) => `
+            <div class="item">
+                <div class="item-name">${item.product.name}</div>
+                <div class="item-details">
+                    ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
+                </div>
+            </div>`
+              )
+              .join("")}
         </div>
-        ${
-          paymentMethod === "efectivo"
-            ? `
-        <div class="info-line">
-            <span>Recibido:</span>
-            <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
-        </div>
-        <div class="info-line">
-            <span>Cambio:</span>
-            <span>$${change.toFixed(2)}</span>
-        </div>`
-            : ""
-        }
-    </div>
 
-    <div class="footer">
-        <div class="thank-you">¡Gracias por su compra!</div>
-        <div>
-            Conserve este ticket<br>
-            Cambios y devoluciones: 30 días<br>
-            ¡Que tenga un excelente día!
+        <div class="total-section">
+            <div class="info-line">
+                <span>Subtotal:</span>
+                <span>$${total.toFixed(2)}</span>
+            </div>
+            <div class="info-line">
+                <span>Impuestos:</span>
+                <span>$0.00</span>
+            </div>
+            <div class="total">
+                TOTAL: $${total.toFixed(2)}
+            </div>
         </div>
-        <div style="margin-top: 8px; font-size: 9px;">
-            Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-            Sistema POS - Farmacia Solidaria v1.0
+
+        <div class="payment-info">
+            <div class="info-line">
+                <span>Método de pago:</span>
+                <span>${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+            </div>
+            ${
+              paymentMethod === "efectivo"
+                ? `
+            <div class="info-line">
+                <span>Recibido:</span>
+                <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
+            </div>
+            <div class="info-line">
+                <span>Cambio:</span>
+                <span>$${change.toFixed(2)}</span>
+            </div>`
+                : ""
+            }
+        </div>
+
+        <div class="footer">
+            <div class="thank-you">¡Gracias por su compra!</div>
+            <div>
+                Conserve este ticket<br>
+                Cambios y devoluciones: 30 días<br>
+                ¡Que tenga un excelente día!
+            </div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
+                Sistema POS - Farmacia Solidaria v1.0
+            </div>
         </div>
     </div>
 </body>
 </html>
+
 
     `
 
