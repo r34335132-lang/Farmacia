@@ -106,19 +106,24 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
+   <div className="min-h-screen bg-background">
+      {/* Header con logo */}
       <header className="border-b bg-white">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <Package className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-primary">Farmacia Solidaria - Admin</h1>
+            <img
+              src="/solidaria.jpg"
+              alt="Logo Farmacia"
+              className="h-10 w-auto"
+            />
+
           </div>
           <Button onClick={handleLogout} variant="outline">
             Cerrar Sesión
           </Button>
         </div>
       </header>
+
 
       <div className="p-6 space-y-6">
         {/* Stats Cards */}

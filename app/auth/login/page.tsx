@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -24,21 +23,35 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
 
       if (data.user) {
-        // Get user role to redirect appropriately
-        const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single()
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role, is_active")
+          .eq("id", data.user.id)
+          .single()
 
-        if (profile?.role === "admin") {
-          router.push("/admin/dashboard")
-        } else {
-          router.push("/pos")
+        if (profile?.is_active === false) {
+          toast({
+            title: "Acceso denegado",
+            description: "Tu cuenta está desactivada.",
+            variant: "destructive",
+          })
+          await supabase.auth.signOut()
+          return
+        }
+
+        switch (profile?.role) {
+          case "admin":
+            router.push("/admin/dashboard")
+            break
+          case "cashier":
+            router.push("/pos")
+            break
+          default:
+            router.push("/")
         }
       }
     } catch (error: any) {
@@ -54,34 +67,21 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Iniciar Sesión</CardTitle>
-          <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
+          <img src="/solidaria.jpg" alt="Logo Farmacia" className="mx-auto h-16 mb-2 rounded-lg" />
+          <CardTitle className="text-2xl font-bold">Farmacia Solidaria</CardTitle>
+          <CardDescription>Accede al sistema POS</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
+              <Label htmlFor="email">Correo</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={loading} />
             </div>
             <div>
               <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-              />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required disabled={loading} />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
