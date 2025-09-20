@@ -171,43 +171,54 @@ export default function SalesReports() {
         body { 
             font-family: Arial, sans-serif; 
             font-size: 12px;
-            margin: 20px;
             background: white;
             color: #000;
             line-height: 1.4;
+            width: 100%;
+            max-width: 100%;
+        }
+        .container {
+            width: 100%;
+            max-width: 100%;
+            padding: 15px;
         }
         .header { 
-            text-align: center; 
             border-bottom: 2px solid #000; 
             padding-bottom: 15px; 
             margin-bottom: 20px;
+            width: 100%;
         }
         .logo-text { 
             font-size: 24px; 
             font-weight: bold; 
             margin-bottom: 5px;
+            width: 100%;
         }
         .subtitle { 
             font-size: 14px; 
             margin-bottom: 10px;
             color: #666;
+            width: 100%;
         }
         .report-info {
             background: #f5f5f5;
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 5px;
+            width: 100%;
         }
         .info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-bottom: 15px;
+            width: 100%;
         }
         .info-item {
             display: flex;
             justify-content: space-between;
             padding: 5px 0;
+            width: 100%;
         }
         .info-label {
             font-weight: bold;
@@ -217,13 +228,14 @@ export default function SalesReports() {
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin-bottom: 30px;
+            width: 100%;
         }
         .stat-card {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
-            text-align: center;
             border: 1px solid #dee2e6;
+            width: 100%;
         }
         .stat-title {
             font-size: 11px;
@@ -240,12 +252,14 @@ export default function SalesReports() {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 20px;
+            table-layout: fixed;
         }
         .sales-table th,
         .sales-table td {
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
+            word-wrap: break-word;
         }
         .sales-table th {
             background-color: #f2f2f2;
@@ -254,6 +268,18 @@ export default function SalesReports() {
         .sales-table tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        .sales-table th:nth-child(1),
+        .sales-table td:nth-child(1) { width: 12%; }
+        .sales-table th:nth-child(2),
+        .sales-table td:nth-child(2) { width: 15%; }
+        .sales-table th:nth-child(3),
+        .sales-table td:nth-child(3) { width: 18%; }
+        .sales-table th:nth-child(4),
+        .sales-table td:nth-child(4) { width: 30%; }
+        .sales-table th:nth-child(5),
+        .sales-table td:nth-child(5) { width: 12%; }
+        .sales-table th:nth-child(6),
+        .sales-table td:nth-child(6) { width: 13%; }
         .payment-method {
             padding: 2px 6px;
             border-radius: 3px;
@@ -269,136 +295,157 @@ export default function SalesReports() {
             color: #0c5460;
         }
         .footer {
-            text-align: center;
             margin-top: 30px;
             border-top: 1px solid #ddd;
             padding-top: 15px;
             font-size: 11px;
             color: #666;
+            width: 100%;
         }
         @media print {
-            body { margin: 0; }
-            .stats-section { grid-template-columns: repeat(2, 1fr); }
-            @page { margin: 1cm; }
+            * {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 10mm !important;
+                box-sizing: border-box !important;
+            }
+            .stats-section { 
+                grid-template-columns: repeat(2, 1fr); 
+            }
+            @page { 
+                margin: 0.5cm; 
+                size: A4 landscape;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="logo-text">FARMACIA SOLIDARIA</div>
-        <div class="subtitle">Reporte de Ventas</div>
-        <div style="font-size: 12px; color: #666;">
-            Generado el ${new Date().toLocaleString("es-ES")}
+    <div class="container">
+        <div class="header">
+            <div class="logo-text">FARMACIA SOLIDARIA</div>
+            <div class="subtitle">Reporte de Ventas</div>
+            <div style="font-size: 12px; color: #666;">
+                Generado el ${new Date().toLocaleString("es-ES")}
+            </div>
         </div>
-    </div>
 
-    <div class="report-info">
-        <div class="info-grid">
-            <div class="info-item">
-                <span class="info-label">Período:</span>
-                <span>${getFilterDescription()}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Método de pago:</span>
-                <span>${getPaymentFilterDescription()}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Búsqueda:</span>
-                <span>${searchTerm || "Sin filtro"}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Total de ventas:</span>
-                <span>${filteredSales.length} registros</span>
+        <div class="report-info">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Período:</span>
+                    <span>${getFilterDescription()}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Método de pago:</span>
+                    <span>${getPaymentFilterDescription()}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Búsqueda:</span>
+                    <span>${searchTerm || "Sin filtro"}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total de ventas:</span>
+                    <span>${filteredSales.length} registros</span>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="stats-section">
-        <div class="stat-card">
-            <div class="stat-title">Total Ventas</div>
-            <div class="stat-value">${filteredSales.length}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-title">Ingresos Totales</div>
-            <div class="stat-value">$${getTotalRevenue().toFixed(2)}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-title">Ticket Promedio</div>
-            <div class="stat-value">$${getAverageTicket().toFixed(2)}</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-title">Efectivo vs Tarjeta</div>
-            <div class="stat-value" style="font-size: 14px;">
-                ${filteredSales.filter((s) => s.payment_method === "efectivo").length} / ${filteredSales.filter((s) => s.payment_method === "tarjeta").length}
+        <div class="stats-section">
+            <div class="stat-card">
+                <div class="stat-title">Total Ventas</div>
+                <div class="stat-value">${filteredSales.length}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Ingresos Totales</div>
+                <div class="stat-value">$${getTotalRevenue().toFixed(2)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Ticket Promedio</div>
+                <div class="stat-value">$${getAverageTicket().toFixed(2)}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">Efectivo vs Tarjeta</div>
+                <div class="stat-value" style="font-size: 14px;">
+                    ${filteredSales.filter((s) => s.payment_method === "efectivo").length} / ${filteredSales.filter((s) => s.payment_method === "tarjeta").length}
+                </div>
             </div>
         </div>
-    </div>
 
-    ${
-      filteredSales.length > 0
-        ? `
-    <table class="sales-table">
-        <thead>
-            <tr>
-                <th>ID Venta</th>
-                <th>Fecha</th>
-                <th>Cajero</th>
-                <th>Productos</th>
-                <th>Método Pago</th>
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${filteredSales
-              .map(
-                (sale) => `
-            <tr>
-                <td>#${sale.id.slice(-8)}</td>
-                <td>${new Date(sale.created_at).toLocaleDateString("es-ES")}<br>
-                    <small>${new Date(sale.created_at).toLocaleTimeString("es-ES")}</small>
-                </td>
-                <td>${sale.profiles?.full_name || "N/A"}</td>
-                <td style="font-size: 10px;">
-                    ${sale.sale_items?.map((item) => `${item.products?.name} (x${item.quantity})`).join(", ") || "N/A"}
-                </td>
-                <td>
-                    <span class="payment-method payment-${sale.payment_method}">
-                        ${sale.payment_method.toUpperCase()}
-                    </span>
-                </td>
-                <td style="font-weight: bold;">$${Number(sale.total_amount).toFixed(2)}</td>
-            </tr>
-            `,
-              )
-              .join("")}
-        </tbody>
-    </table>
-    `
-        : `
-    <div style="text-align: center; padding: 40px; color: #666;">
-        <h3>No se encontraron ventas</h3>
-        <p>No hay ventas que coincidan con los filtros aplicados.</p>
-    </div>
-    `
-    }
-
-    <div class="footer">
-        <div>
-            <strong>Farmacia Solidaria</strong><br>
-            Cuidando la salud de nuestra comunidad<br>
-            Dirección: Calle Principal #123 | Tel: (555) 123-4567<br>
-            www.farmaciasolidaria.com
+        ${
+          filteredSales.length > 0
+            ? `
+        <table class="sales-table">
+            <thead>
+                <tr>
+                    <th>ID Venta</th>
+                    <th>Fecha</th>
+                    <th>Cajero</th>
+                    <th>Productos</th>
+                    <th>Método Pago</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${filteredSales
+                  .map(
+                    (sale) => `
+                <tr>
+                    <td>#${sale.id.slice(-8)}</td>
+                    <td>${new Date(sale.created_at).toLocaleDateString("es-ES")}<br>
+                        <small>${new Date(sale.created_at).toLocaleTimeString("es-ES")}</small>
+                    </td>
+                    <td>${sale.profiles?.full_name || "N/A"}</td>
+                    <td style="font-size: 10px;">
+                        ${sale.sale_items?.map((item) => `${item.products?.name} (x${item.quantity})`).join(", ") || "N/A"}
+                    </td>
+                    <td>
+                        <span class="payment-method payment-${sale.payment_method}">
+                            ${sale.payment_method.toUpperCase()}
+                        </span>
+                    </td>
+                    <td style="font-weight: bold;">$${Number(sale.total_amount).toFixed(2)}</td>
+                </tr>
+                `,
+                  )
+                  .join("")}
+            </tbody>
+        </table>
+        `
+            : `
+        <div style="text-align: center; padding: 40px; color: #666;">
+            <h3>No se encontraron ventas</h3>
+            <p>No hay ventas que coincidan con los filtros aplicados.</p>
         </div>
-        <div style="margin-top: 10px;">
-            Sistema POS - Farmacia Solidaria v1.0
+        `
+        }
+
+        <div class="footer">
+            <div>
+                <strong>Farmacia Solidaria</strong><br>
+                Cuidando la salud de nuestra comunidad<br>
+                Dirección: Calle Principal #123 | Tel: (555) 123-4567<br>
+                www.farmaciasolidaria.com
+            </div>
+            <div style="margin-top: 10px;">
+                Sistema POS - Farmacia Solidaria v1.0
+            </div>
         </div>
     </div>
 </body>
 </html>
     `
 
-    // Create a new window for printing
-    const printWindow = window.open("", "_blank", "width=800,height=600")
+    const printWindow = window.open("", "_blank", "width=1200,height=800")
     if (printWindow) {
       printWindow.document.write(reportContent)
       printWindow.document.close()
