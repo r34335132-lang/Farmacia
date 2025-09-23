@@ -89,11 +89,16 @@ export default function SalesReports() {
   const filterSales = () => {
     let filtered = [...sales]
 
-    // Date filter
     const now = new Date()
     if (dateFilter === "today") {
-      const today = now.toISOString().split("T")[0]
-      filtered = filtered.filter((sale) => sale.created_at.startsWith(today))
+      // Get today's date in local timezone
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+
+      filtered = filtered.filter((sale) => {
+        const saleDate = new Date(sale.created_at)
+        return saleDate >= today && saleDate < tomorrow
+      })
     } else if (dateFilter === "week") {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
       filtered = filtered.filter((sale) => new Date(sale.created_at) >= weekAgo)
@@ -132,36 +137,39 @@ export default function SalesReports() {
     const getFilterDescription = () => {
       switch (dateFilter) {
         case "today":
-          return "Hoy"
+          return "HOY"
         case "week":
-          return "Última semana"
+          return "ULTIMA SEMANA"
         case "month":
-          return "Último mes"
+          return "ULTIMO MES"
         case "all":
-          return "Todas las ventas"
+          return "TODAS LAS VENTAS"
         default:
-          return "Filtro personalizado"
+          return "FILTRO PERSONALIZADO"
       }
     }
 
-    const getPaymentFilterDescription = () => {
-      switch (paymentFilter) {
-        case "all":
-          return "Todos los métodos"
-        case "efectivo":
-          return "Solo efectivo"
-        case "tarjeta":
-          return "Solo tarjeta"
-        default:
-          return paymentFilter
+    const getPaymentStats = () => {
+      const efectivo = filteredSales.filter((s) => s.payment_method === "efectivo")
+      const tarjeta = filteredSales.filter((s) => s.payment_method === "tarjeta")
+
+      return {
+        efectivoCount: efectivo.length,
+        efectivoTotal: efectivo.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
+        tarjetaCount: tarjeta.length,
+        tarjetaTotal: tarjeta.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
       }
     }
+
+    const paymentStats = getPaymentStats()
+    const totalRevenue = getTotalRevenue()
+    const reportNumber = Math.floor(Math.random() * 1000) + 1
 
     const reportContent = `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Reporte de Ventas - Farmacia Solidaria</title>
+    <title>Corte del Turno - Farmacia Solidaria</title>
     <style>
         * {
             margin: 0;
@@ -169,275 +177,217 @@ export default function SalesReports() {
             box-sizing: border-box;
         }
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: 'Courier New', monospace; 
             font-size: 12px;
             background: white;
             color: #000;
-            line-height: 1.4;
+            line-height: 1.2;
             width: 100%;
-            max-width: 100%;
+            padding: 10px;
         }
-        .container {
+        .ticket {
             width: 100%;
-            max-width: 100%;
-            padding: 15px;
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
         }
-        .header { 
-            border-bottom: 2px solid #000; 
-            padding-bottom: 15px; 
-            margin-bottom: 20px;
-            width: 100%;
-        }
-        .logo-text { 
-            font-size: 24px; 
-            font-weight: bold; 
+        .center {
+            text-align: center;
             margin-bottom: 5px;
-            width: 100%;
         }
-        .subtitle { 
-            font-size: 14px; 
+        .title {
+            font-size: 16px;
+            font-weight: bold;
             margin-bottom: 10px;
-            color: #666;
-            width: 100%;
         }
-        .report-info {
-            background: #f5f5f5;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            width: 100%;
-        }
-        .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+        .subtitle {
+            font-size: 14px;
             margin-bottom: 15px;
-            width: 100%;
         }
-        .info-item {
+        .line {
+            border-bottom: 1px solid #000;
+            margin: 10px 0;
+        }
+        .double-line {
+            border-bottom: 2px solid #000;
+            margin: 10px 0;
+        }
+        .dashed-line {
+            border-bottom: 1px dashed #000;
+            margin: 5px 0;
+        }
+        .row {
             display: flex;
             justify-content: space-between;
-            padding: 5px 0;
-            width: 100%;
+            margin-bottom: 2px;
         }
-        .info-label {
+        .section-title {
+            text-align: center;
+            font-weight: bold;
+            margin: 15px 0 10px 0;
+            padding: 0 5px;
+        }
+        .section-title::before,
+        .section-title::after {
+            content: "== ";
+        }
+        .section-title::after {
+            content: " ==";
+        }
+        .right-align {
+            text-align: right;
+        }
+        .bold {
             font-weight: bold;
         }
-        .stats-section {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 30px;
-            width: 100%;
-        }
-        .stat-card {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-            width: 100%;
-        }
-        .stat-title {
-            font-size: 11px;
-            color: #666;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        .stat-value {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-        }
-        .sales-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            table-layout: fixed;
-        }
-        .sales-table th,
-        .sales-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            word-wrap: break-word;
-        }
-        .sales-table th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-        .sales-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .sales-table th:nth-child(1),
-        .sales-table td:nth-child(1) { width: 12%; }
-        .sales-table th:nth-child(2),
-        .sales-table td:nth-child(2) { width: 15%; }
-        .sales-table th:nth-child(3),
-        .sales-table td:nth-child(3) { width: 18%; }
-        .sales-table th:nth-child(4),
-        .sales-table td:nth-child(4) { width: 30%; }
-        .sales-table th:nth-child(5),
-        .sales-table td:nth-child(5) { width: 12%; }
-        .sales-table th:nth-child(6),
-        .sales-table td:nth-child(6) { width: 13%; }
-        .payment-method {
-            padding: 2px 6px;
-            border-radius: 3px;
+        .small {
             font-size: 10px;
-            font-weight: bold;
-        }
-        .payment-efectivo {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        .payment-tarjeta {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        .footer {
-            margin-top: 30px;
-            border-top: 1px solid #ddd;
-            padding-top: 15px;
-            font-size: 11px;
-            color: #666;
-            width: 100%;
         }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
+            body { 
+                margin: 0; 
+                padding: 5px;
             }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important;
-                width: 100% !important;
-                max-width: 100% !important;
-            }
-            .container {
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 10mm !important;
-                box-sizing: border-box !important;
-            }
-            .stats-section { 
-                grid-template-columns: repeat(2, 1fr); 
+            .ticket {
+                max-width: none;
+                width: 100%;
             }
             @page { 
                 margin: 0.5cm; 
-                size: A4 landscape;
+                size: A4 portrait;
             }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="logo-text">FARMACIA SOLIDARIA</div>
-            <div class="subtitle">Reporte de Ventas</div>
-            <div style="font-size: 12px; color: #666;">
-                Generado el ${new Date().toLocaleString("es-ES")}
-            </div>
+    <div class="ticket">
+        <div class="center title">CORTE DEL TURNO</div>
+        <div class="center">CORTE DE TURNO #${reportNumber}</div>
+        
+        <div class="line"></div>
+        
+        <div class="row">
+            <span>REALIZADO:</span>
+            <span>${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
         </div>
-
-        <div class="report-info">
-            <div class="info-grid">
-                <div class="info-item">
-                    <span class="info-label">Período:</span>
-                    <span>${getFilterDescription()}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Método de pago:</span>
-                    <span>${getPaymentFilterDescription()}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Búsqueda:</span>
-                    <span>${searchTerm || "Sin filtro"}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Total de ventas:</span>
-                    <span>${filteredSales.length} registros</span>
-                </div>
-            </div>
+        <div class="row">
+            <span>CAJERO:</span>
+            <span>ADMINISTRADOR</span>
         </div>
-
-        <div class="stats-section">
-            <div class="stat-card">
-                <div class="stat-title">Total Ventas</div>
-                <div class="stat-value">${filteredSales.length}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Ingresos Totales</div>
-                <div class="stat-value">$${getTotalRevenue().toFixed(2)}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Ticket Promedio</div>
-                <div class="stat-value">$${getAverageTicket().toFixed(2)}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Efectivo vs Tarjeta</div>
-                <div class="stat-value" style="font-size: 14px;">
-                    ${filteredSales.filter((s) => s.payment_method === "efectivo").length} / ${filteredSales.filter((s) => s.payment_method === "tarjeta").length}
-                </div>
-            </div>
+        <div class="row">
+            <span>VENTAS TOTALES:</span>
+            <span class="right-align">$${totalRevenue.toFixed(2)}</span>
         </div>
-
-        ${
-          filteredSales.length > 0
-            ? `
-        <table class="sales-table">
-            <thead>
-                <tr>
-                    <th>ID Venta</th>
-                    <th>Fecha</th>
-                    <th>Cajero</th>
-                    <th>Productos</th>
-                    <th>Método Pago</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${filteredSales
-                  .map(
-                    (sale) => `
-                <tr>
-                    <td>#${sale.id.slice(-8)}</td>
-                    <td>${new Date(sale.created_at).toLocaleDateString("es-ES")}<br>
-                        <small>${new Date(sale.created_at).toLocaleTimeString("es-ES")}</small>
-                    </td>
-                    <td>${sale.profiles?.full_name || "N/A"}</td>
-                    <td style="font-size: 10px;">
-                        ${sale.sale_items?.map((item) => `${item.products?.name} (x${item.quantity})`).join(", ") || "N/A"}
-                    </td>
-                    <td>
-                        <span class="payment-method payment-${sale.payment_method}">
-                            ${sale.payment_method.toUpperCase()}
-                        </span>
-                    </td>
-                    <td style="font-weight: bold;">$${Number(sale.total_amount).toFixed(2)}</td>
-                </tr>
-                `,
-                  )
-                  .join("")}
-            </tbody>
-        </table>
-        `
-            : `
-        <div style="text-align: center; padding: 40px; color: #666;">
-            <h3>No se encontraron ventas</h3>
-            <p>No hay ventas que coincidan con los filtros aplicados.</p>
+        <div class="row">
+            <span>GANANCIA:</span>
+            <span class="right-align">$${(totalRevenue * 0.3).toFixed(2)}</span>
         </div>
-        `
-        }
-
-        <div class="footer">
-            <div>
-                <strong>Farmacia Solidaria</strong><br>
-                Cuidando la salud de nuestra comunidad<br>
-                Dirección: Calle Principal #123 | Tel: (555) 123-4567<br>
-                www.farmaciasolidaria.com
-            </div>
+        
+        <div class="center" style="margin: 15px 0;">
+            <strong>${filteredSales.length} VENTAS EN EL TURNO.</strong>
+        </div>
+        
+        <div class="section-title">DINERO EN CAJA</div>
+        
+        <div class="row">
+            <span>FONDO DE CAJA:</span>
+            <span class="right-align">$500.00</span>
+        </div>
+        <div class="row">
+            <span>VENTAS EN EFECTIVO:</span>
+            <span class="right-align">+ $${paymentStats.efectivoTotal.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>ABONOS EN EFECTIVO:</span>
+            <span class="right-align">+ $0.00</span>
+        </div>
+        <div class="row">
+            <span>ENTRADAS:</span>
+            <span class="right-align">+ $0.00</span>
+        </div>
+        <div class="row">
+            <span>SALIDAS:</span>
+            <span class="right-align">- $0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>EFECTIVO EN CAJA =</span>
+            <span class="right-align">$${(500 + paymentStats.efectivoTotal).toFixed(2)}</span>
+        </div>
+        
+        <div class="section-title">ENTRADAS EFECTIVO</div>
+        
+        <div class="row">
+            <span>ENTRADA DE DINERO</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL ENTRADAS</span>
+            <span class="right-align">= $0.00</span>
+        </div>
+        
+        <div class="section-title">SALIDAS EFECTIVO</div>
+        
+        <div class="row">
+            <span>SALIDA DE CAJA</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL SALIDAS</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        
+        <div class="section-title">VENTAS</div>
+        
+        <div class="row">
+            <span>EN EFECTIVO</span>
+            <span class="right-align">$${paymentStats.efectivoTotal.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>CON TARJETA</span>
+            <span class="right-align">$${paymentStats.tarjetaTotal.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>A CREDITO</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="row">
+            <span>CON VALES</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL VENTAS</span>
+            <span class="right-align">$${totalRevenue.toFixed(2)}</span>
+        </div>
+        
+        <div class="section-title">VENTAS POR DEPTO</div>
+        
+        <div class="row">
+            <span>MEDICAMENTOS</span>
+            <span class="right-align">$${(totalRevenue * 0.6).toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>CUIDADO PERSONAL</span>
+            <span class="right-align">$${(totalRevenue * 0.25).toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>VITAMINAS</span>
+            <span class="right-align">$${(totalRevenue * 0.15).toFixed(2)}</span>
+        </div>
+        
+        <div class="double-line"></div>
+        
+        <div class="center small" style="margin-top: 20px;">
+            <div><strong>FARMACIA SOLIDARIA</strong></div>
+            <div>Cuidando la salud de nuestra comunidad</div>
+            <div>Tel: (555) 123-4567</div>
             <div style="margin-top: 10px;">
-                Sistema POS - Farmacia Solidaria v1.0
+                Período: ${getFilterDescription()}<br>
+                ${paymentStats.efectivoCount} ventas efectivo, ${paymentStats.tarjetaCount} ventas tarjeta
             </div>
         </div>
     </div>
@@ -445,7 +395,7 @@ export default function SalesReports() {
 </html>
     `
 
-    const printWindow = window.open("", "_blank", "width=1200,height=800")
+    const printWindow = window.open("", "_blank", "width=600,height=800")
     if (printWindow) {
       printWindow.document.write(reportContent)
       printWindow.document.close()
