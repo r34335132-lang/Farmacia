@@ -207,6 +207,179 @@ export default function ProductsPage() {
     }
   }
 
+  const generateStockReport = () => {
+    const reportContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Reporte de Inventario</title>
+          <style>
+            @page {
+              size: 55mm auto;
+              margin: 0;
+            }
+            
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 10px;
+              line-height: 1.2;
+              margin: 0;
+              padding: 2mm;
+              width: 55mm;
+              max-width: 55mm;
+              box-sizing: border-box;
+              background: white;
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 3mm;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 2mm;
+            }
+            
+            .title {
+              font-size: 12px;
+              font-weight: bold;
+              margin-bottom: 1mm;
+            }
+            
+            .date {
+              font-size: 9px;
+              margin-bottom: 1mm;
+            }
+            
+            .section {
+              margin: 3mm 0;
+            }
+            
+            .section-title {
+              font-size: 10px;
+              font-weight: bold;
+              text-align: center;
+              margin: 2mm 0;
+              padding: 1mm 0;
+              border-top: 1px dashed #000;
+              border-bottom: 1px dashed #000;
+            }
+            
+            .product-line {
+              display: flex;
+              justify-content: space-between;
+              margin: 1mm 0;
+              font-size: 9px;
+            }
+            
+            .product-name {
+              flex: 1;
+              margin-right: 2mm;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            
+            .product-stock {
+              text-align: right;
+              min-width: 8mm;
+              font-weight: bold;
+            }
+            
+            .low-stock {
+              color: #ff0000;
+            }
+            
+            .footer {
+              margin-top: 3mm;
+              padding-top: 2mm;
+              border-top: 1px dashed #000;
+              text-align: center;
+              font-size: 8px;
+            }
+            
+            .total-line {
+              font-weight: bold;
+              font-size: 10px;
+              text-align: center;
+              margin: 2mm 0;
+              padding: 1mm 0;
+              border-top: 1px solid #000;
+            }
+            
+            @media print {
+              body { 
+                width: 55mm;
+                max-width: 55mm;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">REPORTE DE INVENTARIO</div>
+            <div class="date">FECHA: ${new Date().toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}</div>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS EN STOCK ==</div>
+            ${filteredProducts
+              .map(
+                (product) => `
+              <div class="product-line">
+                <div class="product-name">${product.name}</div>
+                <div class="product-stock ${product.stock_quantity <= product.min_stock_level ? "low-stock" : ""}">${product.stock_quantity}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+          
+          <div class="total-line">
+            TOTAL PRODUCTOS: ${filteredProducts.length}
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS CON STOCK BAJO ==</div>
+            ${
+              filteredProducts
+                .filter((p) => p.stock_quantity <= p.min_stock_level)
+                .map(
+                  (product) => `
+              <div class="product-line">
+                <div class="product-name">${product.name}</div>
+                <div class="product-stock low-stock">${product.stock_quantity}</div>
+              </div>
+            `,
+                )
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto con stock bajo</div>'
+            }
+          </div>
+          
+          <div class="footer">
+            <div>Total de productos: ${filteredProducts.length}</div>
+            <div>Stock bajo: ${filteredProducts.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
+            <div>Generado: ${new Date().toLocaleString("es-ES")}</div>
+          </div>
+        </body>
+      </html>
+    `
+
+    const printWindow = window.open("", "_blank")
+    if (printWindow) {
+      printWindow.document.write(reportContent)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => {
+        printWindow.print()
+      }, 250)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -246,207 +419,216 @@ export default function ProductsPage() {
             />
           </div>
 
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                onClick={() => {
-                  setEditingProduct(null)
-                  setFormData({
-                    name: "",
-                    description: "",
-                    barcode: "",
-                    price: "",
-                    stock_quantity: "",
-                    min_stock_level: "10",
-                    category: "",
-                    image_url: "",
-                  })
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Agregar Producto
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
-                <DialogDescription>
-                  {editingProduct ? "Modifica los datos del producto" : "Completa la información del nuevo producto"}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <ImageUpload
-                  onImageUploaded={handleImageUploaded}
-                  currentImage={formData.image_url}
-                  className="space-y-2"
-                />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={generateStockReport}>
+              <Package className="h-4 w-4 mr-2" />
+              Exportar Inventario
+            </Button>
 
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nombre del producto *</Label>
-                  <Input
-                    id="name"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  onClick={() => {
+                    setEditingProduct(null)
+                    setFormData({
+                      name: "",
+                      description: "",
+                      barcode: "",
+                      price: "",
+                      stock_quantity: "",
+                      min_stock_level: "10",
+                      category: "",
+                      image_url: "",
+                    })
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Producto
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
+                  <DialogDescription>
+                    {editingProduct ? "Modifica los datos del producto" : "Completa la información del nuevo producto"}
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <ImageUpload
+                    onImageUploaded={handleImageUploaded}
+                    currentImage={formData.image_url}
+                    className="space-y-2"
                   />
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nombre del producto *</Label>
+                    <Input
+                      id="name"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="barcode">Código de barras</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descripción</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="barcode">Código de barras</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="barcode"
+                        value={formData.barcode}
+                        onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                        placeholder="Escanea o ingresa manualmente"
+                        autoFocus={scannerMode === "manual"}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && formData.barcode) {
+                            e.preventDefault()
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(true)}>
+                        <QrCode className="h-4 w-4" />
+                      </Button>
+                      <Button type="button" variant="outline" onClick={generateBarcode}>
+                        Generar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Precio *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Categoría</Label>
+                      <Input
+                        id="category"
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_quantity">Stock actual *</Label>
+                      <Input
+                        id="stock_quantity"
+                        type="number"
+                        required
+                        value={formData.stock_quantity}
+                        onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="min_stock_level">Stock mínimo</Label>
+                      <Input
+                        id="min_stock_level"
+                        type="number"
+                        value={formData.min_stock_level}
+                        onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">{editingProduct ? "Actualizar" : "Agregar"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isQrScannerOpen} onOpenChange={setIsQrScannerOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Escanear Código de Barras</DialogTitle>
+                  <DialogDescription>Elige el método de escaneo que prefieras</DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4">
                   <div className="flex gap-2">
-                    <Input
-                      id="barcode"
-                      value={formData.barcode}
-                      onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                      placeholder="Escanea o ingresa manualmente"
-                      autoFocus={scannerMode === "manual"}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && formData.barcode) {
-                          e.preventDefault()
-                        }
-                      }}
-                    />
-                    <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(true)}>
-                      <QrCode className="h-4 w-4" />
+                    <Button
+                      type="button"
+                      variant={scannerMode === "manual" ? "default" : "outline"}
+                      onClick={() => setScannerMode("manual")}
+                      className="flex-1"
+                    >
+                      <Keyboard className="h-4 w-4 mr-2" />
+                      Escáner Físico
                     </Button>
-                    <Button type="button" variant="outline" onClick={generateBarcode}>
-                      Generar
+                    <Button
+                      type="button"
+                      variant={scannerMode === "camera" ? "default" : "outline"}
+                      onClick={() => setScannerMode("camera")}
+                      className="flex-1"
+                    >
+                      <Camera className="h-4 w-4 mr-2" />
+                      Cámara
                     </Button>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Precio *</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      required
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    />
-                  </div>
+                  {scannerMode === "manual" && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Usa tu escáner de códigos de barras físico:
+                        </p>
+                        <form onSubmit={handleManualScan}>
+                          <Input
+                            name="manualCode"
+                            placeholder="Escanea el código aquí..."
+                            autoFocus
+                            className="font-mono"
+                          />
+                        </form>
+                      </div>
+                    </div>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="category">Categoría</Label>
-                    <Input
-                      id="category"
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="stock_quantity">Stock actual *</Label>
-                    <Input
-                      id="stock_quantity"
-                      type="number"
-                      required
-                      value={formData.stock_quantity}
-                      onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="min_stock_level">Stock mínimo</Label>
-                    <Input
-                      id="min_stock_level"
-                      type="number"
-                      value={formData.min_stock_level}
-                      onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
-                    />
-                  </div>
+                  {scannerMode === "camera" && (
+                    <div className="space-y-4">
+                      <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        <div className="text-center">
+                          <Camera className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Funcionalidad de cámara próximamente</p>
+                        </div>
+                      </div>
+                      <form onSubmit={handleManualScan}>
+                        <Input name="manualCode" placeholder="O ingresa el código manualmente" className="font-mono" />
+                      </form>
+                    </div>
+                  )}
                 </div>
 
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button type="submit">{editingProduct ? "Actualizar" : "Agregar"}</Button>
                 </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isQrScannerOpen} onOpenChange={setIsQrScannerOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Escanear Código de Barras</DialogTitle>
-                <DialogDescription>Elige el método de escaneo que prefieras</DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={scannerMode === "manual" ? "default" : "outline"}
-                    onClick={() => setScannerMode("manual")}
-                    className="flex-1"
-                  >
-                    <Keyboard className="h-4 w-4 mr-2" />
-                    Escáner Físico
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={scannerMode === "camera" ? "default" : "outline"}
-                    onClick={() => setScannerMode("camera")}
-                    className="flex-1"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Cámara
-                  </Button>
-                </div>
-
-                {scannerMode === "manual" && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground mb-2">Usa tu escáner de códigos de barras físico:</p>
-                      <form onSubmit={handleManualScan}>
-                        <Input
-                          name="manualCode"
-                          placeholder="Escanea el código aquí..."
-                          autoFocus
-                          className="font-mono"
-                        />
-                      </form>
-                    </div>
-                  </div>
-                )}
-
-                {scannerMode === "camera" && (
-                  <div className="space-y-4">
-                    <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
-                      <div className="text-center">
-                        <Camera className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">Funcionalidad de cámara próximamente</p>
-                      </div>
-                    </div>
-                    <form onSubmit={handleManualScan}>
-                      <Input name="manualCode" placeholder="O ingresa el código manualmente" className="font-mono" />
-                    </form>
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(false)}>
-                  Cancelar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Products Table */}
