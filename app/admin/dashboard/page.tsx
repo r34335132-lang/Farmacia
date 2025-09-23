@@ -55,20 +55,24 @@ export default function AdminDashboard() {
 
       const lowStock = products?.filter((p) => p.stock_quantity <= p.min_stock_level) || []
 
-      // Get today's sales
-      const today = new Date().toISOString().split("T")[0]
+      // Get today's sales with proper timezone handling
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+
       const { data: todaySales } = await supabase
         .from("sales")
         .select("*, profiles(full_name)")
-        .gte("created_at", `${today}T00:00:00`)
+        .gte("created_at", today.toISOString())
+        .lt("created_at", tomorrow.toISOString())
         .order("created_at", { ascending: false })
         .limit(5)
 
-      // Get revenue
       const { data: revenue } = await supabase
         .from("sales")
         .select("total_amount")
-        .gte("created_at", `${today}T00:00:00`)
+        .gte("created_at", today.toISOString())
+        .lt("created_at", tomorrow.toISOString())
 
       const totalRevenue = revenue?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
 
@@ -106,24 +110,18 @@ export default function AdminDashboard() {
   }
 
   return (
-   <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background">
       {/* Header con logo */}
       <header className="border-b bg-white">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <img
-              src="/solidaria.jpg"
-              alt="Logo Farmacia"
-              className="h-10 w-auto"
-            />
-
+            <img src="/solidaria.jpg" alt="Logo Farmacia" className="h-10 w-auto" />
           </div>
           <Button onClick={handleLogout} variant="outline">
             Cerrar Sesión
           </Button>
         </div>
       </header>
-
 
       <div className="p-6 space-y-6">
         {/* Stats Cards */}
