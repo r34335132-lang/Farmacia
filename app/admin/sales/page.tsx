@@ -178,55 +178,67 @@ export default function SalesReports() {
         }
         body { 
             font-family: 'Courier New', monospace; 
-            font-size: 12px;
+            font-size: 13px;
+            margin: 0 !important; 
+            padding: 0 !important;
+            width: 55mm;
+            max-width: 55mm;
             background: white;
             color: #000;
-            line-height: 1.2;
-            width: 100%;
-            padding: 10px;
+            line-height: 1.4;
         }
-        .ticket {
+        .content {
             width: 100%;
-            max-width: 400px;
-            margin: 0 auto;
-            background: white;
-            padding: 10px;
+            max-width: 55mm;
+            margin: 0;
+            padding: 2mm;
+            box-sizing: border-box;
         }
         .center {
             text-align: center;
             margin-bottom: 5px;
+            width: 100%;
         }
         .title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
+            width: 100%;
         }
         .subtitle {
-            font-size: 14px;
-            margin-bottom: 15px;
+            font-size: 13px;
+            margin-bottom: 10px;
+            width: 100%;
         }
         .line {
             border-bottom: 1px solid #000;
-            margin: 10px 0;
+            margin: 8px 0;
+            width: 100%;
         }
         .double-line {
             border-bottom: 2px solid #000;
             margin: 10px 0;
+            width: 100%;
         }
         .dashed-line {
             border-bottom: 1px dashed #000;
             margin: 5px 0;
+            width: 100%;
         }
         .row {
             display: flex;
             justify-content: space-between;
             margin-bottom: 2px;
+            font-size: 12px;
+            width: 100%;
         }
         .section-title {
             text-align: center;
             font-weight: bold;
             margin: 15px 0 10px 0;
-            padding: 0 5px;
+            padding: 0 2px;
+            font-size: 13px;
+            width: 100%;
         }
         .section-title::before,
         .section-title::after {
@@ -244,24 +256,45 @@ export default function SalesReports() {
         .small {
             font-size: 10px;
         }
+        .footer-logo {
+            margin-top: 10px;
+            text-align: center;
+            width: 100%;
+        }
+        .footer-logo img {
+            width: 100%;
+            max-width: 51mm;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
         @media print {
-            body { 
-                margin: 0; 
-                padding: 5px;
+            * {
+                margin: 0 !important;
+                padding: 0 !important;
             }
-            .ticket {
-                max-width: none;
-                width: 100%;
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                width: 55mm !important;
+                max-width: 55mm !important;
             }
-            @page { 
-                margin: 0.5cm; 
-                size: A4 portrait;
+            .content { 
+                width: 55mm !important;
+                max-width: 55mm !important;
+                margin: 0 !important;
+                padding: 2mm !important;
+                box-sizing: border-box !important;
+            }
+            @page {
+                size: 55mm auto;
+                margin: 0 !important;
             }
         }
     </style>
 </head>
 <body>
-    <div class="ticket">
+    <div class="content">
         <div class="center title">CORTE DEL TURNO</div>
         <div class="center">CORTE DE TURNO #${reportNumber}</div>
         
@@ -381,13 +414,21 @@ export default function SalesReports() {
         
         <div class="double-line"></div>
         
-        <div class="center small" style="margin-top: 20px;">
+        <div class="center small" style="margin-top: 15px;">
             <div><strong>FARMACIA SOLIDARIA</strong></div>
             <div>Cuidando la salud de nuestra comunidad</div>
             <div>Tel: (555) 123-4567</div>
-            <div style="margin-top: 10px;">
+            <div style="margin-top: 8px;">
                 Período: ${getFilterDescription()}<br>
                 ${paymentStats.efectivoCount} ventas efectivo, ${paymentStats.tarjetaCount} ventas tarjeta
+            </div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
+                Sistema POS - Farmacia Solidaria v1.0
+            </div>
+            
+            <div class="footer-logo">
+                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
             </div>
         </div>
     </div>
@@ -395,7 +436,7 @@ export default function SalesReports() {
 </html>
     `
 
-    const printWindow = window.open("", "_blank", "width=600,height=800")
+    const printWindow = window.open("", "_blank", "width=400,height=600")
     if (printWindow) {
       printWindow.document.write(reportContent)
       printWindow.document.close()
