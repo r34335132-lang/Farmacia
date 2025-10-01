@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Download, Calendar, DollarSign, ShoppingCart, TrendingUp } from "lucide-react"
+import { ArrowLeft, Download, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -346,7 +346,7 @@ export default function SalesReports() {
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(200 + paymentStats.efectivoTotal).toFixed(2)}</span>
+            <span class="right-align">$${(500 + paymentStats.efectivoTotal).toFixed(2)}</span>
         </div>
         
         <div class="section-title">ENTRADAS EFECTIVO</div>
@@ -439,6 +439,213 @@ export default function SalesReports() {
     const printWindow = window.open("", "_blank", "width=400,height=600")
     if (printWindow) {
       printWindow.document.write(reportContent)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => {
+        printWindow.print()
+        printWindow.close()
+      }, 250)
+    }
+  }
+
+  const cancelSale = async (saleId: string) => {
+    if (!confirm("¿Estás seguro de que quieres cancelar esta venta? Esta acción no se puede deshacer.")) {
+      return
+    }
+
+    try {
+      // Delete sale items first (foreign key constraint)
+      await supabase.from("sale_items").delete().eq("sale_id", saleId)
+
+      // Then delete the sale
+      const { error } = await supabase.from("sales").delete().eq("id", saleId)
+
+      if (error) throw error
+
+      // Reload sales to update the list
+      loadSales()
+      alert("Venta cancelada exitosamente")
+    } catch (error) {
+      console.error("Error canceling sale:", error)
+      alert("Error al cancelar la venta")
+    }
+  }
+
+  const reprintTicket = (sale: Sale) => {
+    const ticketContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ticket de Venta - Farmacia Solidaria</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 13px;
+            margin: 0 !important; 
+            padding: 0 !important;
+            width: 55mm;
+            max-width: 55mm;
+            background: white;
+            color: #000;
+            line-height: 1.4;
+        }
+        .content {
+            width: 100%;
+            max-width: 55mm;
+            margin: 0;
+            padding: 2mm;
+            box-sizing: border-box;
+        }
+        .center {
+            text-align: center;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+        .title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+        .line {
+            border-bottom: 1px solid #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+        .dashed-line {
+            border-bottom: 1px dashed #000;
+            margin: 5px 0;
+            width: 100%;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 12px;
+            width: 100%;
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+            font-size: 11px;
+            width: 100%;
+        }
+        .right-align {
+            text-align: right;
+        }
+        .bold {
+            font-weight: bold;
+        }
+        .small {
+            font-size: 10px;
+        }
+        @media print {
+            * {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                width: 55mm !important;
+                max-width: 55mm !important;
+            }
+            .content { 
+                width: 55mm !important;
+                max-width: 55mm !important;
+                margin: 0 !important;
+                padding: 2mm !important;
+                box-sizing: border-box !important;
+            }
+            @page {
+                size: 55mm auto;
+                margin: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="center title">FARMACIA SOLIDARIA</div>
+        <div class="center small">Cuidando la salud de nuestra comunidad</div>
+        <div class="center small">Tel: (555) 123-4567</div>
+        
+        <div class="line"></div>
+        
+        <div class="row">
+            <span>TICKET:</span>
+            <span>#${sale.id.slice(-8)}</span>
+        </div>
+        <div class="row">
+            <span>FECHA:</span>
+            <span>${new Date(sale.created_at).toLocaleDateString("es-ES")}</span>
+        </div>
+        <div class="row">
+            <span>HORA:</span>
+            <span>${new Date(sale.created_at).toLocaleTimeString("es-ES", { hour12: false })}</span>
+        </div>
+        <div class="row">
+            <span>CAJERO:</span>
+            <span>${sale.profiles?.full_name || "N/A"}</span>
+        </div>
+        
+        <div class="line"></div>
+        
+        <div class="center small bold">PRODUCTOS</div>
+        
+        ${
+          sale.sale_items
+            ?.map(
+              (item) => `
+        <div class="item-row">
+            <span>${item.products?.name || "Producto"}</span>
+            <span></span>
+        </div>
+        <div class="item-row">
+            <span>  ${item.quantity} x $${item.unit_price.toFixed(2)}</span>
+            <span class="right-align">$${(item.quantity * item.unit_price).toFixed(2)}</span>
+        </div>
+        `,
+            )
+            .join("") || ""
+        }
+        
+        <div class="dashed-line"></div>
+        
+        <div class="row bold">
+            <span>TOTAL:</span>
+            <span class="right-align">$${Number(sale.total_amount).toFixed(2)}</span>
+        </div>
+        
+        <div class="row">
+            <span>PAGO:</span>
+            <span class="right-align">${sale.payment_method.toUpperCase()}</span>
+        </div>
+        
+        <div class="line"></div>
+        
+        <div class="center small" style="margin-top: 10px;">
+            <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
+            <div>Conserve su ticket</div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                REIMPRESIÓN - ${new Date().toLocaleString("es-ES")}<br>
+                Sistema POS - Farmacia Solidaria v1.0
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+    `
+
+    const printWindow = window.open("", "_blank", "width=400,height=600")
+    if (printWindow) {
+      printWindow.document.write(ticketContent)
       printWindow.document.close()
       printWindow.focus()
       setTimeout(() => {
@@ -591,11 +798,32 @@ export default function SalesReports() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold">${sale.total_amount}</p>
-                      <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
-                        {sale.payment_method}
-                      </Badge>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right mr-4">
+                        <p className="text-lg font-bold">${sale.total_amount}</p>
+                        <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
+                          {sale.payment_method}
+                        </Badge>
+                      </div>
+                      {/* Action buttons for each sale */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => reprintTicket(sale)}
+                          title="Reimprimir ticket"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => cancelSale(sale.id)}
+                          title="Cancelar venta"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
