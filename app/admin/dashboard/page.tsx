@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign } from "lucide-react"
+import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
@@ -13,6 +13,8 @@ import { NotificationManager } from "@/components/notification-manager"
 interface DashboardStats {
   totalProducts: number
   lowStockProducts: number
+  expiringProducts: number
+  expiredProducts: number
   todaySales: number
   totalRevenue: number
   activeCashiers: number
@@ -21,6 +23,7 @@ interface DashboardStats {
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
+  const [expiringItems, setExpiringItems] = useState<any[]>([])
   const [recentSales, setRecentSales] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -55,15 +58,32 @@ export default function AdminDashboard() {
 
       const lowStock = products?.filter((p) => p.stock_quantity <= p.min_stock_level) || []
 
+      const today = new Date()
+      const expiringProducts =
+        products?.filter((p) => {
+          if (!p.expiration_date) return false
+          const expirationDate = new Date(p.expiration_date)
+          const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+          const alertThreshold = p.days_before_expiry_alert || 30
+          return daysUntilExpiry > 0 && daysUntilExpiry <= alertThreshold
+        }) || []
+
+      const expiredProducts =
+        products?.filter((p) => {
+          if (!p.expiration_date) return false
+          const expirationDate = new Date(p.expiration_date)
+          return expirationDate < today
+        }) || []
+
       // Get today's sales with proper timezone handling
       const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
+      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const tomorrow = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000)
 
       const { data: todaySales } = await supabase
         .from("sales")
         .select("*, profiles(full_name)")
-        .gte("created_at", today.toISOString())
+        .gte("created_at", todayDate.toISOString())
         .lt("created_at", tomorrow.toISOString())
         .order("created_at", { ascending: false })
         .limit(5)
@@ -71,7 +91,7 @@ export default function AdminDashboard() {
       const { data: revenue } = await supabase
         .from("sales")
         .select("total_amount")
-        .gte("created_at", today.toISOString())
+        .gte("created_at", todayDate.toISOString())
         .lt("created_at", tomorrow.toISOString())
 
       const totalRevenue = revenue?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
@@ -82,12 +102,15 @@ export default function AdminDashboard() {
       setStats({
         totalProducts: products?.length || 0,
         lowStockProducts: lowStock.length,
+        expiringProducts: expiringProducts.length,
+        expiredProducts: expiredProducts.length,
         todaySales: todaySales?.length || 0,
         totalRevenue,
         activeCashiers: cashiers?.length || 0,
       })
 
       setLowStockItems(lowStock.slice(0, 5))
+      setExpiringItems(expiringProducts.slice(0, 5))
       setRecentSales(todaySales || [])
     } catch (error) {
       console.error("Error loading dashboard:", error)
@@ -125,7 +148,7 @@ export default function AdminDashboard() {
 
       <div className="p-6 space-y-6">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
@@ -143,6 +166,26 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-destructive">{stats?.lowStockProducts}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
+              <Calendar className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-500">{stats?.expiringProducts}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{stats?.expiredProducts}</div>
             </CardContent>
           </Card>
 
@@ -228,7 +271,7 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Notification Manager */}
           <NotificationManager userRole="admin" />
 
@@ -254,6 +297,45 @@ export default function AdminDashboard() {
                       <Badge variant="destructive">Bajo Stock</Badge>
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Expiring Products Alert */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-orange-500" />
+                Productos por Vencer
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {expiringItems.length === 0 ? (
+                <p className="text-muted-foreground">No hay productos por vencer</p>
+              ) : (
+                <div className="space-y-2">
+                  {expiringItems.map((product) => {
+                    const today = new Date()
+                    const expirationDate = new Date(product.expiration_date)
+                    const daysUntilExpiry = Math.ceil(
+                      (expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+                    )
+
+                    return (
+                      <div key={product.id} className="flex items-center justify-between p-2 border rounded">
+                        <div>
+                          <p className="font-medium">{product.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Vence: {expirationDate.toLocaleDateString("es-ES")}
+                          </p>
+                        </div>
+                        <Badge variant="warning" className="bg-orange-500 text-white">
+                          {daysUntilExpiry}d
+                        </Badge>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
