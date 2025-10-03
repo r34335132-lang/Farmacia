@@ -37,6 +37,8 @@ interface Product {
   is_active: boolean
   created_at: string
   image_url?: string
+  expiration_date?: string
+  days_before_expiry_alert?: number
 }
 
 export default function ProductsPage() {
@@ -61,6 +63,8 @@ export default function ProductsPage() {
     min_stock_level: "10",
     category: "",
     image_url: "",
+    expiration_date: "",
+    days_before_expiry_alert: "30",
   })
 
   useEffect(() => {
@@ -121,6 +125,10 @@ export default function ProductsPage() {
         min_stock_level: Number.parseInt(formData.min_stock_level),
         category: formData.category,
         image_url: formData.image_url || null,
+        expiration_date: formData.expiration_date || null,
+        days_before_expiry_alert: formData.days_before_expiry_alert
+          ? Number.parseInt(formData.days_before_expiry_alert)
+          : 30,
       }
 
       if (editingProduct) {
@@ -145,6 +153,8 @@ export default function ProductsPage() {
         min_stock_level: "10",
         category: "",
         image_url: "",
+        expiration_date: "",
+        days_before_expiry_alert: "30",
       })
       setIsAddDialogOpen(false)
       setEditingProduct(null)
@@ -165,6 +175,8 @@ export default function ProductsPage() {
       min_stock_level: product.min_stock_level.toString(),
       category: product.category || "",
       image_url: product.image_url || "",
+      expiration_date: product.expiration_date || "",
+      days_before_expiry_alert: product.days_before_expiry_alert?.toString() || "30",
     })
     setEditingProduct(product)
     setIsAddDialogOpen(true)
@@ -205,6 +217,22 @@ export default function ProductsPage() {
     if (input.value.trim()) {
       handleQrScan(input.value.trim())
     }
+  }
+
+  const getExpirationStatus = (product: Product) => {
+    if (!product.expiration_date) return null
+
+    const today = new Date()
+    const expirationDate = new Date(product.expiration_date)
+    const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const alertThreshold = product.days_before_expiry_alert || 30
+
+    if (daysUntilExpiry < 0) {
+      return { status: "expired", days: Math.abs(daysUntilExpiry), variant: "destructive" as const }
+    } else if (daysUntilExpiry <= alertThreshold) {
+      return { status: "expiring", days: daysUntilExpiry, variant: "warning" as const }
+    }
+    return null
   }
 
   const generateStockReport = () => {
@@ -288,6 +316,15 @@ export default function ProductsPage() {
               color: #ff0000;
             }
             
+            .expiring {
+              color: #ff6600;
+            }
+            
+            .expired {
+              color: #cc0000;
+              text-decoration: line-through;
+            }
+            
             .footer {
               margin-top: 3mm;
               padding-top: 2mm;
@@ -328,14 +365,21 @@ export default function ProductsPage() {
           <div class="section">
             <div class="section-title">== PRODUCTOS EN STOCK ==</div>
             ${filteredProducts
-              .map(
-                (product) => `
+              .map((product) => {
+                const expirationStatus = getExpirationStatus(product)
+                const statusClass =
+                  expirationStatus?.status === "expired"
+                    ? "expired"
+                    : expirationStatus?.status === "expiring"
+                      ? "expiring"
+                      : ""
+                return `
               <div class="product-line">
-                <div class="product-name">${product.name}</div>
+                <div class="product-name ${statusClass}">${product.name}${expirationStatus ? ` (${expirationStatus.status === "expired" ? "VENCIDO" : `Vence en ${expirationStatus.days}d`})` : ""}</div>
                 <div class="product-stock ${product.stock_quantity <= product.min_stock_level ? "low-stock" : ""}">${product.stock_quantity}</div>
               </div>
-            `,
-              )
+            `
+              })
               .join("")}
           </div>
           
@@ -360,9 +404,62 @@ export default function ProductsPage() {
             }
           </div>
           
+          <div class="section">
+            <div class="section-title">== PRODUCTOS POR VENCER ==</div>
+            ${
+              filteredProducts
+                .filter((p) => {
+                  const status = getExpirationStatus(p)
+                  return status && status.status === "expiring"
+                })
+                .map((product) => {
+                  const status = getExpirationStatus(product)
+                  return `
+              <div class="product-line">
+                <div class="product-name expiring">${product.name}</div>
+                <div class="product-stock">${status?.days}d</div>
+              </div>
+            `
+                })
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto por vencer</div>'
+            }
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS VENCIDOS ==</div>
+            ${
+              filteredProducts
+                .filter((p) => {
+                  const status = getExpirationStatus(p)
+                  return status && status.status === "expired"
+                })
+                .map(
+                  (product) => `
+              <div class="product-line">
+                <div class="product-name expired">${product.name}</div>
+                <div class="product-stock">VENCIDO</div>
+              </div>
+            `,
+                )
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto vencido</div>'
+            }
+          </div>
+          
           <div class="footer">
             <div>Total de productos: ${filteredProducts.length}</div>
             <div>Stock bajo: ${filteredProducts.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
+            <div>Por vencer: ${
+              filteredProducts.filter((p) => {
+                const s = getExpirationStatus(p)
+                return s && s.status === "expiring"
+              }).length
+            }</div>
+            <div>Vencidos: ${
+              filteredProducts.filter((p) => {
+                const s = getExpirationStatus(p)
+                return s && s.status === "expired"
+              }).length
+            }</div>
             <div>Generado: ${new Date().toLocaleString("es-ES")}</div>
           </div>
         </body>
@@ -439,6 +536,8 @@ export default function ProductsPage() {
                       min_stock_level: "10",
                       category: "",
                       image_url: "",
+                      expiration_date: "",
+                      days_before_expiry_alert: "30",
                     })
                   }}
                 >
@@ -549,6 +648,30 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="expiration_date">Fecha de caducidad</Label>
+                      <Input
+                        id="expiration_date"
+                        type="date"
+                        value={formData.expiration_date}
+                        onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="days_before_expiry_alert">Días de alerta</Label>
+                      <Input
+                        id="days_before_expiry_alert"
+                        type="number"
+                        value={formData.days_before_expiry_alert}
+                        onChange={(e) => setFormData({ ...formData, days_before_expiry_alert: e.target.value })}
+                        placeholder="30"
+                      />
+                      <p className="text-xs text-muted-foreground">Días antes de vencer para alertar</p>
+                    </div>
+                  </div>
+
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                       Cancelar
@@ -647,60 +770,85 @@ export default function ProductsPage() {
                   <TableHead>Precio</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Categoría</TableHead>
+                  <TableHead>Caducidad</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
-                        {product.image_url ? (
-                          <img
-                            src={product.image_url || "/placeholder.svg"}
-                            alt={product.name}
-                            className="w-full h-full object-cover"
-                          />
+                {filteredProducts.map((product) => {
+                  const expirationStatus = getExpirationStatus(product)
+
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                          {product.image_url ? (
+                            <img
+                              src={product.image_url || "/placeholder.svg"}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="h-6 w-6 text-gray-400" />
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{product.name}</p>
+                          {product.description && (
+                            <p className="text-sm text-muted-foreground">{product.description}</p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
+                      <TableCell>${product.price.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{product.stock_quantity}</span>
+                          {product.stock_quantity <= product.min_stock_level && (
+                            <Badge variant="destructive" className="text-xs">
+                              Bajo
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{product.category || "Sin categoría"}</TableCell>
+                      <TableCell>
+                        {product.expiration_date ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm">
+                              {new Date(product.expiration_date).toLocaleDateString("es-ES")}
+                            </span>
+                            {expirationStatus && (
+                              <Badge variant={expirationStatus.variant} className="text-xs w-fit">
+                                {expirationStatus.status === "expired"
+                                  ? `Vencido hace ${expirationStatus.days}d`
+                                  : `${expirationStatus.days}d restantes`}
+                              </Badge>
+                            )}
+                          </div>
                         ) : (
-                          <Package className="h-6 w-6 text-gray-400" />
+                          <span className="text-sm text-muted-foreground">Sin fecha</span>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        {product.description && <p className="text-sm text-muted-foreground">{product.description}</p>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
-                    <TableCell>${product.price.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{product.stock_quantity}</span>
-                        {product.stock_quantity <= product.min_stock_level && (
-                          <Badge variant="destructive" className="text-xs">
-                            Bajo
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{product.category || "Sin categoría"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">Activo</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">Activo</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
 
