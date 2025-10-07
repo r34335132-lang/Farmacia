@@ -346,7 +346,7 @@ export default function SalesReports() {
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(500 + paymentStats.efectivoTotal).toFixed(2)}</span>
+            <span class="right-align">$${(200 + paymentStats.efectivoTotal).toFixed(2)}</span>
         </div>
         
         <div class="section-title">ENTRADAS EFECTIVO</div>
