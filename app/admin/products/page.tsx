@@ -20,10 +20,23 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Plus, Search, Edit, Trash2, Package, QrCode, Camera, Keyboard } from "lucide-react"
+import {
+  ArrowLeft,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Package,
+  QrCode,
+  Camera,
+  Keyboard,
+  RotateCcw,
+  Archive,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/image-upload"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Product {
   id: string
@@ -43,7 +56,9 @@ interface Product {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [deletedProducts, setDeletedProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [filteredDeletedProducts, setFilteredDeletedProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -70,6 +85,7 @@ export default function ProductsPage() {
   useEffect(() => {
     checkAuth()
     loadProducts()
+    loadDeletedProducts()
   }, [])
 
   useEffect(() => {
@@ -80,7 +96,15 @@ export default function ProductsPage() {
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredProducts(filtered)
-  }, [products, searchTerm])
+
+    const filteredDeleted = deletedProducts.filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    setFilteredDeletedProducts(filteredDeleted)
+  }, [products, deletedProducts, searchTerm])
 
   const checkAuth = async () => {
     const {
@@ -109,6 +133,36 @@ export default function ProductsPage() {
       console.error("Error loading products:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadDeletedProducts = async () => {
+    try {
+      const { data, error } = await supabase.from("products").select("*").eq("is_active", false).order("name")
+
+      if (error) throw error
+      setDeletedProducts(data || [])
+    } catch (error) {
+      console.error("Error loading deleted products:", error)
+    }
+  }
+
+  const handleRestore = async (productId: string) => {
+    if (!confirm("¿Estás seguro de que quieres recuperar este producto?")) return
+
+    try {
+      const { error } = await supabase.from("products").update({ is_active: true }).eq("id", productId)
+
+      if (error) throw error
+
+      // Reload both lists
+      loadProducts()
+      loadDeletedProducts()
+
+      alert("Producto recuperado exitosamente")
+    } catch (error) {
+      console.error("Error restoring product:", error)
+      alert("Error al recuperar el producto")
     }
   }
 
@@ -190,6 +244,7 @@ export default function ProductsPage() {
 
       if (error) throw error
       loadProducts()
+      loadDeletedProducts()
     } catch (error) {
       console.error("Error deleting product:", error)
       alert("Error al eliminar el producto")
@@ -505,7 +560,7 @@ export default function ProductsPage() {
 
       <div className="p-6 space-y-6">
         {/* Search and Add */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        <div className="flex flex-col sm:flex-col gap-4 justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -754,111 +809,204 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        {/* Products Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Productos ({filteredProducts.length})</CardTitle>
-            <CardDescription>Gestiona el inventario de la farmacia</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Imagen</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Precio</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Categoría</TableHead>
-                  <TableHead>Caducidad</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => {
-                  const expirationStatus = getExpirationStatus(product)
+        <Tabs defaultValue="active" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="active">
+              <Package className="h-4 w-4 mr-2" />
+              Productos Activos ({filteredProducts.length})
+            </TabsTrigger>
+            <TabsTrigger value="deleted">
+              <Archive className="h-4 w-4 mr-2" />
+              Productos Eliminados ({filteredDeletedProducts.length})
+            </TabsTrigger>
+          </TabsList>
 
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
-                          {product.image_url ? (
-                            <img
-                              src={product.image_url || "/placeholder.svg"}
-                              alt={product.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <Package className="h-6 w-6 text-gray-400" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          {product.description && (
-                            <p className="text-sm text-muted-foreground">{product.description}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
-                      <TableCell>${product.price.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span>{product.stock_quantity}</span>
-                          {product.stock_quantity <= product.min_stock_level && (
-                            <Badge variant="destructive" className="text-xs">
-                              Bajo
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{product.category || "Sin categoría"}</TableCell>
-                      <TableCell>
-                        {product.expiration_date ? (
-                          <div className="flex flex-col gap-1">
-                            <span className="text-sm">
-                              {new Date(product.expiration_date).toLocaleDateString("es-ES")}
-                            </span>
-                            {expirationStatus && (
-                              <Badge variant={expirationStatus.variant} className="text-xs w-fit">
-                                {expirationStatus.status === "expired"
-                                  ? `Vencido hace ${expirationStatus.days}d`
-                                  : `${expirationStatus.days}d restantes`}
-                              </Badge>
+          <TabsContent value="active" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Productos Activos ({filteredProducts.length})</CardTitle>
+                <CardDescription>Gestiona el inventario activo de la farmacia</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Imagen</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Caducidad</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.map((product) => {
+                      const expirationStatus = getExpirationStatus(product)
+
+                      return (
+                        <TableRow key={product.id}>
+                          <TableCell>
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                              {product.image_url ? (
+                                <img
+                                  src={product.image_url || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-6 w-6 text-gray-400" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              {product.description && (
+                                <p className="text-sm text-muted-foreground">{product.description}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
+                          <TableCell>${product.price.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{product.stock_quantity}</span>
+                              {product.stock_quantity <= product.min_stock_level && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Bajo
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{product.category || "Sin categoría"}</TableCell>
+                          <TableCell>
+                            {product.expiration_date ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm">
+                                  {new Date(product.expiration_date).toLocaleDateString("es-ES")}
+                                </span>
+                                {expirationStatus && (
+                                  <Badge variant={expirationStatus.variant} className="text-xs w-fit">
+                                    {expirationStatus.status === "expired"
+                                      ? `Vencido hace ${expirationStatus.days}d`
+                                      : `${expirationStatus.days}d restantes`}
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Sin fecha</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">Activo</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+
+                {filteredProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="deleted" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Productos Eliminados ({filteredDeletedProducts.length})</CardTitle>
+                <CardDescription>
+                  Productos que fueron eliminados pero se mantienen en el sistema por tener ventas registradas. Puedes
+                  recuperarlos aquí.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Imagen</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDeletedProducts.map((product) => (
+                      <TableRow key={product.id} className="opacity-60">
+                        <TableCell>
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url || "/placeholder.svg"}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Package className="h-6 w-6 text-gray-400" />
                             )}
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Sin fecha</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">Activo</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
-                            <Edit className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            {product.description && (
+                              <p className="text-sm text-muted-foreground">{product.description}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
+                        <TableCell>${product.price.toFixed(2)}</TableCell>
+                        <TableCell>{product.stock_quantity}</TableCell>
+                        <TableCell>{product.category || "Sin categoría"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Eliminado</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestore(product.id)}
+                            className="gap-2"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            Recuperar
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
 
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                {filteredDeletedProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {searchTerm ? "No se encontraron productos eliminados" : "No hay productos eliminados"}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
