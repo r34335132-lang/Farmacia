@@ -28,6 +28,8 @@ import {
   LogOut,
   Camera,
   Keyboard,
+  Percent,
+  Tag,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
@@ -61,6 +63,9 @@ export default function POSPage() {
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false)
   const [scannerMode, setScannerMode] = useState<"camera" | "manual">("manual")
   const [isScanning, setIsScanning] = useState(false)
+  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
+  const [discountValue, setDiscountValue] = useState("")
+
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const barcodeInputRef = useRef<HTMLInputElement>(null)
@@ -68,7 +73,21 @@ export default function POSPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0)
+  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
+
+  const calculateDiscount = () => {
+    const value = Number.parseFloat(discountValue || "0")
+    if (value <= 0) return 0
+
+    if (discountType === "percentage") {
+      return (subtotal * value) / 100
+    }
+    return value
+  }
+
+  const discountAmount = calculateDiscount()
+  const total = Math.max(0, subtotal - discountAmount)
+
   const change = paymentMethod === "efectivo" ? Math.max(0, Number.parseFloat(cashReceived || "0") - total) : 0
 
   useEffect(() => {
@@ -76,7 +95,6 @@ export default function POSPage() {
     loadProducts()
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Si no hay ningún input enfocado y se presiona una tecla, enfocar el input de código de barras
       if (document.activeElement?.tagName !== "INPUT" && e.key.match(/[0-9a-zA-Z]/)) {
         barcodeInputRef.current?.focus()
       }
@@ -91,7 +109,7 @@ export default function POSPage() {
       setIsScanning(true)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment", // Usar cámara trasera si está disponible
+          facingMode: "environment",
           width: { ideal: 640 },
           height: { ideal: 480 },
         },
@@ -232,6 +250,8 @@ export default function POSPage() {
 
   const clearCart = () => {
     setCart([])
+    setDiscountValue("")
+    setDiscountType("percentage")
   }
 
   const sendSaleNotification = async (saleData: any) => {
@@ -261,12 +281,20 @@ export default function POSPage() {
     setProcessingPayment(true)
 
     try {
-      // Create sale record
+      const discountValueNum = Number.parseFloat(discountValue || "0")
+      const hasDiscount = discountValueNum > 0
+
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert([
           {
             cashier_id: currentUser.id,
+            subtotal_before_discount: subtotal,
+            discount_type: hasDiscount ? discountType : "none",
+            discount_value: hasDiscount ? discountValueNum : 0,
+            discount_reason: hasDiscount
+              ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
+              : null,
             total_amount: total,
             payment_method: paymentMethod,
             cash_received: paymentMethod === "efectivo" ? Number.parseFloat(cashReceived) : null,
@@ -279,7 +307,6 @@ export default function POSPage() {
 
       if (saleError) throw saleError
 
-      // Create sale items
       const saleItems = cart.map((item) => ({
         sale_id: sale.id,
         product_id: item.product.id,
@@ -292,7 +319,6 @@ export default function POSPage() {
 
       if (itemsError) throw itemsError
 
-      // Update stock quantities
       for (const item of cart) {
         const { error: stockError } = await supabase
           .from("products")
@@ -303,7 +329,6 @@ export default function POSPage() {
 
         if (stockError) throw stockError
 
-        // Record stock movement
         await supabase.from("stock_movements").insert([
           {
             product_id: item.product.id,
@@ -315,19 +340,18 @@ export default function POSPage() {
         ])
       }
 
-      // Send notification of sale
       await sendSaleNotification(sale)
 
-      // Generate receipt
-      generateReceipt(sale, cart)
+      const discountReasonText = hasDiscount
+        ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
+        : ""
+      generateReceipt(sale, cart, discountAmount, discountReasonText)
 
-      // Clear cart and close dialog
       clearCart()
       setIsPaymentDialogOpen(false)
       setCashReceived("")
       setPaymentMethod("efectivo")
 
-      // Reload products to update stock
       loadProducts()
 
       alert("Venta procesada exitosamente")
@@ -339,7 +363,7 @@ export default function POSPage() {
     }
   }
 
-  const generateReceipt = (sale: any, items: CartItem[]) => {
+  const generateReceipt = (sale: any, items: CartItem[], discount: number, discountReason: string) => {
     const receiptContent = `
 <!DOCTYPE html>
 <html>
@@ -366,7 +390,7 @@ export default function POSPage() {
             width: 100%;
             max-width: 55mm;
             margin: 0;
-            padding: 2mm; /* Padding mínimo interno para evitar que el texto toque los bordes */
+            padding: 2mm;
             box-sizing: border-box;
         }
         .header { 
@@ -418,6 +442,10 @@ export default function POSPage() {
             padding-top: 5px;
             width: 100%;
         }
+        .discount-line {
+            color: #008800;
+            font-weight: bold;
+        }
         .total { 
             font-size: 15px; 
             font-weight: bold; 
@@ -449,8 +477,8 @@ export default function POSPage() {
             width: 100%;
         }
         .footer-logo img {
-            width: 100%; /* Cambiado de 55mm a 100% para usar todo el ancho disponible */
-            max-width: 51mm; /* Máximo ancho considerando el padding interno */
+            width: 100%;
+            max-width: 51mm;
             height: auto;
             display: block;
             margin: 0 auto;
@@ -470,11 +498,11 @@ export default function POSPage() {
                 width: 55mm !important;
                 max-width: 55mm !important;
                 margin: 0 !important;
-                padding: 2mm !important; /* Padding mínimo para impresión */
+                padding: 2mm !important;
                 box-sizing: border-box !important;
             }
             @page {
-                size: 55mm auto; /* Configuración específica del tamaño de página */
+                size: 55mm auto;
                 margin: 0 !important;
             }
         }
@@ -525,8 +553,18 @@ export default function POSPage() {
         <div class="total-section">
             <div class="info-line">
                 <span>Subtotal:</span>
-                <span>$${total.toFixed(2)}</span>
+                <span>$${subtotal.toFixed(2)}</span>
             </div>
+            ${
+              discount > 0
+                ? `
+            <div class="info-line discount-line">
+                <span>Descuento (${discountReason}):</span>
+                <span>-$${discount.toFixed(2)}</span>
+            </div>
+            `
+                : ""
+            }
             <div class="info-line">
                 <span>Impuestos:</span>
                 <span>$0.00</span>
@@ -534,6 +572,15 @@ export default function POSPage() {
             <div class="total">
                 TOTAL: $${total.toFixed(2)}
             </div>
+            ${
+              discount > 0
+                ? `
+            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px;">
+                ¡Ahorraste $${discount.toFixed(2)}!
+            </div>
+            `
+                : ""
+            }
         </div>
 
         <div class="payment-info">
@@ -568,7 +615,6 @@ export default function POSPage() {
                 Sistema POS - Farmacia Solidaria v1.0
             </div>
 
-            <!-- Logo al final -->
             <div class="footer-logo">
                 <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
             </div>
@@ -576,12 +622,8 @@ export default function POSPage() {
     </div>
 </body>
 </html>
-
-
-
     `
 
-    // Create a new window for printing
     const printWindow = window.open("", "_blank", "width=400,height=600")
     if (printWindow) {
       printWindow.document.write(receiptContent)
@@ -791,7 +833,6 @@ export default function POSPage() {
             )}
           </div>
 
-          {/* Cart Items */}
           <div className="space-y-3 flex-1 overflow-auto max-h-96">
             {cart.map((item) => (
               <Card key={item.product.id} className="border-purple-100 shadow-md">
@@ -845,7 +886,6 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Total and Payment */}
           {cart.length > 0 && (
             <div className="space-y-4 border-t pt-4">
               <div className="text-center">
@@ -868,19 +908,99 @@ export default function POSPage() {
 
       <InstallPrompt />
 
-      {/* Payment Dialog */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="border-purple-200">
+        <DialogContent className="border-purple-200 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
               💳 Procesar Pago
             </DialogTitle>
             <DialogDescription className="text-lg font-semibold">
-              Total a cobrar: <span className="text-green-600">${total.toFixed(2)}</span>
+              Subtotal: <span className="text-purple-600">${subtotal.toFixed(2)}</span>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <Card className="border-orange-200 bg-orange-50/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2 text-orange-700">
+                  <Tag className="h-4 w-4" />
+                  Aplicar Descuento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Tipo</Label>
+                    <Select
+                      value={discountType}
+                      onValueChange={(value: "percentage" | "fixed") => setDiscountType(value)}
+                    >
+                      <SelectTrigger className="border-orange-200">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">
+                          <div className="flex items-center gap-2">
+                            <Percent className="h-3 w-3" />
+                            Porcentaje (%)
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="fixed">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-3 w-3" />
+                            Monto fijo ($)
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Valor</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      placeholder={discountType === "percentage" ? "10" : "50.00"}
+                      className="border-orange-200"
+                    />
+                  </div>
+                </div>
+
+                {discountAmount > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center text-green-700 font-semibold">
+                      <span>Descuento aplicado:</span>
+                      <span className="text-lg">-${discountAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="text-xs text-green-600 mt-1">
+                      {discountType === "percentage"
+                        ? `${discountValue}% de descuento`
+                        : `$${discountValue} de descuento`}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {discountAmount > 0 && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                  <span>Subtotal:</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-green-600 font-semibold mb-2">
+                  <span>Descuento:</span>
+                  <span>-${discountAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold text-purple-700 border-t border-purple-200 pt-2">
+                  <span>Total a pagar:</span>
+                  <span>${total.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-base font-semibold">Método de pago</Label>
               <Select value={paymentMethod} onValueChange={(value: "efectivo" | "tarjeta") => setPaymentMethod(value)}>
@@ -943,7 +1063,6 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Scanner Dialog */}
       <Dialog
         open={isQRScannerOpen}
         onOpenChange={(open) => {
