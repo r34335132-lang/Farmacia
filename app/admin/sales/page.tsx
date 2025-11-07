@@ -454,6 +454,47 @@ export default function SalesReports() {
     }
 
     try {
+      // Fetch sale items first to get product quantities before deletion
+      const { data: saleItems, error: fetchError } = await supabase
+        .from("sale_items")
+        .select("product_id, quantity")
+        .eq("sale_id", saleId)
+
+      if (fetchError) throw fetchError
+
+      // Get current user for stock movement record
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      // Restore inventory for each product
+      for (const item of saleItems || []) {
+        // Get current stock quantity
+        const { data: product } = await supabase
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", item.product_id)
+          .single()
+
+        // Update stock by adding back the sold quantity
+        await supabase
+          .from("products")
+          .update({
+            stock_quantity: (product?.stock_quantity || 0) + item.quantity,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.product_id)
+
+        // Create reverse stock movement record for audit trail
+        await supabase.from("stock_movements").insert({
+          product_id: item.product_id,
+          movement_type: "entrada",
+          quantity: item.quantity,
+          reason: `Devolución por cancelación de Venta #${saleId.slice(-8)}`,
+          user_id: user?.id,
+        })
+      }
+
       // Delete sale items first (foreign key constraint)
       await supabase.from("sale_items").delete().eq("sale_id", saleId)
 
@@ -464,7 +505,7 @@ export default function SalesReports() {
 
       // Reload sales to update the list
       loadSales()
-      alert("Venta cancelada exitosamente")
+      alert("Venta cancelada exitosamente y stock restaurado")
     } catch (error) {
       console.error("Error canceling sale:", error)
       alert("Error al cancelar la venta")
