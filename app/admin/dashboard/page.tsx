@@ -54,7 +54,10 @@ export default function AdminDashboard() {
   const loadDashboardData = async () => {
     try {
       // Get products stats
-      const { data: products } = await supabase.from("products").select("*").eq("is_active", true)
+      const { data: products, count } = await supabase
+        .from("products")
+        .select("*", { count: "exact" })
+        .eq("is_active", true)
 
       const lowStock = products?.filter((p) => p.stock_quantity <= p.min_stock_level) || []
 
@@ -100,7 +103,7 @@ export default function AdminDashboard() {
       const { data: cashiers } = await supabase.from("profiles").select("*").eq("role", "cajero").eq("is_active", true)
 
       setStats({
-        totalProducts: products?.length || 0,
+        totalProducts: count || 0,
         lowStockProducts: lowStock.length,
         expiringProducts: expiringProducts.length,
         expiredProducts: expiredProducts.length,
