@@ -169,6 +169,21 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    if (!formData.name.trim()) {
+      alert("El nombre del producto es requerido")
+      return
+    }
+
+    if (!formData.price || Number.parseFloat(formData.price) <= 0) {
+      alert("El precio debe ser mayor a 0")
+      return
+    }
+
+    if (!formData.stock_quantity || Number.parseInt(formData.stock_quantity) < 0) {
+      alert("El stock debe ser 0 o mayor")
+      return
+    }
+
     try {
       const productData = {
         name: formData.name,
@@ -189,12 +204,28 @@ export default function ProductsPage() {
         // Update existing product
         const { error } = await supabase.from("products").update(productData).eq("id", editingProduct.id)
 
-        if (error) throw error
+        if (error) {
+          console.error("Error updating product:", error)
+          alert(`Error al actualizar: ${error.message}`)
+          return
+        }
+        alert("Producto actualizado exitosamente")
       } else {
-        // Create new product
+        // Create new product without barcode uniqueness validation
         const { error } = await supabase.from("products").insert([productData])
 
-        if (error) throw error
+        if (error) {
+          console.error("Error creating product:", error)
+          if (error.message.includes("duplicate")) {
+            alert(
+              "Este código de barras ya existe. Puedes usar el mismo código para un producto diferente si lo deseas.",
+            )
+          } else {
+            alert(`Error al guardar: ${error.message}`)
+          }
+          return
+        }
+        alert("Producto registrado exitosamente")
       }
 
       // Reset form and close dialog
@@ -214,8 +245,8 @@ export default function ProductsPage() {
       setEditingProduct(null)
       loadProducts()
     } catch (error) {
-      console.error("Error saving product:", error)
-      alert("Error al guardar el producto")
+      console.error("Unexpected error saving product:", error)
+      alert("Error inesperado al guardar el producto")
     }
   }
 
