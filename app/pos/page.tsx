@@ -65,6 +65,7 @@ export default function POSPage() {
   const [isScanning, setIsScanning] = useState(false)
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
   const [discountValue, setDiscountValue] = useState("")
+  const [boxBalance, setBoxBalance] = useState(500)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -185,22 +186,40 @@ export default function POSPage() {
     }
   }
 
-  const handleBarcodeSearch = () => {
+  const handleBarcodeSearch = async () => {
     if (!barcodeInput.trim()) return
 
-    console.log("[v0] Buscando producto con código:", barcodeInput.trim())
-
+    // Primero buscar en productos activos
     const product = products.find((p) => p.barcode === barcodeInput.trim())
+
+    if (!product) {
+      // Si no encuentra en activos, buscar en todos (incluyendo eliminados)
+      const { data: deletedProduct, error } = await supabase
+        .from("products")
+        .select("id, name, price, stock_quantity, barcode, image_url")
+        .eq("barcode", barcodeInput.trim())
+        .single()
+
+      if (deletedProduct && !error) {
+        // Mostrar información del producto eliminado
+        alert(
+          `⚠️ PRODUCTO ENCONTRADO PERO ELIMINADO\n\nNombre: ${deletedProduct.name}\nPrecio: $${deletedProduct.price.toFixed(2)}\nStock: ${deletedProduct.stock_quantity}\n\nPuedes intentar recuperarlo desde gestión de productos.`,
+        )
+        setBarcodeInput("")
+        return
+      } else {
+        alert("❌ Producto no encontrado")
+        setBarcodeInput("")
+        return
+      }
+    }
+
     if (product) {
-      console.log("[v0] Producto encontrado:", product.name)
       addToCart(product)
       setBarcodeInput("")
       if (isQRScannerOpen) {
         setIsQRScannerOpen(false)
       }
-    } else {
-      console.log("[v0] Producto no encontrado para código:", barcodeInput.trim())
-      alert("Producto no encontrado con ese código")
     }
   }
 
@@ -683,6 +702,26 @@ export default function POSPage() {
       <div className="flex h-[calc(100vh-5rem)]">
         {/* Products Section */}
         <div className="flex-1 p-6 space-y-6 overflow-auto">
+          <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-white/20 rounded-full">
+                    <Banknote className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Saldo de Caja</h2>
+                    <p className="text-blue-100 text-sm">Dinero inicial disponible</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-blue-100">Efectivo disponible:</p>
+                  <p className="text-4xl font-bold">${boxBalance.toFixed(2)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Welcome Message */}
           <Card className="bg-gradient-to-r from-purple-500 to-green-500 text-white border-0">
             <CardContent className="p-6">
@@ -733,7 +772,7 @@ export default function POSPage() {
                   📷 Abrir Escáner QR Avanzado
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  💡 Tip: Los escáneres físicos funcionan automáticamente en el campo de arriba
+                  💡 Tip: Si el producto no existe en activos, te mostrará si está en eliminados
                 </p>
               </div>
             </CardContent>
