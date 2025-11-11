@@ -141,7 +141,11 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase.from("products").select("*").order("name", { ascending: true })
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .range(0, 9999)
+        .order("name", { ascending: true })
 
       if (error) throw error
 
