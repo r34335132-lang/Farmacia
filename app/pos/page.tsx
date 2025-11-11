@@ -67,6 +67,7 @@ export default function POSPage() {
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
   const [discountValue, setDiscountValue] = useState("")
   const [boxBalance, setBoxBalance] = useState(500)
+  const [allProducts, setAllProducts] = useState<Product[]>([])
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -173,19 +174,24 @@ export default function POSPage() {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, price, stock_quantity, barcode, image_url, is_active")
-        .range(0, 9999)
+        .select("*")
+        .eq("is_active", true)
+        .range(0, 9999) // Added explicit range
         .order("name", { ascending: true })
 
       if (error) throw error
 
-      const allProducts = data || []
-      const activeProducts = allProducts.filter((p) => p.is_active !== false)
+      console.log("[v0] TOTAL RAW PRODUCTS LOADED FROM DB:", data?.length)
+      console.log("[v0] First product:", data?.[0])
+      console.log("[v0] Last product:", data?.[data.length - 1])
+      console.log("[v0] Products starting with 'r':", data?.filter((p) => p.name.toLowerCase().startsWith("r")).length)
+      console.log("[v0] Products starting with 's':", data?.filter((p) => p.name.toLowerCase().startsWith("s")).length)
+      console.log("[v0] Products starting with 'z':", data?.filter((p) => p.name.toLowerCase().startsWith("z")).length)
 
-      console.log("[v0] TODOS los productos del POS cargados:", allProducts.length, "Activos:", activeProducts.length)
-      setProducts(activeProducts)
+      setProducts(data || [])
+      setAllProducts(data || [])
     } catch (error) {
-      console.error("Error loading products:", error)
+      console.error("[v0] Error loading products:", error)
     } finally {
       setLoading(false)
     }
@@ -653,6 +659,21 @@ export default function POSPage() {
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  if (searchTerm) {
+    console.log(
+      "[v0] ===== BÚSQUEDA =====",
+      "\nSearch term: '" + searchTerm + "'",
+      "\nTotal productos disponibles:",
+      products.length,
+      "\nProductos encontrados:",
+      filteredProducts.length,
+      "\nPrimeros 3 resultados:",
+      filteredProducts.slice(0, 3).map((p) => p.name),
+      "\nÚltimos 3 resultados:",
+      filteredProducts.slice(-3).map((p) => p.name),
+    )
+  }
 
   if (loading) {
     return (
