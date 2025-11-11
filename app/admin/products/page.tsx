@@ -874,7 +874,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => {
+                    {filteredProducts.map((product) => {
                       const expirationStatus = getExpirationStatus(product)
 
                       return (
@@ -950,7 +950,7 @@ export default function ProductsPage() {
                   </TableBody>
                 </Table>
 
-                {products.length === 0 && (
+                {filteredProducts.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
                   </div>
@@ -983,7 +983,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deletedProducts.map((product) => (
+                    {filteredDeletedProducts.map((product) => (
                       <TableRow key={product.id} className="opacity-60">
                         <TableCell>
                           <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -1029,7 +1029,7 @@ export default function ProductsPage() {
                   </TableBody>
                 </Table>
 
-                {deletedProducts.length === 0 && (
+                {filteredDeletedProducts.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No se encontraron productos eliminados" : "No hay productos eliminados"}
                   </div>
