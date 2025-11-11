@@ -34,6 +34,8 @@ import {
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
 
+const PRODUCTS_PER_PAGE = 30
+
 interface Product {
   id: string
   name: string
@@ -68,6 +70,7 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("")
   const [boxBalance, setBoxBalance] = useState(500)
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -190,6 +193,7 @@ export default function POSPage() {
 
       setProducts(data || [])
       setAllProducts(data || [])
+      setCurrentPage(1)
     } catch (error) {
       console.error("[v0] Error loading products:", error)
     } finally {
@@ -388,10 +392,10 @@ export default function POSPage() {
             padding: 0;
             box-sizing: border-box;
         }
-        body { 
-            font-family: 'Courier New', monospace; 
+        body {
+            font-family: 'Courier New', monospace;
             font-size: 13px;
-            margin: 0 !important; 
+            margin: 0 !important;
             padding: 0 !important;
             width: 55mm;
             max-width: 55mm;
@@ -406,51 +410,51 @@ export default function POSPage() {
             padding: 2mm;
             box-sizing: border-box;
         }
-        .header { 
-            text-align: left; 
-            border-bottom: 1px dashed #000; 
-            padding-bottom: 5px; 
+        .header {
+            text-align: left;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 5px;
             margin-bottom: 5px;
             width: 100%;
         }
-        .logo-text { 
-            font-size: 15px; 
-            font-weight: bold; 
+        .logo-text {
+            font-size: 15px;
+            font-weight: bold;
             margin-bottom: 2px;
             width: 100%;
         }
-        .subtitle { 
-            font-size: 11px; 
+        .subtitle {
+            font-size: 11px;
             margin-bottom: 5px;
             width: 100%;
         }
-        .info-line { 
-            display: flex; 
-            justify-content: space-between; 
+        .info-line {
+            display: flex;
+            justify-content: space-between;
             margin: 2px 0;
             font-size: 13px;
             width: 100%;
         }
-        .items { 
-            margin: 8px 0; 
+        .items {
+            margin: 8px 0;
             border-top: 1px dashed #000;
             border-bottom: 1px dashed #000;
             padding: 5px 0;
             text-align: left;
             width: 100%;
         }
-        .item { 
-            margin: 3px 0; 
+        .item {
+            margin: 3px 0;
             width: 100%;
         }
-        .item-name { 
-            font-weight: bold; 
+        .item-name {
+            font-weight: bold;
         }
-        .item-details { 
+        .item-details {
             font-size: 12px;
         }
-        .total-section { 
-            margin-top: 8px; 
+        .total-section {
+            margin-top: 8px;
             border-top: 1px dashed #000;
             padding-top: 5px;
             width: 100%;
@@ -459,29 +463,29 @@ export default function POSPage() {
             color: #008800;
             font-weight: bold;
         }
-        .total { 
-            font-size: 15px; 
-            font-weight: bold; 
+        .total {
+            font-size: 15px;
+            font-weight: bold;
             text-align: right;
             margin: 5px 0;
             width: 100%;
         }
-        .payment-info { 
+        .payment-info {
             margin: 8px 0;
             font-size: 12px;
             width: 100%;
         }
-        .footer { 
-            text-align: center; 
-            margin-top: 10px; 
+        .footer {
+            text-align: center;
+            margin-top: 10px;
             border-top: 1px dashed #000;
             padding-top: 5px;
             font-size: 11px;
             width: 100%;
         }
-        .thank-you { 
-            font-size: 13px; 
-            font-weight: bold; 
+        .thank-you {
+            font-size: 13px;
+            font-weight: bold;
             margin: 5px 0;
         }
         .footer-logo {
@@ -501,13 +505,13 @@ export default function POSPage() {
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
+            html, body {
+                margin: 0 !important;
+                padding: 0 !important;
                 width: 55mm !important;
                 max-width: 55mm !important;
             }
-            .content { 
+            .content {
                 width: 55mm !important;
                 max-width: 55mm !important;
                 margin: 0 !important;
@@ -660,6 +664,12 @@ export default function POSPage() {
       product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * PRODUCTS_PER_PAGE,
+    currentPage * PRODUCTS_PER_PAGE,
+  )
+
   if (searchTerm) {
     console.log(
       "[v0] ===== BÚSQUEDA =====",
@@ -800,15 +810,23 @@ export default function POSPage() {
               <Input
                 placeholder="Buscar por nombre del medicamento..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value)
+                  setCurrentPage(1)
+                }}
                 className="border-green-200 focus:border-green-400"
               />
             </CardContent>
           </Card>
 
+          <div className="text-sm text-muted-foreground bg-white/80 backdrop-blur-sm p-3 rounded-lg">
+            Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+            {searchTerm && ` (filtrados de ${products.length} totales)`}
+          </div>
+
           {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product) => (
+            {paginatedProducts.map((product) => (
               <Card
                 key={product.id}
                 className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 border-0 shadow-lg bg-white/80 backdrop-blur-sm"
@@ -865,6 +883,55 @@ export default function POSPage() {
               </Card>
             ))}
           </div>
+
+          {filteredProducts.length > PRODUCTS_PER_PAGE && (
+            <div className="flex flex-col items-center gap-4 mt-6 mb-6">
+              <div className="flex justify-center items-center gap-2">
+                <Button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  variant="outline"
+                  className="bg-white/80 backdrop-blur-sm"
+                >
+                  Anterior
+                </Button>
+
+                <div className="flex gap-2">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = i + 1
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        className={
+                          currentPage === pageNum
+                            ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                            : "bg-white/80 backdrop-blur-sm"
+                        }
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                  {totalPages > 5 && <span className="flex items-center px-2">...</span>}
+                </div>
+
+                <Button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                  variant="outline"
+                  className="bg-white/80 backdrop-blur-sm"
+                >
+                  Siguiente
+                </Button>
+              </div>
+
+              <div className="text-center text-sm text-muted-foreground bg-white/80 backdrop-blur-sm px-4 py-2 rounded-lg">
+                Página {currentPage} de {totalPages}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cart Section */}

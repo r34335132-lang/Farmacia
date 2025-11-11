@@ -38,6 +38,8 @@ import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/image-upload"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+const PRODUCTS_PER_PAGE = 50
+
 interface Product {
   id: string
   name: string
@@ -65,6 +67,8 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false)
   const [scannerMode, setScannerMode] = useState<"manual" | "camera">("manual")
+  const [currentPageActive, setCurrentPageActive] = useState(1)
+  const [currentPageDeleted, setCurrentPageDeleted] = useState(1)
   const router = useRouter()
   const supabase = createClient()
 
@@ -95,6 +99,7 @@ export default function ProductsPage() {
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredProducts(filtered)
+    setCurrentPageActive(1)
 
     const filteredDeleted = deletedProducts.filter(
       (product) =>
@@ -103,6 +108,7 @@ export default function ProductsPage() {
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredDeletedProducts(filteredDeleted)
+    setCurrentPageDeleted(1)
 
     if (searchTerm) {
       console.log(
@@ -177,6 +183,8 @@ export default function ProductsPage() {
 
       setProducts(activeProds)
       setDeletedProducts(inactiveProds)
+      setCurrentPageActive(1)
+      setCurrentPageDeleted(1)
     } catch (error) {
       console.error("[v0] Error loading products:", error)
     } finally {
@@ -602,6 +610,18 @@ export default function ProductsPage() {
     }
   }
 
+  const totalPagesActive = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  const paginatedActiveProducts = filteredProducts.slice(
+    (currentPageActive - 1) * PRODUCTS_PER_PAGE,
+    currentPageActive * PRODUCTS_PER_PAGE,
+  )
+
+  const totalPagesDeleted = Math.ceil(filteredDeletedProducts.length / PRODUCTS_PER_PAGE)
+  const paginatedDeletedProducts = filteredDeletedProducts.slice(
+    (currentPageDeleted - 1) * PRODUCTS_PER_PAGE,
+    currentPageDeleted * PRODUCTS_PER_PAGE,
+  )
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -892,6 +912,11 @@ export default function ProductsPage() {
           </TabsList>
 
           <TabsContent value="active" className="mt-6">
+            <div className="mb-4 text-sm text-muted-foreground">
+              Mostrando {paginatedActiveProducts.length} de {filteredProducts.length} productos
+              {searchTerm && ` (filtrados de ${products.length} totales)`}
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle>Productos Activos ({products.length})</CardTitle>
@@ -913,7 +938,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProducts.map((product) => {
+                    {paginatedActiveProducts.map((product) => {
                       const expirationStatus = getExpirationStatus(product)
 
                       return (
@@ -994,11 +1019,58 @@ export default function ProductsPage() {
                     {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
                   </div>
                 )}
+
+                {filteredProducts.length > PRODUCTS_PER_PAGE && (
+                  <div className="flex flex-col items-center gap-4 mt-6">
+                    <div className="flex justify-center items-center gap-2">
+                      <Button
+                        onClick={() => setCurrentPageActive(Math.max(1, currentPageActive - 1))}
+                        disabled={currentPageActive === 1}
+                        variant="outline"
+                      >
+                        Anterior
+                      </Button>
+
+                      <div className="flex gap-2">
+                        {Array.from({ length: Math.min(5, totalPagesActive) }, (_, i) => {
+                          const pageNum = i + 1
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setCurrentPageActive(pageNum)}
+                              variant={currentPageActive === pageNum ? "default" : "outline"}
+                            >
+                              {pageNum}
+                            </Button>
+                          )
+                        })}
+                        {totalPagesActive > 5 && <span className="flex items-center px-2">...</span>}
+                      </div>
+
+                      <Button
+                        onClick={() => setCurrentPageActive(Math.min(totalPagesActive, currentPageActive + 1))}
+                        disabled={currentPageActive === totalPagesActive}
+                        variant="outline"
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+
+                    <div className="text-center text-sm text-muted-foreground">
+                      Página {currentPageActive} de {totalPagesActive}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="deleted" className="mt-6">
+            <div className="mb-4 text-sm text-muted-foreground">
+              Mostrando {paginatedDeletedProducts.length} de {filteredDeletedProducts.length} productos eliminados
+              {searchTerm && ` (filtrados de ${deletedProducts.length} totales)`}
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle>Productos Eliminados ({deletedProducts.length})</CardTitle>
@@ -1022,7 +1094,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDeletedProducts.map((product) => (
+                    {paginatedDeletedProducts.map((product) => (
                       <TableRow key={product.id} className="opacity-60">
                         <TableCell>
                           <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -1071,6 +1143,48 @@ export default function ProductsPage() {
                 {filteredDeletedProducts.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No se encontraron productos eliminados" : "No hay productos eliminados"}
+                  </div>
+                )}
+
+                {filteredDeletedProducts.length > PRODUCTS_PER_PAGE && (
+                  <div className="flex flex-col items-center gap-4 mt-6">
+                    <div className="flex justify-center items-center gap-2">
+                      <Button
+                        onClick={() => setCurrentPageDeleted(Math.max(1, currentPageDeleted - 1))}
+                        disabled={currentPageDeleted === 1}
+                        variant="outline"
+                      >
+                        Anterior
+                      </Button>
+
+                      <div className="flex gap-2">
+                        {Array.from({ length: Math.min(5, totalPagesDeleted) }, (_, i) => {
+                          const pageNum = i + 1
+                          return (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setCurrentPageDeleted(pageNum)}
+                              variant={currentPageDeleted === pageNum ? "default" : "outline"}
+                            >
+                              {pageNum}
+                            </Button>
+                          )
+                        })}
+                        {totalPagesDeleted > 5 && <span className="flex items-center px-2">...</span>}
+                      </div>
+
+                      <Button
+                        onClick={() => setCurrentPageDeleted(Math.min(totalPagesDeleted, currentPageDeleted + 1))}
+                        disabled={currentPageDeleted === totalPagesDeleted}
+                        variant="outline"
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+
+                    <div className="text-center text-sm text-muted-foreground">
+                      Página {currentPageDeleted} de {totalPagesDeleted}
+                    </div>
                   </div>
                 )}
               </CardContent>
