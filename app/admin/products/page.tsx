@@ -125,11 +125,7 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*", { count: "exact" })
-        .eq("is_active", true)
-        .order("name")
+      const { data, error } = await supabase.from("products").select("*").eq("is_active", true).order("name")
 
       if (error) throw error
       setProducts(data || [])
@@ -142,11 +138,7 @@ export default function ProductsPage() {
 
   const loadDeletedProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*", { count: "exact" })
-        .eq("is_active", false)
-        .order("name")
+      const { data, error } = await supabase.from("products").select("*").eq("is_active", false).order("name")
 
       if (error) throw error
       setDeletedProducts(data || [])
@@ -458,7 +450,7 @@ export default function ProductsPage() {
           
           <div class="section">
             <div class="section-title">== PRODUCTOS EN STOCK ==</div>
-            ${filteredProducts
+            ${products
               .map((product) => {
                 const expirationStatus = getExpirationStatus(product)
                 const statusClass =
@@ -478,13 +470,13 @@ export default function ProductsPage() {
           </div>
           
           <div class="total-line">
-            TOTAL PRODUCTOS: ${filteredProducts.length}
+            TOTAL PRODUCTOS: ${products.length}
           </div>
           
           <div class="section">
             <div class="section-title">== PRODUCTOS CON STOCK BAJO ==</div>
             ${
-              filteredProducts
+              products
                 .filter((p) => p.stock_quantity <= p.min_stock_level)
                 .map(
                   (product) => `
@@ -501,7 +493,7 @@ export default function ProductsPage() {
           <div class="section">
             <div class="section-title">== PRODUCTOS POR VENCER ==</div>
             ${
-              filteredProducts
+              products
                 .filter((p) => {
                   const status = getExpirationStatus(p)
                   return status && status.status === "expiring"
@@ -522,7 +514,7 @@ export default function ProductsPage() {
           <div class="section">
             <div class="section-title">== PRODUCTOS VENCIDOS ==</div>
             ${
-              filteredProducts
+              products
                 .filter((p) => {
                   const status = getExpirationStatus(p)
                   return status && status.status === "expired"
@@ -540,16 +532,16 @@ export default function ProductsPage() {
           </div>
           
           <div class="footer">
-            <div>Total de productos: ${filteredProducts.length}</div>
-            <div>Stock bajo: ${filteredProducts.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
+            <div>Total de productos: ${products.length}</div>
+            <div>Stock bajo: ${products.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
             <div>Por vencer: ${
-              filteredProducts.filter((p) => {
+              products.filter((p) => {
                 const s = getExpirationStatus(p)
                 return s && s.status === "expiring"
               }).length
             }</div>
             <div>Vencidos: ${
-              filteredProducts.filter((p) => {
+              products.filter((p) => {
                 const s = getExpirationStatus(p)
                 return s && s.status === "expired"
               }).length
@@ -852,18 +844,18 @@ export default function ProductsPage() {
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="active">
               <Package className="h-4 w-4 mr-2" />
-              Productos Activos ({filteredProducts.length})
+              Productos Activos ({products.length})
             </TabsTrigger>
             <TabsTrigger value="deleted">
               <Archive className="h-4 w-4 mr-2" />
-              Productos Eliminados ({filteredDeletedProducts.length})
+              Productos Eliminados ({deletedProducts.length})
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="active" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Productos Activos ({filteredProducts.length})</CardTitle>
+                <CardTitle>Productos Activos ({products.length})</CardTitle>
                 <CardDescription>Gestiona el inventario activo de la farmacia</CardDescription>
               </CardHeader>
               <CardContent>
@@ -882,7 +874,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProducts.map((product) => {
+                    {products.map((product) => {
                       const expirationStatus = getExpirationStatus(product)
 
                       return (
@@ -958,7 +950,7 @@ export default function ProductsPage() {
                   </TableBody>
                 </Table>
 
-                {filteredProducts.length === 0 && (
+                {products.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
                   </div>
@@ -970,7 +962,7 @@ export default function ProductsPage() {
           <TabsContent value="deleted" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle>Productos Eliminados ({filteredDeletedProducts.length})</CardTitle>
+                <CardTitle>Productos Eliminados ({deletedProducts.length})</CardTitle>
                 <CardDescription>
                   Productos que fueron eliminados pero se mantienen en el sistema por tener ventas registradas. Puedes
                   recuperarlos aquí.
@@ -991,7 +983,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDeletedProducts.map((product) => (
+                    {deletedProducts.map((product) => (
                       <TableRow key={product.id} className="opacity-60">
                         <TableCell>
                           <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -1037,7 +1029,7 @@ export default function ProductsPage() {
                   </TableBody>
                 </Table>
 
-                {filteredDeletedProducts.length === 0 && (
+                {deletedProducts.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     {searchTerm ? "No se encontraron productos eliminados" : "No hay productos eliminados"}
                   </div>
