@@ -85,7 +85,6 @@ export default function ProductsPage() {
   useEffect(() => {
     checkAuth()
     loadProducts()
-    loadDeletedProducts()
   }, [])
 
   useEffect(() => {
@@ -128,12 +127,25 @@ export default function ProductsPage() {
       const { data, error, count } = await supabase
         .from("products")
         .select("*", { count: "exact" })
-        .eq("is_active", true)
         .order("name", { ascending: true })
 
       if (error) throw error
-      console.log("[v0] Admin Products loaded:", data?.length, "Total count:", count)
-      setProducts(data || [])
+
+      const allProducts = data || []
+      const activeProds = allProducts.filter((p) => p.is_active !== false)
+      const inactiveProds = allProducts.filter((p) => p.is_active === false)
+
+      console.log(
+        "[v0] TODOS los productos cargados:",
+        allProducts.length,
+        "Activos:",
+        activeProds.length,
+        "Eliminados:",
+        inactiveProds.length,
+      )
+
+      setProducts(activeProds)
+      setDeletedProducts(inactiveProds)
     } catch (error) {
       console.error("Error loading products:", error)
     } finally {
@@ -142,19 +154,7 @@ export default function ProductsPage() {
   }
 
   const loadDeletedProducts = async () => {
-    try {
-      const { data, error, count } = await supabase
-        .from("products")
-        .select("*", { count: "exact" })
-        .eq("is_active", false)
-        .order("name", { ascending: true })
-
-      if (error) throw error
-      console.log("[v0] Deleted Products loaded:", data?.length, "Total count:", count)
-      setDeletedProducts(data || [])
-    } catch (error) {
-      console.error("Error loading deleted products:", error)
-    }
+    // Mantenerla vacía o removerla completamente
   }
 
   const handleRestore = async (productId: string) => {
@@ -167,7 +167,6 @@ export default function ProductsPage() {
 
       // Reload both lists
       loadProducts()
-      loadDeletedProducts()
 
       alert("Producto recuperado exitosamente")
     } catch (error) {
@@ -285,7 +284,6 @@ export default function ProductsPage() {
 
       if (error) throw error
       loadProducts()
-      loadDeletedProducts()
     } catch (error) {
       console.error("Error deleting product:", error)
       alert("Error al eliminar el producto")
