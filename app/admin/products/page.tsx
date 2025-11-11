@@ -127,6 +127,7 @@ export default function ProductsPage() {
       const { data, error, count } = await supabase
         .from("products")
         .select("*", { count: "exact" })
+        .range(0, 9999) // Added range to load up to 10,000 products without limit
         .order("name", { ascending: true })
 
       if (error) throw error
