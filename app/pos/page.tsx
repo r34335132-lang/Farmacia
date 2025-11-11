@@ -179,7 +179,6 @@ export default function POSPage() {
         .from("products")
         .select("*")
         .eq("is_active", true)
-        .range(0, 9999) // Added explicit range
         .order("name", { ascending: true })
 
       if (error) throw error
