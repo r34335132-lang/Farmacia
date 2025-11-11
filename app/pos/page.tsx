@@ -174,10 +174,10 @@ export default function POSPage() {
         .from("products")
         .select("id, name, price, stock_quantity, barcode, image_url")
         .eq("is_active", true)
-        .order("name")
-        .range(0, 50000)
+        .order("name", { ascending: true })
 
       if (error) throw error
+      console.log("[v0] POS Products loaded:", data?.length)
       setProducts(data || [])
     } catch (error) {
       console.error("Error loading products:", error)
