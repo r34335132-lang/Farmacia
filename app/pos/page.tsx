@@ -175,6 +175,7 @@ export default function POSPage() {
         .select("id, name, price, stock_quantity, barcode, image_url")
         .eq("is_active", true)
         .order("name")
+        .range(0, 50000)
 
       if (error) throw error
       setProducts(data || [])
