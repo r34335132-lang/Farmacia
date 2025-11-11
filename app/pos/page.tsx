@@ -174,6 +174,7 @@ export default function POSPage() {
       const { data, error } = await supabase
         .from("products")
         .select("id, name, price, stock_quantity, barcode, image_url, is_active")
+        .range(0, 9999)
         .order("name", { ascending: true })
 
       if (error) throw error
@@ -647,7 +648,11 @@ export default function POSPage() {
     router.push("/auth/login")
   }
 
-  const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredProducts = products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()),
+  )
 
   if (loading) {
     return (
