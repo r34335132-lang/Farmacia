@@ -103,6 +103,23 @@ export default function ProductsPage() {
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredDeletedProducts(filteredDeleted)
+
+    if (searchTerm) {
+      console.log(
+        "[v0] ===== BÚSQUEDA ADMIN =====",
+        "\nSearch term: '" + searchTerm + "'",
+        "\nTotal productos activos:",
+        products.length,
+        "\nProductos encontrados:",
+        filtered.length,
+        "\nProductos eliminados encontrados:",
+        filteredDeleted.length,
+        "\nPrimeros 3 activos:",
+        filtered.slice(0, 3).map((p) => p.name),
+        "\nÚltimos 3 activos:",
+        filtered.slice(-3).map((p) => p.name),
+      )
+    }
   }, [products, deletedProducts, searchTerm])
 
   const checkAuth = async () => {
@@ -124,11 +141,7 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error, count } = await supabase
-        .from("products")
-        .select("*", { count: "exact" })
-        .range(0, 9999) // Added range to load up to 10,000 products without limit
-        .order("name", { ascending: true })
+      const { data, error } = await supabase.from("products").select("*").order("name", { ascending: true })
 
       if (error) throw error
 
@@ -137,12 +150,17 @@ export default function ProductsPage() {
       const inactiveProds = allProducts.filter((p) => p.is_active === false)
 
       console.log(
-        "[v0] TODOS los productos cargados:",
+        "[v0] ===== ADMIN PRODUCTS =====",
+        "\nTotal productos:",
         allProducts.length,
-        "Activos:",
+        "\nActivos:",
         activeProds.length,
-        "Eliminados:",
+        "\nEliminados:",
         inactiveProds.length,
+        "\nPrimeros activos:",
+        activeProds.slice(0, 3).map((p) => p.name),
+        "\nÚltimos activos:",
+        activeProds.slice(-3).map((p) => p.name),
       )
 
       setProducts(activeProds)
