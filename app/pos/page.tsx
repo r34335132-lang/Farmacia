@@ -1,11 +1,14 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import type React from "react"
+
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -13,139 +16,95 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import {
-  ShoppingCart,
-  Scan,
+  ArrowLeft,
   Plus,
-  Minus,
+  Search,
+  Edit,
   Trash2,
-  CreditCard,
-  Banknote,
-  Receipt,
-  LogOut,
+  Package,
+  QrCode,
   Camera,
   Keyboard,
-  Percent,
-  Tag,
+  RotateCcw,
+  Archive,
 } from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { InstallPrompt } from "@/components/install-prompt"
+import { ImageUpload } from "@/components/image-upload"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface Product {
   id: string
   name: string
+  description: string
+  barcode: string
   price: number
   stock_quantity: number
-  barcode?: string
+  min_stock_level: number
+  category: string
+  is_active: boolean
+  created_at: string
   image_url?: string
+  expiration_date?: string
+  days_before_expiry_alert?: number
 }
 
-interface CartItem {
-  product: Product
-  quantity: number
-  subtotal: number
-}
-
-export default function POSPage() {
+export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
+  const [deletedProducts, setDeletedProducts] = useState<Product[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [filteredDeletedProducts, setFilteredDeletedProducts] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-  const [barcodeInput, setBarcodeInput] = useState("")
   const [loading, setLoading] = useState(true)
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"efectivo" | "tarjeta">("efectivo")
-  const [cashReceived, setCashReceived] = useState("")
-  const [processingPayment, setProcessingPayment] = useState(false)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [isQRScannerOpen, setIsQRScannerOpen] = useState(false)
-  const [scannerMode, setScannerMode] = useState<"camera" | "manual">("manual")
-  const [isScanning, setIsScanning] = useState(false)
-  const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
-  const [discountValue, setDiscountValue] = useState("")
-  const [boxBalance, setBoxBalance] = useState(500)
-
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const barcodeInputRef = useRef<HTMLInputElement>(null)
-
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false)
+  const [scannerMode, setScannerMode] = useState<"manual" | "camera">("manual")
   const router = useRouter()
   const supabase = createClient()
 
-  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0)
-
-  const calculateDiscount = () => {
-    const value = Number.parseFloat(discountValue || "0")
-    if (value <= 0) return 0
-
-    if (discountType === "percentage") {
-      return (subtotal * value) / 100
-    }
-    return value
-  }
-
-  const discountAmount = calculateDiscount()
-  const total = Math.max(0, subtotal - discountAmount)
-
-  const change = paymentMethod === "efectivo" ? Math.max(0, Number.parseFloat(cashReceived || "0") - total) : 0
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    barcode: "",
+    price: "",
+    stock_quantity: "",
+    min_stock_level: "10",
+    category: "",
+    image_url: "",
+    expiration_date: "",
+    days_before_expiry_alert: "30",
+  })
 
   useEffect(() => {
     checkAuth()
     loadProducts()
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (document.activeElement?.tagName !== "INPUT" && e.key.match(/[0-9a-zA-Z]/)) {
-        barcodeInputRef.current?.focus()
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
+    loadDeletedProducts()
   }, [])
 
-  const startCamera = async () => {
-    try {
-      setIsScanning(true)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-      })
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.play()
-      }
-    } catch (error) {
-      console.error("Error accessing camera:", error)
-      alert("No se pudo acceder a la cámara. Usa el modo manual.")
-      setScannerMode("manual")
-      setIsScanning(false)
-    }
-  }
-
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream
-      stream.getTracks().forEach((track) => track.stop())
-      videoRef.current.srcObject = null
-    }
-    setIsScanning(false)
-  }
-
   useEffect(() => {
-    if (isQRScannerOpen && scannerMode === "camera") {
-      startCamera()
-    } else {
-      stopCamera()
-    }
+    const filtered = products.filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    setFilteredProducts(filtered)
 
-    return () => stopCamera()
-  }, [isQRScannerOpen, scannerMode])
+    const filteredDeleted = deletedProducts.filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+    setFilteredDeletedProducts(filteredDeleted)
+  }, [products, deletedProducts, searchTerm])
 
   const checkAuth = async () => {
     const {
@@ -156,26 +115,17 @@ export default function POSPage() {
       return
     }
 
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
 
-    if (!profile?.is_active) {
-      alert("Tu cuenta está desactivada")
-      await supabase.auth.signOut()
-      router.push("/auth/login")
+    if (profile?.role !== "admin") {
+      router.push("/pos")
       return
     }
-
-    setCurrentUser(profile)
   }
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, price, stock_quantity, barcode, image_url")
-        .eq("is_active", true)
-        .gt("stock_quantity", 0)
-        .order("name")
+      const { data, error } = await supabase.from("products").select("*").eq("is_active", true).order("name")
 
       if (error) throw error
       setProducts(data || [])
@@ -186,1043 +136,909 @@ export default function POSPage() {
     }
   }
 
-  const handleBarcodeSearch = async () => {
-    if (!barcodeInput.trim()) return
+  const loadDeletedProducts = async () => {
+    try {
+      const { data, error } = await supabase.from("products").select("*").eq("is_active", false).order("name")
 
-    // Primero buscar en productos activos
-    const product = products.find((p) => p.barcode === barcodeInput.trim())
-
-    if (!product) {
-      // Si no encuentra en activos, buscar en todos (incluyendo eliminados)
-      const { data: deletedProduct, error } = await supabase
-        .from("products")
-        .select("id, name, price, stock_quantity, barcode, image_url")
-        .eq("barcode", barcodeInput.trim())
-        .single()
-
-      if (deletedProduct && !error) {
-        // Mostrar información del producto eliminado
-        alert(
-          `⚠️ PRODUCTO ENCONTRADO PERO ELIMINADO\n\nNombre: ${deletedProduct.name}\nPrecio: $${deletedProduct.price.toFixed(2)}\nStock: ${deletedProduct.stock_quantity}\n\nPuedes intentar recuperarlo desde gestión de productos.`,
-        )
-        setBarcodeInput("")
-        return
-      } else {
-        alert("❌ Producto no encontrado")
-        setBarcodeInput("")
-        return
-      }
-    }
-
-    if (product) {
-      addToCart(product)
-      setBarcodeInput("")
-      if (isQRScannerOpen) {
-        setIsQRScannerOpen(false)
-      }
+      if (error) throw error
+      setDeletedProducts(data || [])
+    } catch (error) {
+      console.error("Error loading deleted products:", error)
     }
   }
 
-  const addToCart = (product: Product) => {
-    const existingItem = cart.find((item) => item.product.id === product.id)
-
-    if (existingItem) {
-      if (existingItem.quantity >= product.stock_quantity) {
-        alert("No hay suficiente stock")
-        return
-      }
-      updateQuantity(product.id, existingItem.quantity + 1)
-    } else {
-      const newItem: CartItem = {
-        product,
-        quantity: 1,
-        subtotal: product.price,
-      }
-      setCart([...cart, newItem])
-    }
-  }
-
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeFromCart(productId)
-      return
-    }
-
-    const product = products.find((p) => p.id === productId)
-    if (product && newQuantity > product.stock_quantity) {
-      alert("No hay suficiente stock")
-      return
-    }
-
-    setCart(
-      cart.map((item) =>
-        item.product.id === productId
-          ? { ...item, quantity: newQuantity, subtotal: item.product.price * newQuantity }
-          : item,
-      ),
-    )
-  }
-
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter((item) => item.product.id !== productId))
-  }
-
-  const clearCart = () => {
-    setCart([])
-    setDiscountValue("")
-    setDiscountType("percentage")
-  }
-
-  const sendSaleNotification = async (saleData: any) => {
-    if ("serviceWorker" in navigator && "Notification" in window) {
-      const permission = await Notification.requestPermission()
-      if (permission === "granted") {
-        new Notification("Nueva Venta Registrada", {
-          body: `Venta por $${saleData.total_amount.toFixed(2)} - ${saleData.payment_method}`,
-          icon: "/icon-192.jpg",
-          badge: "/icon-192.jpg",
-        })
-      }
-    }
-  }
-
-  const handlePayment = async () => {
-    if (cart.length === 0) return
-
-    if (paymentMethod === "efectivo") {
-      const received = Number.parseFloat(cashReceived)
-      if (isNaN(received) || received < total) {
-        alert("El monto recibido debe ser mayor o igual al total")
-        return
-      }
-    }
-
-    setProcessingPayment(true)
+  const handleRestore = async (productId: string) => {
+    if (!confirm("¿Estás seguro de que quieres recuperar este producto?")) return
 
     try {
-      const discountValueNum = Number.parseFloat(discountValue || "0")
-      const hasDiscount = discountValueNum > 0
+      const { error } = await supabase.from("products").update({ is_active: true }).eq("id", productId)
 
-      const { data: sale, error: saleError } = await supabase
-        .from("sales")
-        .insert([
-          {
-            cashier_id: currentUser.id,
-            subtotal_before_discount: subtotal,
-            discount_type: hasDiscount ? discountType : "none",
-            discount_value: hasDiscount ? discountValueNum : 0,
-            discount_reason: hasDiscount
-              ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-              : null,
-            total_amount: total,
-            payment_method: paymentMethod,
-            cash_received: paymentMethod === "efectivo" ? Number.parseFloat(cashReceived) : null,
-            change_given: paymentMethod === "efectivo" ? change : null,
-            status: "completed",
-          },
-        ])
-        .select()
-        .single()
+      if (error) throw error
 
-      if (saleError) throw saleError
-
-      const saleItems = cart.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price: item.product.price,
-        subtotal: item.subtotal,
-      }))
-
-      const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
-
-      if (itemsError) throw itemsError
-
-      for (const item of cart) {
-        const { error: stockError } = await supabase
-          .from("products")
-          .update({
-            stock_quantity: item.product.stock_quantity - item.quantity,
-          })
-          .eq("id", item.product.id)
-
-        if (stockError) throw stockError
-
-        await supabase.from("stock_movements").insert([
-          {
-            product_id: item.product.id,
-            movement_type: "salida",
-            quantity: -item.quantity,
-            reason: `Venta #${sale.id}`,
-            user_id: currentUser.id,
-          },
-        ])
-      }
-
-      await sendSaleNotification(sale)
-
-      const discountReasonText = hasDiscount
-        ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-        : ""
-      generateReceipt(sale, cart, discountAmount, discountReasonText)
-
-      clearCart()
-      setIsPaymentDialogOpen(false)
-      setCashReceived("")
-      setPaymentMethod("efectivo")
-
+      // Reload both lists
       loadProducts()
+      loadDeletedProducts()
 
-      alert("Venta procesada exitosamente")
+      alert("Producto recuperado exitosamente")
     } catch (error) {
-      console.error("Error processing payment:", error)
-      alert("Error al procesar el pago")
-    } finally {
-      setProcessingPayment(false)
+      console.error("Error restoring product:", error)
+      alert("Error al recuperar el producto")
     }
   }
 
-  const generateReceipt = (sale: any, items: CartItem[], discount: number, discountReason: string) => {
-    const receiptContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Ticket de Venta - Farmacia Solidaria</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!formData.name.trim()) {
+      alert("El nombre del producto es requerido")
+      return
+    }
+
+    if (!formData.price || Number.parseFloat(formData.price) <= 0) {
+      alert("El precio debe ser mayor a 0")
+      return
+    }
+
+    if (!formData.stock_quantity || Number.parseInt(formData.stock_quantity) < 0) {
+      alert("El stock debe ser 0 o mayor")
+      return
+    }
+
+    try {
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        barcode: formData.barcode || null,
+        price: Number.parseFloat(formData.price),
+        stock_quantity: Number.parseInt(formData.stock_quantity),
+        min_stock_level: Number.parseInt(formData.min_stock_level),
+        category: formData.category,
+        image_url: formData.image_url || null,
+        expiration_date: formData.expiration_date || null,
+        days_before_expiry_alert: formData.days_before_expiry_alert
+          ? Number.parseInt(formData.days_before_expiry_alert)
+          : 30,
+      }
+
+      if (editingProduct) {
+        // Update existing product
+        const { error } = await supabase.from("products").update(productData).eq("id", editingProduct.id)
+
+        if (error) {
+          console.error("Error updating product:", error)
+          alert(`Error al actualizar: ${error.message}`)
+          return
         }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
+        alert("Producto actualizado exitosamente")
+      } else {
+        // Create new product without barcode uniqueness validation
+        const { error } = await supabase.from("products").insert([productData])
+
+        if (error) {
+          console.error("Error creating product:", error)
+          if (error.message.includes("duplicate")) {
+            alert(
+              "Este código de barras ya existe. Puedes usar el mismo código para un producto diferente si lo deseas.",
+            )
+          } else {
+            alert(`Error al guardar: ${error.message}`)
+          }
+          return
         }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .header { 
-            text-align: left; 
-            border-bottom: 1px dashed #000; 
-            padding-bottom: 5px; 
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .logo-text { 
-            font-size: 15px; 
-            font-weight: bold; 
-            margin-bottom: 2px;
-            width: 100%;
-        }
-        .subtitle { 
-            font-size: 11px; 
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .info-line { 
-            display: flex; 
-            justify-content: space-between; 
-            margin: 2px 0;
-            font-size: 13px;
-            width: 100%;
-        }
-        .items { 
-            margin: 8px 0; 
-            border-top: 1px dashed #000;
-            border-bottom: 1px dashed #000;
-            padding: 5px 0;
-            text-align: left;
-            width: 100%;
-        }
-        .item { 
-            margin: 3px 0; 
-            width: 100%;
-        }
-        .item-name { 
-            font-weight: bold; 
-        }
-        .item-details { 
-            font-size: 12px;
-        }
-        .total-section { 
-            margin-top: 8px; 
-            border-top: 1px dashed #000;
-            padding-top: 5px;
-            width: 100%;
-        }
-        .discount-line {
-            color: #008800;
-            font-weight: bold;
-        }
-        .total { 
-            font-size: 15px; 
-            font-weight: bold; 
-            text-align: right;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .payment-info { 
-            margin: 8px 0;
-            font-size: 12px;
-            width: 100%;
-        }
-        .footer { 
-            text-align: center; 
-            margin-top: 10px; 
-            border-top: 1px dashed #000;
-            padding-top: 5px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .thank-you { 
-            font-size: 13px; 
-            font-weight: bold; 
-            margin: 5px 0;
-        }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
-        }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
-        @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
+        alert("Producto registrado exitosamente")
+      }
+
+      // Reset form and close dialog
+      setFormData({
+        name: "",
+        description: "",
+        barcode: "",
+        price: "",
+        stock_quantity: "",
+        min_stock_level: "10",
+        category: "",
+        image_url: "",
+        expiration_date: "",
+        days_before_expiry_alert: "30",
+      })
+      setIsAddDialogOpen(false)
+      setEditingProduct(null)
+      loadProducts()
+    } catch (error) {
+      console.error("Unexpected error saving product:", error)
+      alert("Error inesperado al guardar el producto")
+    }
+  }
+
+  const handleEdit = (product: Product) => {
+    setFormData({
+      name: product.name,
+      description: product.description || "",
+      barcode: product.barcode || "",
+      price: product.price.toString(),
+      stock_quantity: product.stock_quantity.toString(),
+      min_stock_level: product.min_stock_level.toString(),
+      category: product.category || "",
+      image_url: product.image_url || "",
+      expiration_date: product.expiration_date || "",
+      days_before_expiry_alert: product.days_before_expiry_alert?.toString() || "30",
+    })
+    setEditingProduct(product)
+    setIsAddDialogOpen(true)
+  }
+
+  const handleDelete = async (productId: string) => {
+    if (!confirm("¿Estás seguro de que quieres eliminar este producto?")) return
+
+    try {
+      const { error } = await supabase.from("products").update({ is_active: false }).eq("id", productId)
+
+      if (error) throw error
+      loadProducts()
+      loadDeletedProducts()
+    } catch (error) {
+      console.error("Error deleting product:", error)
+      alert("Error al eliminar el producto")
+    }
+  }
+
+  const generateBarcode = () => {
+    const barcode = Date.now().toString()
+    setFormData({ ...formData, barcode })
+  }
+
+  const handleImageUploaded = (url: string) => {
+    setFormData({ ...formData, image_url: url })
+  }
+
+  const handleQrScan = (scannedCode: string) => {
+    setFormData({ ...formData, barcode: scannedCode })
+    setIsQrScannerOpen(false)
+  }
+
+  const handleManualScan = (e: React.FormEvent) => {
+    e.preventDefault()
+    const form = e.target as HTMLFormElement
+    const input = form.elements.namedItem("manualCode") as HTMLInputElement
+    if (input.value.trim()) {
+      handleQrScan(input.value.trim())
+    }
+  }
+
+  const getExpirationStatus = (product: Product) => {
+    if (!product.expiration_date) return null
+
+    const today = new Date()
+    const expirationDate = new Date(product.expiration_date)
+    const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const alertThreshold = product.days_before_expiry_alert || 30
+
+    if (daysUntilExpiry < 0) {
+      return { status: "expired", days: Math.abs(daysUntilExpiry), variant: "destructive" as const }
+    } else if (daysUntilExpiry <= alertThreshold) {
+      return { status: "expiring", days: daysUntilExpiry, variant: "warning" as const }
+    }
+    return null
+  }
+
+  const generateStockReport = () => {
+    const reportContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Reporte de Inventario</title>
+          <style>
             @page {
-                size: 55mm auto;
-                margin: 0 !important;
+              size: 55mm auto;
+              margin: 0;
             }
-        }
-    </style>
-</head>
-<body>
-    <div class="content">
-        <div class="header">
-            <div class="logo-text">FARMACIA SOLIDARIA</div>
-            <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
-            <div style="font-size: 10px;">
-                Dirección: Calle Principal #123<br>
-                Tel: (555) 123-4567<br>
-                www.farmaciasolidaria.com
-            </div>
-        </div>
-
-        <div class="info-line">
-            <span>Fecha:</span>
-            <span>${new Date().toLocaleString("es-ES")}</span>
-        </div>
-        <div class="info-line">
-            <span>Cajero:</span>
-            <span>${currentUser.full_name}</span>
-        </div>
-        <div class="info-line">
-            <span>Ticket #:</span>
-            <span>${sale.id.slice(-8).toUpperCase()}</span>
-        </div>
-
-        <div class="items">
-            <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">
-                PRODUCTOS VENDIDOS
-            </div>
-            ${items
-              .map(
-                (item) => `
-            <div class="item">
-                <div class="item-name">${item.product.name}</div>
-                <div class="item-details">
-                    ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
-                </div>
-            </div>`,
-              )
+            
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 10px;
+              line-height: 1.2;
+              margin: 0;
+              padding: 2mm;
+              width: 55mm;
+              max-width: 55mm;
+              box-sizing: border-box;
+              background: white;
+            }
+            
+            .header {
+              text-align: center;
+              margin-bottom: 3mm;
+              border-bottom: 1px dashed #000;
+              padding-bottom: 2mm;
+            }
+            
+            .title {
+              font-size: 12px;
+              font-weight: bold;
+              margin-bottom: 1mm;
+            }
+            
+            .date {
+              font-size: 9px;
+              margin-bottom: 1mm;
+            }
+            
+            .section {
+              margin: 3mm 0;
+            }
+            
+            .section-title {
+              font-size: 10px;
+              font-weight: bold;
+              text-align: center;
+              margin: 2mm 0;
+              padding: 1mm 0;
+              border-top: 1px dashed #000;
+              border-bottom: 1px dashed #000;
+            }
+            
+            .product-line {
+              display: flex;
+              justify-content: space-between;
+              margin: 1mm 0;
+              font-size: 9px;
+            }
+            
+            .product-name {
+              flex: 1;
+              margin-right: 2mm;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            
+            .product-stock {
+              text-align: right;
+              min-width: 8mm;
+              font-weight: bold;
+            }
+            
+            .low-stock {
+              color: #ff0000;
+            }
+            
+            .expiring {
+              color: #ff6600;
+            }
+            
+            .expired {
+              color: #cc0000;
+              text-decoration: line-through;
+            }
+            
+            .footer {
+              margin-top: 3mm;
+              padding-top: 2mm;
+              border-top: 1px dashed #000;
+              text-align: center;
+              font-size: 8px;
+            }
+            
+            .total-line {
+              font-weight: bold;
+              font-size: 10px;
+              text-align: center;
+              margin: 2mm 0;
+              padding: 1mm 0;
+              border-top: 1px solid #000;
+            }
+            
+            @media print {
+              body { 
+                width: 55mm;
+                max-width: 55mm;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">REPORTE DE INVENTARIO</div>
+            <div class="date">FECHA: ${new Date().toLocaleDateString("es-ES", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}</div>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS EN STOCK ==</div>
+            ${filteredProducts
+              .map((product) => {
+                const expirationStatus = getExpirationStatus(product)
+                const statusClass =
+                  expirationStatus?.status === "expired"
+                    ? "expired"
+                    : expirationStatus?.status === "expiring"
+                      ? "expiring"
+                      : ""
+                return `
+              <div class="product-line">
+                <div class="product-name ${statusClass}">${product.name}${expirationStatus ? ` (${expirationStatus.status === "expired" ? "VENCIDO" : `Vence en ${expirationStatus.days}d`})` : ""}</div>
+                <div class="product-stock ${product.stock_quantity <= product.min_stock_level ? "low-stock" : ""}">${product.stock_quantity}</div>
+              </div>
+            `
+              })
               .join("")}
-        </div>
-
-        <div class="total-section">
-            <div class="info-line">
-                <span>Subtotal:</span>
-                <span>$${subtotal.toFixed(2)}</span>
-            </div>
+          </div>
+          
+          <div class="total-line">
+            TOTAL PRODUCTOS: ${filteredProducts.length}
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS CON STOCK BAJO ==</div>
             ${
-              discount > 0
-                ? `
-            <div class="info-line discount-line">
-                <span>Descuento (${discountReason}):</span>
-                <span>-$${discount.toFixed(2)}</span>
-            </div>
+              filteredProducts
+                .filter((p) => p.stock_quantity <= p.min_stock_level)
+                .map(
+                  (product) => `
+              <div class="product-line">
+                <div class="product-name">${product.name}</div>
+                <div class="product-stock low-stock">${product.stock_quantity}</div>
+              </div>
+            `,
+                )
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto con stock bajo</div>'
+            }
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS POR VENCER ==</div>
+            ${
+              filteredProducts
+                .filter((p) => {
+                  const status = getExpirationStatus(p)
+                  return status && status.status === "expiring"
+                })
+                .map((product) => {
+                  const status = getExpirationStatus(product)
+                  return `
+              <div class="product-line">
+                <div class="product-name expiring">${product.name}</div>
+                <div class="product-stock">${status?.days}d</div>
+              </div>
             `
-                : ""
+                })
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto por vencer</div>'
             }
-            <div class="info-line">
-                <span>Impuestos:</span>
-                <span>$0.00</span>
-            </div>
-            <div class="total">
-                TOTAL: $${total.toFixed(2)}
-            </div>
+          </div>
+          
+          <div class="section">
+            <div class="section-title">== PRODUCTOS VENCIDOS ==</div>
             ${
-              discount > 0
-                ? `
-            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px;">
-                ¡Ahorraste $${discount.toFixed(2)}!
-            </div>
-            `
-                : ""
+              filteredProducts
+                .filter((p) => {
+                  const status = getExpirationStatus(p)
+                  return status && status.status === "expired"
+                })
+                .map(
+                  (product) => `
+              <div class="product-line">
+                <div class="product-name expired">${product.name}</div>
+                <div class="product-stock">VENCIDO</div>
+              </div>
+            `,
+                )
+                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto vencido</div>'
             }
-        </div>
-
-        <div class="payment-info">
-            <div class="info-line">
-                <span>Método de pago:</span>
-                <span>${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
-            </div>
-            ${
-              paymentMethod === "efectivo"
-                ? `
-            <div class="info-line">
-                <span>Recibido:</span>
-                <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
-            </div>
-            <div class="info-line">
-                <span>Cambio:</span>
-                <span>$${change.toFixed(2)}</span>
-            </div>`
-                : ""
-            }
-        </div>
-
-        <div class="footer">
-            <div class="thank-you">¡Gracias por su compra!</div>
-            <div>
-                Conserve este ticket<br>
-                Cambios y devoluciones: 30 días<br>
-                ¡Que tenga un excelente día!
-            </div>
-            <div style="margin-top: 8px; font-size: 10px;">
-                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
-            </div>
-
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+          </div>
+          
+          <div class="footer">
+            <div>Total de productos: ${filteredProducts.length}</div>
+            <div>Stock bajo: ${filteredProducts.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
+            <div>Por vencer: ${
+              filteredProducts.filter((p) => {
+                const s = getExpirationStatus(p)
+                return s && s.status === "expiring"
+              }).length
+            }</div>
+            <div>Vencidos: ${
+              filteredProducts.filter((p) => {
+                const s = getExpirationStatus(p)
+                return s && s.status === "expired"
+              }).length
+            }</div>
+            <div>Generado: ${new Date().toLocaleString("es-ES")}</div>
+          </div>
+        </body>
+      </html>
     `
 
-    const printWindow = window.open("", "_blank", "width=400,height=600")
+    const printWindow = window.open("", "_blank")
     if (printWindow) {
-      printWindow.document.write(receiptContent)
+      printWindow.document.write(reportContent)
       printWindow.document.close()
       printWindow.focus()
       setTimeout(() => {
         printWindow.print()
-        printWindow.close()
       }, 250)
     }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/auth/login")
-  }
-
-  const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(searchTerm.toLowerCase()))
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Cargando punto de venta...</div>
+        <div className="text-lg">Cargando productos...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-green-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm">
-        <div className="flex h-20 items-center justify-between px-6">
+      <header className="border-b bg-white">
+        <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <div className="p-2 bg-gradient-to-r from-purple-600 to-green-600 rounded-xl">
-              <ShoppingCart className="h-8 w-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-                Farmacia Solidaria
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                ¡Bienvenido/a {currentUser?.full_name}! 💊 Listo para ayudar
-              </p>
-            </div>
+            <Link href="/admin/dashboard">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Volver
+              </Button>
+            </Link>
+            <Package className="h-6 w-6 text-primary" />
+            <h1 className="text-xl font-bold">Gestión de Productos</h1>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="border-purple-200 hover:bg-purple-50 bg-transparent"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Cerrar Sesión
-          </Button>
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-5rem)]">
-        {/* Products Section */}
-        <div className="flex-1 p-6 space-y-6 overflow-auto">
-          <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white/20 rounded-full">
-                    <Banknote className="h-8 w-8" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Saldo de Caja</h2>
-                    <p className="text-blue-100 text-sm">Dinero inicial disponible</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-blue-100">Efectivo disponible:</p>
-                  <p className="text-4xl font-bold">${boxBalance.toFixed(2)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="p-6 space-y-6">
+        {/* Search and Add */}
+        <div className="flex flex-col sm:flex-col gap-4 justify-between">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar productos..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
 
-          {/* Welcome Message */}
-          <Card className="bg-gradient-to-r from-purple-500 to-green-500 text-white border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-full">
-                  <ShoppingCart className="h-8 w-8" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}! 👋</h2>
-                  <p className="text-purple-100">Estamos aquí para cuidar la salud de nuestra comunidad</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={generateStockReport}>
+              <Package className="h-4 w-4 mr-2" />
+              Exportar Inventario
+            </Button>
 
-          {/* Barcode Scanner */}
-          <Card className="border-purple-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-purple-50 to-green-50">
-              <CardTitle className="flex items-center gap-2 text-purple-700">
-                <Scan className="h-5 w-5" />
-                Escáner de Código de Barras / QR
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    ref={barcodeInputRef}
-                    placeholder="Escanea o ingresa código de barras..."
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleBarcodeSearch()}
-                    className="border-purple-200 focus:border-purple-400"
-                    autoFocus
-                  />
-                  <Button
-                    onClick={handleBarcodeSearch}
-                    className="bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700"
-                  >
-                    <Scan className="h-4 w-4" />
-                  </Button>
-                </div>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
                 <Button
-                  onClick={() => setIsQRScannerOpen(true)}
-                  variant="outline"
-                  className="w-full border-green-200 text-green-700 hover:bg-green-50"
+                  onClick={() => {
+                    setEditingProduct(null)
+                    setFormData({
+                      name: "",
+                      description: "",
+                      barcode: "",
+                      price: "",
+                      stock_quantity: "",
+                      min_stock_level: "10",
+                      category: "",
+                      image_url: "",
+                      expiration_date: "",
+                      days_before_expiry_alert: "30",
+                    })
+                  }}
                 >
-                  📷 Abrir Escáner QR Avanzado
+                  <Plus className="h-4 w-4 mr-2" />
+                  Agregar Producto
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  💡 Tip: Si el producto no existe en activos, te mostrará si está en eliminados
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
+                  <DialogDescription>
+                    {editingProduct ? "Modifica los datos del producto" : "Completa la información del nuevo producto"}
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <ImageUpload
+                    onImageUploaded={handleImageUploaded}
+                    currentImage={formData.image_url}
+                    className="space-y-2"
+                  />
 
-          {/* Product Search */}
-          <Card className="border-green-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-purple-50">
-              <CardTitle className="text-green-700">Buscar Medicamentos</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <Input
-                placeholder="Buscar por nombre del medicamento..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="border-green-200 focus:border-green-400"
-              />
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nombre del producto *</Label>
+                    <Input
+                      id="name"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product) => (
-              <Card
-                key={product.id}
-                className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 border-0 shadow-lg bg-white/80 backdrop-blur-sm"
-              >
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="w-full h-32 bg-gradient-to-br from-purple-100 to-green-100 rounded-lg flex items-center justify-center overflow-hidden">
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-green-400 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-2xl">💊</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">Sin imagen</span>
-                        </div>
-                      )}
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Descripción</Label>
+                    <Textarea
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="barcode">Código de barras</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="barcode"
+                        value={formData.barcode}
+                        onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                        placeholder="Escanea o ingresa manualmente"
+                        autoFocus={scannerMode === "manual"}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && formData.barcode) {
+                            e.preventDefault()
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(true)}>
+                        <QrCode className="h-4 w-4" />
+                      </Button>
+                      <Button type="button" variant="outline" onClick={generateBarcode}>
+                        Generar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Precio *</Label>
+                      <Input
+                        id="price"
+                        type="number"
+                        step="0.01"
+                        required
+                        value={formData.price}
+                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                      />
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="font-bold text-lg text-gray-800 line-clamp-2">{product.name}</h3>
-                      <div className="flex justify-between items-center">
-                        <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-                          ${product.price.toFixed(2)}
-                        </span>
-                        <Badge
-                          variant={
-                            product.stock_quantity > 10
-                              ? "default"
-                              : product.stock_quantity > 0
-                                ? "secondary"
-                                : "destructive"
-                          }
-                          className="font-semibold"
-                        >
-                          Stock: {product.stock_quantity}
-                        </Badge>
-                      </div>
-                      <Button
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-semibold py-3"
-                        disabled={product.stock_quantity === 0}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        {product.stock_quantity === 0 ? "Sin Stock" : "Agregar al Carrito"}
-                      </Button>
+                      <Label htmlFor="category">Categoría</Label>
+                      <Input
+                        id="category"
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
 
-        {/* Cart Section */}
-        <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-              🛒 Carrito de Compras
-            </h2>
-            {cart.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={clearCart}
-                className="border-red-200 text-red-600 hover:bg-red-50 bg-transparent"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-3 flex-1 overflow-auto max-h-96">
-            {cart.map((item) => (
-              <Card key={item.product.id} className="border-purple-100 shadow-md">
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-purple-600">${item.product.price.toFixed(2)}</span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-8 w-8 p-0 border-purple-200"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-8 w-8 p-0 border-purple-200"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_quantity">Stock actual *</Label>
+                      <Input
+                        id="stock_quantity"
+                        type="number"
+                        required
+                        value={formData.stock_quantity}
+                        onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                      />
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-lg text-green-600">${item.subtotal.toFixed(2)}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="min_stock_level">Stock mínimo</Label>
+                      <Input
+                        id="min_stock_level"
+                        type="number"
+                        value={formData.min_stock_level}
+                        onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
+                      />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
 
-          {cart.length === 0 && (
-            <div className="text-center text-muted-foreground py-12">
-              <ShoppingCart className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg">El carrito está vacío</p>
-              <p className="text-sm">Agrega productos para comenzar</p>
-            </div>
-          )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="expiration_date">Fecha de caducidad</Label>
+                      <Input
+                        id="expiration_date"
+                        type="date"
+                        value={formData.expiration_date}
+                        onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
+                      />
+                    </div>
 
-          {cart.length > 0 && (
-            <div className="space-y-4 border-t pt-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Total a pagar</p>
-                <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-                  ${total.toFixed(2)}
-                </div>
-              </div>
-              <Button
-                onClick={() => setIsPaymentDialogOpen(true)}
-                className="w-full bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-bold py-4 text-lg"
-                size="lg"
-              >
-                <Receipt className="h-5 w-5 mr-2" />💳 Procesar Pago
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="days_before_expiry_alert">Días de alerta</Label>
+                      <Input
+                        id="days_before_expiry_alert"
+                        type="number"
+                        value={formData.days_before_expiry_alert}
+                        onChange={(e) => setFormData({ ...formData, days_before_expiry_alert: e.target.value })}
+                        placeholder="30"
+                      />
+                      <p className="text-xs text-muted-foreground">Días antes de vencer para alertar</p>
+                    </div>
+                  </div>
 
-      <InstallPrompt />
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">{editingProduct ? "Actualizar" : "Agregar"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
 
-      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="border-purple-200 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-              💳 Procesar Pago
-            </DialogTitle>
-            <DialogDescription className="text-lg font-semibold">
-              Subtotal: <span className="text-purple-600">${subtotal.toFixed(2)}</span>
-            </DialogDescription>
-          </DialogHeader>
+            <Dialog open={isQrScannerOpen} onOpenChange={setIsQrScannerOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Escanear Código de Barras</DialogTitle>
+                  <DialogDescription>Elige el método de escaneo que prefieras</DialogDescription>
+                </DialogHeader>
 
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <Card className="border-orange-200 bg-orange-50/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2 text-orange-700">
-                  <Tag className="h-4 w-4" />
-                  Aplicar Descuento
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Tipo</Label>
-                    <Select
-                      value={discountType}
-                      onValueChange={(value: "percentage" | "fixed") => setDiscountType(value)}
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={scannerMode === "manual" ? "default" : "outline"}
+                      onClick={() => setScannerMode("manual")}
+                      className="flex-1"
                     >
-                      <SelectTrigger className="border-orange-200">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">
-                          <div className="flex items-center gap-2">
-                            <Percent className="h-3 w-3" />
-                            Porcentaje (%)
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="fixed">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-3 w-3" />
-                            Monto fijo ($)
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <Keyboard className="h-4 w-4 mr-2" />
+                      Escáner Físico
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={scannerMode === "camera" ? "default" : "outline"}
+                      onClick={() => setScannerMode("camera")}
+                      className="flex-1"
+                    >
+                      <Camera className="h-4 w-4 mr-2" />
+                      Cámara
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Valor</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={discountValue}
-                      onChange={(e) => setDiscountValue(e.target.value)}
-                      placeholder={discountType === "percentage" ? "10" : "50.00"}
-                      className="border-orange-200"
-                    />
-                  </div>
+
+                  {scannerMode === "manual" && (
+                    <div className="space-y-4">
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Usa tu escáner de códigos de barras físico:
+                        </p>
+                        <form onSubmit={handleManualScan}>
+                          <Input
+                            name="manualCode"
+                            placeholder="Escanea el código aquí..."
+                            autoFocus
+                            className="font-mono"
+                          />
+                        </form>
+                      </div>
+                    </div>
+                  )}
+
+                  {scannerMode === "camera" && (
+                    <div className="space-y-4">
+                      <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                        <div className="text-center">
+                          <Camera className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Funcionalidad de cámara próximamente</p>
+                        </div>
+                      </div>
+                      <form onSubmit={handleManualScan}>
+                        <Input name="manualCode" placeholder="O ingresa el código manualmente" className="font-mono" />
+                      </form>
+                    </div>
+                  )}
                 </div>
 
-                {discountAmount > 0 && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div className="flex justify-between items-center text-green-700 font-semibold">
-                      <span>Descuento aplicado:</span>
-                      <span className="text-lg">-${discountAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
-                      {discountType === "percentage"
-                        ? `${discountValue}% de descuento`
-                        : `$${discountValue} de descuento`}
-                    </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(false)}>
+                    Cancelar
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <Tabs defaultValue="active" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="active">
+              <Package className="h-4 w-4 mr-2" />
+              Productos Activos ({filteredProducts.length})
+            </TabsTrigger>
+            <TabsTrigger value="deleted">
+              <Archive className="h-4 w-4 mr-2" />
+              Productos Eliminados ({filteredDeletedProducts.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="active" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Productos Activos ({filteredProducts.length})</CardTitle>
+                <CardDescription>Gestiona el inventario activo de la farmacia</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Imagen</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Caducidad</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredProducts.map((product) => {
+                      const expirationStatus = getExpirationStatus(product)
+
+                      return (
+                        <TableRow key={product.id}>
+                          <TableCell>
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                              {product.image_url ? (
+                                <img
+                                  src={product.image_url || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-6 w-6 text-gray-400" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              {product.description && (
+                                <p className="text-sm text-muted-foreground">{product.description}</p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
+                          <TableCell>${product.price.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{product.stock_quantity}</span>
+                              {product.stock_quantity <= product.min_stock_level && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Bajo
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{product.category || "Sin categoría"}</TableCell>
+                          <TableCell>
+                            {product.expiration_date ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm">
+                                  {new Date(product.expiration_date).toLocaleDateString("es-ES")}
+                                </span>
+                                {expirationStatus && (
+                                  <Badge variant={expirationStatus.variant} className="text-xs w-fit">
+                                    {expirationStatus.status === "expired"
+                                      ? `Vencido hace ${expirationStatus.days}d`
+                                      : `${expirationStatus.days}d restantes`}
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">Sin fecha</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">Activo</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+
+                {filteredProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {searchTerm ? "No se encontraron productos" : "No hay productos registrados"}
                   </div>
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
 
-            {discountAmount > 0 && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <div className="flex justify-between text-sm text-muted-foreground mb-1">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-green-600 font-semibold mb-2">
-                  <span>Descuento:</span>
-                  <span>-${discountAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold text-purple-700 border-t border-purple-200 pt-2">
-                  <span>Total a pagar:</span>
-                  <span>${total.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
+          <TabsContent value="deleted" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Productos Eliminados ({filteredDeletedProducts.length})</CardTitle>
+                <CardDescription>
+                  Productos que fueron eliminados pero se mantienen en el sistema por tener ventas registradas. Puedes
+                  recuperarlos aquí.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Imagen</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Stock</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredDeletedProducts.map((product) => (
+                      <TableRow key={product.id} className="opacity-60">
+                        <TableCell>
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+                            {product.image_url ? (
+                              <img
+                                src={product.image_url || "/placeholder.svg"}
+                                alt={product.name}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <Package className="h-6 w-6 text-gray-400" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{product.name}</p>
+                            {product.description && (
+                              <p className="text-sm text-muted-foreground">{product.description}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
+                        <TableCell>${product.price.toFixed(2)}</TableCell>
+                        <TableCell>{product.stock_quantity}</TableCell>
+                        <TableCell>{product.category || "Sin categoría"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Eliminado</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRestore(product.id)}
+                            className="gap-2"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            Recuperar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
 
-            <div className="space-y-2">
-              <Label className="text-base font-semibold">Método de pago</Label>
-              <Select value={paymentMethod} onValueChange={(value: "efectivo" | "tarjeta") => setPaymentMethod(value)}>
-                <SelectTrigger className="border-purple-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="efectivo">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-green-600" />💵 Efectivo
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="tarjeta">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-purple-600" />💳 Tarjeta
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {paymentMethod === "efectivo" && (
-              <div className="space-y-2">
-                <Label htmlFor="cashReceived" className="text-base font-semibold">
-                  Monto recibido
-                </Label>
-                <Input
-                  id="cashReceived"
-                  type="number"
-                  step="0.01"
-                  value={cashReceived}
-                  onChange={(e) => setCashReceived(e.target.value)}
-                  placeholder="0.00"
-                  className="border-green-200 focus:border-green-400 text-lg"
-                />
-                {cashReceived && Number.parseFloat(cashReceived) >= total && (
-                  <div className="text-xl font-bold text-green-600 bg-green-50 p-3 rounded-lg text-center">
-                    💰 Cambio: ${change.toFixed(2)}
+                {filteredDeletedProducts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {searchTerm ? "No se encontraron productos eliminados" : "No hay productos eliminados"}
                   </div>
                 )}
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)} className="border-gray-300">
-              Cancelar
-            </Button>
-            <Button
-              onClick={handlePayment}
-              disabled={
-                processingPayment ||
-                (paymentMethod === "efectivo" && (!cashReceived || Number.parseFloat(cashReceived) < total))
-              }
-              className="bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-bold"
-            >
-              {processingPayment ? "Procesando... ⏳" : "✅ Confirmar Pago"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isQRScannerOpen}
-        onOpenChange={(open) => {
-          setIsQRScannerOpen(open)
-          if (!open) {
-            stopCamera()
-            setScannerMode("manual")
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">📷 Escáner QR Avanzado</DialogTitle>
-            <DialogDescription>
-              {scannerMode === "camera"
-                ? "Apunta la cámara hacia el código QR"
-                : "Ingresa el código manualmente o usa la cámara"}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Button
-                variant={scannerMode === "manual" ? "default" : "outline"}
-                onClick={() => setScannerMode("manual")}
-                className="flex-1"
-              >
-                <Keyboard className="h-4 w-4 mr-2" />
-                Manual
-              </Button>
-              <Button
-                variant={scannerMode === "camera" ? "default" : "outline"}
-                onClick={() => setScannerMode("camera")}
-                className="flex-1"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Cámara
-              </Button>
-            </div>
-
-            {scannerMode === "camera" ? (
-              <div className="space-y-3">
-                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-gray-300 relative">
-                  {isScanning ? (
-                    <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="text-center text-gray-500">
-                        <Camera className="h-16 w-16 mx-auto mb-2" />
-                        <p className="text-sm">Presiona "Iniciar Cámara"</p>
-                      </div>
-                    </div>
-                  )}
-                  <canvas ref={canvasRef} className="hidden" />
-                </div>
-
-                {!isScanning ? (
-                  <Button onClick={startCamera} className="w-full">
-                    <Camera className="h-4 w-4 mr-2" />
-                    Iniciar Cámara
-                  </Button>
-                ) : (
-                  <Button onClick={stopCamera} variant="outline" className="w-full bg-transparent">
-                    Detener Cámara
-                  </Button>
-                )}
-
-                <p className="text-xs text-muted-foreground text-center">
-                  📱 Funciona mejor en dispositivos móviles con cámara trasera
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-                  <div className="text-center text-gray-500">
-                    <Scan className="h-16 w-16 mx-auto mb-2" />
-                    <p className="text-sm">Modo Manual</p>
-                    <p className="text-xs mt-2">
-                      🖨️ Perfecto para escáneres físicos
-                      <br />📱 También funciona con códigos QR
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Código QR o Código de Barras:</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Ingresa o escanea el código..."
-                      value={barcodeInput}
-                      onChange={(e) => setBarcodeInput(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          handleBarcodeSearch()
-                          setIsQRScannerOpen(false)
-                        }
-                      }}
-                      autoFocus
-                    />
-                    <Button
-                      onClick={() => {
-                        handleBarcodeSearch()
-                        setIsQRScannerOpen(false)
-                      }}
-                      size="sm"
-                    >
-                      ✅
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsQRScannerOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
