@@ -125,14 +125,14 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from("products")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("is_active", true)
-        .order("name")
-        .range(0, 50000)
+        .order("name", { ascending: true })
 
       if (error) throw error
+      console.log("[v0] Admin Products loaded:", data?.length, "Total count:", count)
       setProducts(data || [])
     } catch (error) {
       console.error("Error loading products:", error)
@@ -143,14 +143,14 @@ export default function ProductsPage() {
 
   const loadDeletedProducts = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from("products")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("is_active", false)
-        .order("name")
-        .range(0, 50000)
+        .order("name", { ascending: true })
 
       if (error) throw error
+      console.log("[v0] Deleted Products loaded:", data?.length, "Total count:", count)
       setDeletedProducts(data || [])
     } catch (error) {
       console.error("Error loading deleted products:", error)
