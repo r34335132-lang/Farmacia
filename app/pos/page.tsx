@@ -69,7 +69,6 @@ export default function POSPage() {
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage")
   const [discountValue, setDiscountValue] = useState("")
   const [boxBalance, setBoxBalance] = useState(500)
-  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [currentPage, setCurrentPage] = useState(1)
 
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -175,26 +174,16 @@ export default function POSPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("is_active", true)
-        .order("name", { ascending: true })
+      const response = await fetch("/api/products")
+      const { products: data, total } = await response.json()
 
-      if (error) throw error
+      console.log("[v0] Total products loaded from API:", total)
 
-      console.log("[v0] TOTAL RAW PRODUCTS LOADED FROM DB:", data?.length)
-      console.log("[v0] First product:", data?.[0])
-      console.log("[v0] Last product:", data?.[data.length - 1])
-      console.log("[v0] Products starting with 'r':", data?.filter((p) => p.name.toLowerCase().startsWith("r")).length)
-      console.log("[v0] Products starting with 's':", data?.filter((p) => p.name.toLowerCase().startsWith("s")).length)
-      console.log("[v0] Products starting with 'z':", data?.filter((p) => p.name.toLowerCase().startsWith("z")).length)
-
-      setProducts(data || [])
-      setAllProducts(data || [])
+      const activeProducts = data.filter((p: any) => p.is_active !== false)
+      setProducts(activeProducts)
       setCurrentPage(1)
     } catch (error) {
-      console.error("[v0] Error loading products:", error)
+      console.error("Error loading products:", error)
     } finally {
       setLoading(false)
     }
@@ -664,25 +653,9 @@ export default function POSPage() {
   )
 
   const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
-  const paginatedProducts = filteredProducts.slice(
-    (currentPage - 1) * PRODUCTS_PER_PAGE,
-    currentPage * PRODUCTS_PER_PAGE,
-  )
-
-  if (searchTerm) {
-    console.log(
-      "[v0] ===== BÚSQUEDA =====",
-      "\nSearch term: '" + searchTerm + "'",
-      "\nTotal productos disponibles:",
-      products.length,
-      "\nProductos encontrados:",
-      filteredProducts.length,
-      "\nPrimeros 3 resultados:",
-      filteredProducts.slice(0, 3).map((p) => p.name),
-      "\nÚltimos 3 resultados:",
-      filteredProducts.slice(-3).map((p) => p.name),
-    )
-  }
+  const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE
+  const endIndex = startIndex + PRODUCTS_PER_PAGE
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex)
 
   if (loading) {
     return (
@@ -819,7 +792,8 @@ export default function POSPage() {
           </Card>
 
           <div className="text-sm text-muted-foreground bg-white/80 backdrop-blur-sm p-3 rounded-lg">
-            Mostrando {paginatedProducts.length} de {filteredProducts.length} productos
+            Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length}{" "}
+            productos
             {searchTerm && ` (filtrados de ${products.length} totales)`}
           </div>
 
@@ -887,7 +861,7 @@ export default function POSPage() {
             <div className="flex flex-col items-center gap-4 mt-6 mb-6">
               <div className="flex justify-center items-center gap-2">
                 <Button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                   variant="outline"
                   className="bg-white/80 backdrop-blur-sm"
@@ -896,28 +870,61 @@ export default function POSPage() {
                 </Button>
 
                 <div className="flex gap-2">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1
-                    return (
+                  {/* Show first page */}
+                  <Button
+                    onClick={() => setCurrentPage(1)}
+                    variant={currentPage === 1 ? "default" : "outline"}
+                    className={
+                      currentPage === 1
+                        ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                        : "bg-white/80 backdrop-blur-sm"
+                    }
+                  >
+                    1
+                  </Button>
+
+                  {/* Show ellipsis if needed */}
+                  {currentPage > 3 && <span className="flex items-center px-2">...</span>}
+
+                  {/* Show pages around current page */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => page > 1 && page < totalPages && Math.abs(page - currentPage) <= 1)
+                    .map((page) => (
                       <Button
-                        key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
-                        variant={currentPage === pageNum ? "default" : "outline"}
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        variant={currentPage === page ? "default" : "outline"}
                         className={
-                          currentPage === pageNum
+                          currentPage === page
                             ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
                             : "bg-white/80 backdrop-blur-sm"
                         }
                       >
-                        {pageNum}
+                        {page}
                       </Button>
-                    )
-                  })}
-                  {totalPages > 5 && <span className="flex items-center px-2">...</span>}
+                    ))}
+
+                  {/* Show ellipsis if needed */}
+                  {currentPage < totalPages - 2 && <span className="flex items-center px-2">...</span>}
+
+                  {/* Show last page */}
+                  {totalPages > 1 && (
+                    <Button
+                      onClick={() => setCurrentPage(totalPages)}
+                      variant={currentPage === totalPages ? "default" : "outline"}
+                      className={
+                        currentPage === totalPages
+                          ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                          : "bg-white/80 backdrop-blur-sm"
+                      }
+                    >
+                      {totalPages}
+                    </Button>
+                  )}
                 </div>
 
                 <Button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                   variant="outline"
                   className="bg-white/80 backdrop-blur-sm"

@@ -147,21 +147,14 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase.from("products").select("*").order("name", { ascending: true })
+      const response = await fetch("/api/products")
+      const { products: data, total } = await response.json()
 
-      if (error) throw error
-
-      // Detailed DEBUG LOGS
-      console.log("[v0] TOTAL RAW PRODUCTS LOADED FROM DB:", data?.length)
-      console.log("[v0] First product:", data?.[0])
-      console.log("[v0] Last product:", data?.[data.length - 1])
-      console.log("[v0] Products starting with 'r':", data?.filter((p) => p.name.toLowerCase().startsWith("r")).length)
-      console.log("[v0] Products starting with 's':", data?.filter((p) => p.name.toLowerCase().startsWith("s")).length)
-      console.log("[v0] Products starting with 'z':", data?.filter((p) => p.name.toLowerCase().startsWith("z")).length)
+      console.log("[v0] Total products loaded from API:", total)
 
       const allProducts = data || []
-      const activeProds = allProducts.filter((p) => p.is_active !== false)
-      const inactiveProds = allProducts.filter((p) => p.is_active === false)
+      const activeProds = allProducts.filter((p: any) => p.is_active !== false)
+      const inactiveProds = allProducts.filter((p: any) => p.is_active === false)
 
       console.log(
         "[v0] ===== ADMIN PRODUCTS =====",
@@ -171,10 +164,6 @@ export default function ProductsPage() {
         activeProds.length,
         "\nEliminados:",
         inactiveProds.length,
-        "\nPrimeros activos:",
-        activeProds.slice(0, 3).map((p) => p.name),
-        "\nÚltimos activos:",
-        activeProds.slice(-3).map((p) => p.name),
       )
 
       setProducts(activeProds)
@@ -182,7 +171,7 @@ export default function ProductsPage() {
       setCurrentPageActive(1)
       setCurrentPageDeleted(1)
     } catch (error) {
-      console.error("[v0] Error loading products:", error)
+      console.error("Error loading products:", error)
     } finally {
       setLoading(false)
     }
@@ -607,16 +596,14 @@ export default function ProductsPage() {
   }
 
   const totalPagesActive = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
-  const paginatedActiveProducts = filteredProducts.slice(
-    (currentPageActive - 1) * PRODUCTS_PER_PAGE,
-    currentPageActive * PRODUCTS_PER_PAGE,
-  )
+  const startIndexActive = (currentPageActive - 1) * PRODUCTS_PER_PAGE
+  const endIndexActive = startIndexActive + PRODUCTS_PER_PAGE
+  const paginatedActiveProducts = filteredProducts.slice(startIndexActive, endIndexActive)
 
   const totalPagesDeleted = Math.ceil(filteredDeletedProducts.length / PRODUCTS_PER_PAGE)
-  const paginatedDeletedProducts = filteredDeletedProducts.slice(
-    (currentPageDeleted - 1) * PRODUCTS_PER_PAGE,
-    currentPageDeleted * PRODUCTS_PER_PAGE,
-  )
+  const startIndexDeleted = (currentPageDeleted - 1) * PRODUCTS_PER_PAGE
+  const endIndexDeleted = startIndexDeleted + PRODUCTS_PER_PAGE
+  const paginatedDeletedProducts = filteredDeletedProducts.slice(startIndexDeleted, endIndexDeleted)
 
   if (loading) {
     return (
@@ -909,7 +896,8 @@ export default function ProductsPage() {
 
           <TabsContent value="active" className="mt-6">
             <div className="mb-4 text-sm text-muted-foreground">
-              Mostrando {paginatedActiveProducts.length} de {filteredProducts.length} productos
+              Mostrando {startIndexActive + 1}-{Math.min(endIndexActive, filteredProducts.length)} de{" "}
+              {filteredProducts.length} productos
               {searchTerm && ` (filtrados de ${products.length} totales)`}
             </div>
 
@@ -1020,7 +1008,7 @@ export default function ProductsPage() {
                   <div className="flex flex-col items-center gap-4 mt-6">
                     <div className="flex justify-center items-center gap-2">
                       <Button
-                        onClick={() => setCurrentPageActive(Math.max(1, currentPageActive - 1))}
+                        onClick={() => setCurrentPageActive((prev) => Math.max(1, prev - 1))}
                         disabled={currentPageActive === 1}
                         variant="outline"
                       >
@@ -1028,23 +1016,45 @@ export default function ProductsPage() {
                       </Button>
 
                       <div className="flex gap-2">
-                        {Array.from({ length: Math.min(5, totalPagesActive) }, (_, i) => {
-                          const pageNum = i + 1
-                          return (
-                            <Button
-                              key={pageNum}
-                              onClick={() => setCurrentPageActive(pageNum)}
-                              variant={currentPageActive === pageNum ? "default" : "outline"}
-                            >
-                              {pageNum}
-                            </Button>
+                        <Button
+                          onClick={() => setCurrentPageActive(1)}
+                          variant={currentPageActive === 1 ? "default" : "outline"}
+                        >
+                          1
+                        </Button>
+
+                        {currentPageActive > 3 && <span className="flex items-center px-2">...</span>}
+
+                        {Array.from({ length: totalPagesActive }, (_, i) => i + 1)
+                          .filter(
+                            (page) => page > 1 && page < totalPagesActive && Math.abs(page - currentPageActive) <= 1,
                           )
-                        })}
-                        {totalPagesActive > 5 && <span className="flex items-center px-2">...</span>}
+                          .map((page) => (
+                            <Button
+                              key={page}
+                              onClick={() => setCurrentPageActive(page)}
+                              variant={currentPageActive === page ? "default" : "outline"}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+
+                        {currentPageActive < totalPagesActive - 2 && (
+                          <span className="flex items-center px-2">...</span>
+                        )}
+
+                        {totalPagesActive > 1 && (
+                          <Button
+                            onClick={() => setCurrentPageActive(totalPagesActive)}
+                            variant={currentPageActive === totalPagesActive ? "default" : "outline"}
+                          >
+                            {totalPagesActive}
+                          </Button>
+                        )}
                       </div>
 
                       <Button
-                        onClick={() => setCurrentPageActive(Math.min(totalPagesActive, currentPageActive + 1))}
+                        onClick={() => setCurrentPageActive((prev) => Math.min(totalPagesActive, prev + 1))}
                         disabled={currentPageActive === totalPagesActive}
                         variant="outline"
                       >
@@ -1063,7 +1073,8 @@ export default function ProductsPage() {
 
           <TabsContent value="deleted" className="mt-6">
             <div className="mb-4 text-sm text-muted-foreground">
-              Mostrando {paginatedDeletedProducts.length} de {filteredDeletedProducts.length} productos eliminados
+              Mostrando {startIndexDeleted + 1}-{Math.min(endIndexDeleted, filteredDeletedProducts.length)} de{" "}
+              {filteredDeletedProducts.length} productos eliminados
               {searchTerm && ` (filtrados de ${deletedProducts.length} totales)`}
             </div>
 
@@ -1146,7 +1157,7 @@ export default function ProductsPage() {
                   <div className="flex flex-col items-center gap-4 mt-6">
                     <div className="flex justify-center items-center gap-2">
                       <Button
-                        onClick={() => setCurrentPageDeleted(Math.max(1, currentPageDeleted - 1))}
+                        onClick={() => setCurrentPageDeleted((prev) => Math.max(1, prev - 1))}
                         disabled={currentPageDeleted === 1}
                         variant="outline"
                       >
@@ -1154,23 +1165,45 @@ export default function ProductsPage() {
                       </Button>
 
                       <div className="flex gap-2">
-                        {Array.from({ length: Math.min(5, totalPagesDeleted) }, (_, i) => {
-                          const pageNum = i + 1
-                          return (
-                            <Button
-                              key={pageNum}
-                              onClick={() => setCurrentPageDeleted(pageNum)}
-                              variant={currentPageDeleted === pageNum ? "default" : "outline"}
-                            >
-                              {pageNum}
-                            </Button>
+                        <Button
+                          onClick={() => setCurrentPageDeleted(1)}
+                          variant={currentPageDeleted === 1 ? "default" : "outline"}
+                        >
+                          1
+                        </Button>
+
+                        {currentPageDeleted > 3 && <span className="flex items-center px-2">...</span>}
+
+                        {Array.from({ length: totalPagesDeleted }, (_, i) => i + 1)
+                          .filter(
+                            (page) => page > 1 && page < totalPagesDeleted && Math.abs(page - currentPageDeleted) <= 1,
                           )
-                        })}
-                        {totalPagesDeleted > 5 && <span className="flex items-center px-2">...</span>}
+                          .map((page) => (
+                            <Button
+                              key={page}
+                              onClick={() => setCurrentPageDeleted(page)}
+                              variant={currentPageDeleted === page ? "default" : "outline"}
+                            >
+                              {page}
+                            </Button>
+                          ))}
+
+                        {currentPageDeleted < totalPagesDeleted - 2 && (
+                          <span className="flex items-center px-2">...</span>
+                        )}
+
+                        {totalPagesDeleted > 1 && (
+                          <Button
+                            onClick={() => setCurrentPageDeleted(totalPagesDeleted)}
+                            variant={currentPageDeleted === totalPagesDeleted ? "default" : "outline"}
+                          >
+                            {totalPagesDeleted}
+                          </Button>
+                        )}
                       </div>
 
                       <Button
-                        onClick={() => setCurrentPageDeleted(Math.min(totalPagesDeleted, currentPageDeleted + 1))}
+                        onClick={() => setCurrentPageDeleted((prev) => Math.min(totalPagesDeleted, prev + 1))}
                         disabled={currentPageDeleted === totalPagesDeleted}
                         variant="outline"
                       >
