@@ -41,6 +41,7 @@ interface Product {
   stock_quantity: number
   barcode?: string
   image_url?: string
+  is_active: boolean
 }
 
 interface CartItem {
@@ -172,13 +173,16 @@ export default function POSPage() {
     try {
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, price, stock_quantity, barcode, image_url")
-        .eq("is_active", true)
+        .select("id, name, price, stock_quantity, barcode, image_url, is_active")
         .order("name", { ascending: true })
 
       if (error) throw error
-      console.log("[v0] POS Products loaded:", data?.length)
-      setProducts(data || [])
+
+      const allProducts = data || []
+      const activeProducts = allProducts.filter((p) => p.is_active !== false)
+
+      console.log("[v0] TODOS los productos del POS cargados:", allProducts.length, "Activos:", activeProducts.length)
+      setProducts(activeProducts)
     } catch (error) {
       console.error("Error loading products:", error)
     } finally {
@@ -189,29 +193,12 @@ export default function POSPage() {
   const handleBarcodeSearch = async () => {
     if (!barcodeInput.trim()) return
 
-    // Primero buscar en productos activos
     const product = products.find((p) => p.barcode === barcodeInput.trim())
 
     if (!product) {
-      // Si no encuentra en activos, buscar en todos (incluyendo eliminados)
-      const { data: deletedProduct, error } = await supabase
-        .from("products")
-        .select("id, name, price, stock_quantity, barcode, image_url")
-        .eq("barcode", barcodeInput.trim())
-        .single()
-
-      if (deletedProduct && !error) {
-        // Mostrar información del producto eliminado
-        alert(
-          `⚠️ PRODUCTO ENCONTRADO PERO ELIMINADO\n\nNombre: ${deletedProduct.name}\nPrecio: $${deletedProduct.price.toFixed(2)}\nStock: ${deletedProduct.stock_quantity}\n\nPuedes intentar recuperarlo desde gestión de productos.`,
-        )
-        setBarcodeInput("")
-        return
-      } else {
-        alert("❌ Producto no encontrado")
-        setBarcodeInput("")
-        return
-      }
+      alert("❌ Producto no encontrado")
+      setBarcodeInput("")
+      return
     }
 
     if (product) {
