@@ -125,7 +125,12 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const { data, error } = await supabase.from("products").select("*").eq("is_active", true).order("name")
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", true)
+        .order("name")
+        .range(0, 50000)
 
       if (error) throw error
       setProducts(data || [])
@@ -138,7 +143,12 @@ export default function ProductsPage() {
 
   const loadDeletedProducts = async () => {
     try {
-      const { data, error } = await supabase.from("products").select("*").eq("is_active", false).order("name")
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("is_active", false)
+        .order("name")
+        .range(0, 50000)
 
       if (error) throw error
       setDeletedProducts(data || [])
