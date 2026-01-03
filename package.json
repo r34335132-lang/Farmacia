@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
+    "@opentelemetry/api": "latest",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
@@ -41,6 +42,7 @@
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "@sveltejs/kit": "latest",
+    "@sveltejs/vite-plugin-svelte": "latest",
     "@vercel/analytics": "latest",
     "@vercel/blob": "latest",
     "autoprefixer": "^10.4.20",
@@ -52,7 +54,7 @@
     "geist": "latest",
     "input-otp": "latest",
     "lucide-react": "^0.454.0",
-    "next": "15.2.4",
+    "next": "16.0.7",
     "next-themes": "latest",
     "react": "^19",
     "react-day-picker": "latest",
@@ -65,6 +67,7 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
+    "vite": "latest",
     "vue": "latest",
     "vue-router": "latest",
     "zod": "3.25.67"

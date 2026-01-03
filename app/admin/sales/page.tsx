@@ -65,20 +65,11 @@ export default function SalesReports() {
 
   const loadSales = async () => {
     try {
-      const { data: salesData } = await supabase
-        .from("sales")
-        .select(`
-          *,
-          profiles(full_name),
-          sale_items(
-            quantity,
-            unit_price,
-            products(name)
-          )
-        `)
-        .order("created_at", { ascending: false })
+      const response = await fetch("/api/sales")
+      if (!response.ok) throw new Error("Failed to fetch sales")
 
-      setSales(salesData || [])
+      const data = await response.json()
+      setSales(data.sales || [])
     } catch (error) {
       console.error("Error loading sales:", error)
     } finally {
@@ -230,6 +221,13 @@ export default function SalesReports() {
             justify-content: space-between;
             margin-bottom: 2px;
             font-size: 12px;
+            width: 100%;
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+            font-size: 11px;
             width: 100%;
         }
         .section-title {
