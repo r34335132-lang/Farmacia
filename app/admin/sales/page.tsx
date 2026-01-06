@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -102,7 +102,7 @@ export default function SalesReports() {
     }
   }
 
-  const filterSales = () => {
+  const filterSales = useCallback(() => {
     let filtered = [...sales]
 
     const now = new Date()
@@ -187,7 +187,7 @@ export default function SalesReports() {
     })
 
     setChartData(chartDataArray)
-  }
+  }, [sales, dateFilter, paymentFilter, searchTerm])
 
   const getAverageTicket = () => {
     if (filteredSales.length === 0) return 0
@@ -755,7 +755,7 @@ export default function SalesReports() {
     if (sales.length > 0) {
       filterSales()
     }
-  }, [dateFilter, paymentFilter, searchTerm, sales])
+  }, [sales, filterSales])
 
   if (loading) {
     return (
