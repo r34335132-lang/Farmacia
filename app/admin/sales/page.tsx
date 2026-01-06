@@ -28,10 +28,19 @@ interface Sale {
   }[]
 }
 
+interface PaymentStats {
+  total: number
+  totalCash: number
+  totalCard: number
+  countCash: number
+  countCard: number
+}
+
 export default function SalesReports() {
   const [sales, setSales] = useState<Sale[]>([])
   const [filteredSales, setFilteredSales] = useState<Sale[]>([])
   const [salesByDay, setSalesByDay] = useState<{ [key: string]: Sale[] }>({})
+  const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState("today")
   const [paymentFilter, setPaymentFilter] = useState("all")
@@ -39,14 +48,15 @@ export default function SalesReports() {
   const router = useRouter()
   const supabase = createClient()
 
+  const totalRevenue = () => {
+    return filteredSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+  }
+
   useEffect(() => {
     checkAuth()
     loadSales()
+    loadPaymentStats()
   }, [])
-
-  useEffect(() => {
-    filterSales()
-  }, [sales, dateFilter, paymentFilter, searchTerm])
 
   const checkAuth = async () => {
     const {
@@ -75,6 +85,18 @@ export default function SalesReports() {
       console.error("Error loading sales:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPaymentStats = async () => {
+    try {
+      const response = await fetch("/api/payments")
+      if (!response.ok) throw new Error("Failed to fetch payment stats")
+
+      const data = await response.json()
+      setPaymentStats(data)
+    } catch (error) {
+      console.error("Error loading payment stats:", error)
     }
   }
 
@@ -132,13 +154,9 @@ export default function SalesReports() {
     setSalesByDay(grouped)
   }
 
-  const getTotalRevenue = () => {
-    return filteredSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
-  }
-
   const getAverageTicket = () => {
     if (filteredSales.length === 0) return 0
-    return getTotalRevenue() / filteredSales.length
+    return totalRevenue() / filteredSales.length
   }
 
   const generateSalesReport = () => {
@@ -157,20 +175,7 @@ export default function SalesReports() {
       }
     }
 
-    const getPaymentStats = () => {
-      const efectivo = filteredSales.filter((s) => s.payment_method === "efectivo")
-      const tarjeta = filteredSales.filter((s) => s.payment_method === "tarjeta")
-
-      return {
-        efectivoCount: efectivo.length,
-        efectivoTotal: efectivo.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
-        tarjetaCount: tarjeta.length,
-        tarjetaTotal: tarjeta.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
-      }
-    }
-
-    const paymentStats = getPaymentStats()
-    const totalRevenue = getTotalRevenue()
+    const totalRevenueValue = totalRevenue()
     const reportNumber = Math.floor(Math.random() * 1000) + 1
 
     const reportContent = `
@@ -325,11 +330,11 @@ export default function SalesReports() {
         </div>
         <div class="row">
             <span>VENTAS TOTALES:</span>
-            <span class="right-align">$${totalRevenue.toFixed(2)}</span>
+            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
         </div>
         <div class="row">
             <span>GANANCIA:</span>
-            <span class="right-align">$${(totalRevenue * 0.3).toFixed(2)}</span>
+            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
         </div>
         
         <div class="center" style="margin: 15px 0;">
@@ -344,7 +349,7 @@ export default function SalesReports() {
         </div>
         <div class="row">
             <span>VENTAS EN EFECTIVO:</span>
-            <span class="right-align">+ $${paymentStats.efectivoTotal.toFixed(2)}</span>
+            <span class="right-align">+ $${paymentStats?.totalCash.toFixed(2) || "0.00"}</span>
         </div>
         <div class="row">
             <span>ABONOS EN EFECTIVO:</span>
@@ -361,7 +366,7 @@ export default function SalesReports() {
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(200 + paymentStats.efectivoTotal).toFixed(2)}</span>
+            <span class="right-align">$${(500 + (paymentStats?.totalCash || 0)).toFixed(2)}</span>
         </div>
         
         <div class="section-title">ENTRADAS EFECTIVO</div>
@@ -392,11 +397,11 @@ export default function SalesReports() {
         
         <div class="row">
             <span>EN EFECTIVO</span>
-            <span class="right-align">$${paymentStats.efectivoTotal.toFixed(2)}</span>
+            <span class="right-align">$${paymentStats?.totalCash.toFixed(2) || "0.00"}</span>
         </div>
         <div class="row">
             <span>CON TARJETA</span>
-            <span class="right-align">$${paymentStats.tarjetaTotal.toFixed(2)}</span>
+            <span class="right-align">$${paymentStats?.totalCard.toFixed(2) || "0.00"}</span>
         </div>
         <div class="row">
             <span>A CREDITO</span>
@@ -409,22 +414,22 @@ export default function SalesReports() {
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>TOTAL VENTAS</span>
-            <span class="right-align">$${totalRevenue.toFixed(2)}</span>
+            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
         </div>
         
         <div class="section-title">VENTAS POR DEPTO</div>
         
         <div class="row">
             <span>MEDICAMENTOS</span>
-            <span class="right-align">$${(totalRevenue * 0.6).toFixed(2)}</span>
+            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
         </div>
         <div class="row">
             <span>CUIDADO PERSONAL</span>
-            <span class="right-align">$${(totalRevenue * 0.25).toFixed(2)}</span>
+            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
         </div>
         <div class="row">
             <span>VITAMINAS</span>
-            <span class="right-align">$${(totalRevenue * 0.15).toFixed(2)}</span>
+            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
         </div>
         
         <div class="double-line"></div>
@@ -435,7 +440,7 @@ export default function SalesReports() {
             <div>Tel: (555) 123-4567</div>
             <div style="margin-top: 8px;">
                 Período: ${getFilterDescription()}<br>
-                ${paymentStats.efectivoCount} ventas efectivo, ${paymentStats.tarjetaCount} ventas tarjeta
+                ${paymentStats?.countCash || 0} ventas efectivo, ${paymentStats?.countCard || 0} ventas tarjeta
             </div>
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
@@ -724,25 +729,62 @@ export default function SalesReports() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50">
+      <div className="max-w-7xl mx-auto p-8">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link href="/admin/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
+              <Button
+                variant="outline"
+                size="icon"
+                className="border-maroon-600 text-maroon-600 hover:bg-maroon-50 bg-transparent"
+              >
+                <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold">Reportes de Ventas</h1>
-              <p className="text-muted-foreground">Análisis detallado de todas las transacciones</p>
+              <h1 className="text-3xl font-bold text-maroon-800">Reportes de Ventas</h1>
+              <p className="text-maroon-600">Análisis detallado de ventas</p>
             </div>
           </div>
-          <Button onClick={generateSalesReport} className="gap-2">
-            <Printer className="h-4 w-4" />
-            Imprimir Corte
+          <Button onClick={generateSalesReport} className="bg-maroon-600 hover:bg-maroon-700">
+            <Printer className="mr-2 h-4 w-4" />
+            Corte del Turno
           </Button>
         </div>
+
+        {paymentStats && (
+          <Card className="mb-6 border-maroon-200 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-maroon-600 to-maroon-700 text-white">
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Estadísticas de Pagos (Todas las Ventas)
+              </CardTitle>
+              <CardDescription className="text-maroon-100">Resumen de métodos de pago</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-maroon-50 rounded-lg">
+                  <div className="text-sm text-maroon-600 mb-1">Total General</div>
+                  <div className="text-2xl font-bold text-maroon-800">${paymentStats.total.toFixed(2)}</div>
+                  <div className="text-xs text-maroon-500 mt-1">
+                    {paymentStats.countCash + paymentStats.countCard} ventas
+                  </div>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="text-sm text-green-600 mb-1">Efectivo</div>
+                  <div className="text-2xl font-bold text-green-800">${paymentStats.totalCash.toFixed(2)}</div>
+                  <div className="text-xs text-green-600 mt-1">{paymentStats.countCash} ventas</div>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-sm text-blue-600 mb-1">Tarjeta</div>
+                  <div className="text-2xl font-bold text-blue-800">${paymentStats.totalCard.toFixed(2)}</div>
+                  <div className="text-xs text-blue-600 mt-1">{paymentStats.countCard} ventas</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Statistics Cards */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -763,7 +805,7 @@ export default function SalesReports() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${getTotalRevenue().toFixed(2)}</div>
+              <div className="text-2xl font-bold">{totalRevenue().toFixed(2)}</div>
               <p className="text-xs text-muted-foreground">en ventas realizadas</p>
             </CardContent>
           </Card>
@@ -774,7 +816,7 @@ export default function SalesReports() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${getAverageTicket().toFixed(2)}</div>
+              <div className="text-2xl font-bold">{getAverageTicket().toFixed(2)}</div>
               <p className="text-xs text-muted-foreground">por transacción</p>
             </CardContent>
           </Card>
@@ -859,8 +901,7 @@ export default function SalesReports() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-primary">${dayTotal.toFixed(2)}</div>
-                          <div className="text-sm text-muted-foreground">Total del día</div>
+                          <div className="text-2xl font-bold text-primary">{dayTotal.toFixed(2)}</div>
                         </div>
                       </div>
                     </CardHeader>
@@ -893,7 +934,7 @@ export default function SalesReports() {
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="text-right">
-                                <div className="text-xl font-bold">${Number(sale.total_amount).toFixed(2)}</div>
+                                <div className="text-xl font-bold">{Number(sale.total_amount).toFixed(2)}</div>
                               </div>
                               <div className="flex gap-2">
                                 <Button
