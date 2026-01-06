@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
 interface Sale {
   id: string
@@ -40,6 +41,7 @@ export default function SalesReports() {
   const [sales, setSales] = useState<Sale[]>([])
   const [filteredSales, setFilteredSales] = useState<Sale[]>([])
   const [salesByDay, setSalesByDay] = useState<{ [key: string]: Sale[] }>({})
+  const [chartData, setChartData] = useState<any[]>([])
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState("today")
@@ -152,6 +154,39 @@ export default function SalesReports() {
     }, {})
 
     setSalesByDay(grouped)
+
+    const chartDataMap = filtered.reduce(
+      (acc: { [key: string]: { date: string; ventas: number; total: number; count: number } }, sale) => {
+        const dateKey = new Date(sale.created_at).toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "short",
+        })
+
+        if (!acc[dateKey]) {
+          acc[dateKey] = {
+            date: dateKey,
+            ventas: 0,
+            total: 0,
+            count: 0,
+          }
+        }
+
+        acc[dateKey].ventas += Number(sale.total_amount)
+        acc[dateKey].total += Number(sale.total_amount)
+        acc[dateKey].count += 1
+
+        return acc
+      },
+      {},
+    )
+
+    const chartDataArray = Object.values(chartDataMap).sort((a, b) => {
+      const dateA = new Date(a.date)
+      const dateB = new Date(b.date)
+      return dateA.getTime() - dateB.getTime()
+    })
+
+    setChartData(chartDataArray)
   }
 
   const getAverageTicket = () => {
@@ -716,6 +751,12 @@ export default function SalesReports() {
     }
   }
 
+  useEffect(() => {
+    if (sales.length > 0) {
+      filterSales()
+    }
+  }, [dateFilter, paymentFilter, searchTerm, sales])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-8">
@@ -729,65 +770,64 @@ export default function SalesReports() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-pink-50">
-      <div className="max-w-7xl mx-auto p-8">
-        <div className="flex items-center justify-between mb-8">
+    <div className="min-h-screen bg-background">
+      {/* Header con logo */}
+      <header className="border-b bg-white">
+        <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <Link href="/admin/dashboard">
-              <Button
-                variant="outline"
-                size="icon"
-                className="border-maroon-600 text-maroon-600 hover:bg-maroon-50 bg-transparent"
-              >
-                <ArrowLeft className="h-4 w-4" />
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-maroon-800">Reportes de Ventas</h1>
-              <p className="text-maroon-600">Análisis detallado de ventas</p>
-            </div>
+            <img src="/solidaria.jpg" alt="Logo Farmacia" className="h-10 w-auto" />
+            <h1 className="text-xl font-bold">Reportes de Ventas</h1>
           </div>
-          <Button onClick={generateSalesReport} className="bg-maroon-600 hover:bg-maroon-700">
-            <Printer className="mr-2 h-4 w-4" />
-            Corte del Turno
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={generateSalesReport} variant="default" className="gap-2">
+              <Printer className="h-4 w-4" />
+              Corte de Caja
+            </Button>
+          </div>
         </div>
+      </header>
 
-        {paymentStats && (
-          <Card className="mb-6 border-maroon-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-maroon-600 to-maroon-700 text-white">
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Estadísticas de Pagos (Todas las Ventas)
-              </CardTitle>
-              <CardDescription className="text-maroon-100">Resumen de métodos de pago</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-maroon-50 rounded-lg">
-                  <div className="text-sm text-maroon-600 mb-1">Total General</div>
-                  <div className="text-2xl font-bold text-maroon-800">${paymentStats.total.toFixed(2)}</div>
-                  <div className="text-xs text-maroon-500 mt-1">
-                    {paymentStats.countCash + paymentStats.countCard} ventas
+      <div className="p-6 space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {paymentStats && (
+            <Card className="mb-6 border-maroon-200 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-maroon-600 to-maroon-700 text-white">
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Estadísticas de Pagos (Todas las Ventas)
+                </CardTitle>
+                <CardDescription className="text-maroon-100">Resumen de métodos de pago</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-maroon-50 rounded-lg">
+                    <div className="text-sm text-maroon-600 mb-1">Total General</div>
+                    <div className="text-2xl font-bold text-maroon-800">{paymentStats.total.toFixed(2)}</div>
+                    <div className="text-xs text-maroon-500 mt-1">
+                      {paymentStats.countCash + paymentStats.countCard} ventas
+                    </div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="text-sm text-green-600 mb-1">Efectivo</div>
+                    <div className="text-2xl font-bold text-green-800">{paymentStats.totalCash.toFixed(2)}</div>
+                    <div className="text-xs text-green-600 mt-1">{paymentStats.countCash} ventas</div>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="text-sm text-blue-600 mb-1">Tarjeta</div>
+                    <div className="text-2xl font-bold text-blue-800">{paymentStats.totalCard.toFixed(2)}</div>
+                    <div className="text-xs text-blue-600 mt-1">{paymentStats.countCard} ventas</div>
                   </div>
                 </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="text-sm text-green-600 mb-1">Efectivo</div>
-                  <div className="text-2xl font-bold text-green-800">${paymentStats.totalCash.toFixed(2)}</div>
-                  <div className="text-xs text-green-600 mt-1">{paymentStats.countCash} ventas</div>
-                </div>
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-sm text-blue-600 mb-1">Tarjeta</div>
-                  <div className="text-2xl font-bold text-blue-800">${paymentStats.totalCard.toFixed(2)}</div>
-                  <div className="text-xs text-blue-600 mt-1">{paymentStats.countCard} ventas</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          )}
 
-        {/* Statistics Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Ventas</CardTitle>
@@ -821,6 +861,54 @@ export default function SalesReports() {
             </CardContent>
           </Card>
         </div>
+
+        {chartData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                Gráfica de Ventas por Día
+              </CardTitle>
+              <CardDescription>
+                Visualización de las ventas diarias. Los días con más ventas indican días fuertes de actividad.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" style={{ fontSize: "12px" }} angle={-45} textAnchor="end" height={80} />
+                    <YAxis style={{ fontSize: "12px" }} tickFormatter={(value) => `$${value}`} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          return (
+                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                              <p className="font-semibold mb-1">{payload[0].payload.date}</p>
+                              <p className="text-sm text-muted-foreground">{payload[0].payload.count} ventas</p>
+                              <p className="text-lg font-bold text-primary">${Number(payload[0].value).toFixed(2)}</p>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    <Bar dataKey="ventas" fill="hsl(var(--primary))" name="Total de Ventas" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                {chartData.length > 0 && (
+                  <p>
+                    Mostrando {chartData.length} día(s) con actividad. Las barras más altas representan los días más
+                    fuertes en ventas.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filters */}
         <Card>
@@ -870,6 +958,7 @@ export default function SalesReports() {
           </CardContent>
         </Card>
 
+        {/* Sales grouped by day */}
         {Object.keys(salesByDay).length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
