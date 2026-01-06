@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Download, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
+import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -31,6 +31,7 @@ interface Sale {
 export default function SalesReports() {
   const [sales, setSales] = useState<Sale[]>([])
   const [filteredSales, setFilteredSales] = useState<Sale[]>([])
+  const [salesByDay, setSalesByDay] = useState<{ [key: string]: Sale[] }>({})
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState("today")
   const [paymentFilter, setPaymentFilter] = useState("all")
@@ -113,6 +114,22 @@ export default function SalesReports() {
     }
 
     setFilteredSales(filtered)
+
+    const grouped = filtered.reduce((acc: { [key: string]: Sale[] }, sale) => {
+      const date = new Date(sale.created_at).toLocaleDateString("es-ES", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+      if (!acc[date]) {
+        acc[date] = []
+      }
+      acc[date].push(sale)
+      return acc
+    }, {})
+
+    setSalesByDay(grouped)
   }
 
   const getTotalRevenue = () => {
@@ -696,36 +713,39 @@ export default function SalesReports() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Cargando reportes...</div>
+      <div className="min-h-screen bg-background p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Cargando ventas...</div>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
+    <div className="min-h-screen bg-background p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/admin/dashboard">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
               </Button>
             </Link>
-            <h1 className="text-2xl font-bold text-primary">Reportes de Ventas</h1>
+            <div>
+              <h1 className="text-3xl font-bold">Reportes de Ventas</h1>
+              <p className="text-muted-foreground">Análisis detallado de todas las transacciones</p>
+            </div>
           </div>
-          <Button variant="outline" onClick={generateSalesReport}>
-            <Download className="h-4 w-4 mr-2" />
-            Exportar
+          <Button onClick={generateSalesReport} className="gap-2">
+            <Printer className="h-4 w-4" />
+            Imprimir Corte
           </Button>
         </div>
-      </header>
 
-      <div className="p-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Statistics Cards */}
+        <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Ventas</CardTitle>
@@ -733,6 +753,7 @@ export default function SalesReports() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{filteredSales.length}</div>
+              <p className="text-xs text-muted-foreground">transacciones completadas</p>
             </CardContent>
           </Card>
 
@@ -743,6 +764,7 @@ export default function SalesReports() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${getTotalRevenue().toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">en ventas realizadas</p>
             </CardContent>
           </Card>
 
@@ -753,19 +775,7 @@ export default function SalesReports() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${getAverageTicket().toFixed(2)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Efectivo vs Tarjeta</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm">
-                <div>Efectivo: {filteredSales.filter((s) => s.payment_method === "efectivo").length}</div>
-                <div>Tarjeta: {filteredSales.filter((s) => s.payment_method === "tarjeta").length}</div>
-              </div>
+              <p className="text-xs text-muted-foreground">por transacción</p>
             </CardContent>
           </Card>
         </div>
@@ -775,25 +785,25 @@ export default function SalesReports() {
           <CardHeader>
             <CardTitle>Filtros</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Período</label>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Período</label>
                 <Select value={dateFilter} onValueChange={setDateFilter}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="today">Hoy</SelectItem>
-                    <SelectItem value="week">Última semana</SelectItem>
-                    <SelectItem value="month">Último mes</SelectItem>
+                    <SelectItem value="week">Última Semana</SelectItem>
+                    <SelectItem value="month">Último Mes</SelectItem>
                     <SelectItem value="all">Todas</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">Método de Pago</label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Método de Pago</label>
                 <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                   <SelectTrigger>
                     <SelectValue />
@@ -806,10 +816,10 @@ export default function SalesReports() {
                 </Select>
               </div>
 
-              <div>
-                <label className="text-sm font-medium mb-2 block">Buscar</label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Buscar</label>
                 <Input
-                  placeholder="Cajero o ID de venta..."
+                  placeholder="Buscar por cajero o ticket..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -818,75 +828,101 @@ export default function SalesReports() {
           </CardContent>
         </Card>
 
-        {/* Sales List */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Historial de Ventas</CardTitle>
-            <CardDescription>Mostrando {filteredSales.length} ventas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {filteredSales.map((sale) => (
-                <div key={sale.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="font-medium">Venta #{sale.id.slice(-8)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {sale.profiles?.full_name} - {new Date(sale.created_at).toLocaleString()}
-                        </p>
+        {Object.keys(salesByDay).length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+              <p className="text-lg font-medium">No hay ventas</p>
+              <p className="text-sm text-muted-foreground">No se encontraron ventas con los filtros seleccionados</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(salesByDay)
+              .sort(([dateA], [dateB]) => {
+                // Sort by date descending (most recent first)
+                return new Date(dateB).getTime() - new Date(dateA).getTime()
+              })
+              .map(([date, daySales]) => {
+                const dayTotal = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+                return (
+                  <Card key={date}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Calendar className="h-5 w-5 text-primary" />
+                          <div>
+                            <CardTitle className="text-xl capitalize">{date}</CardTitle>
+                            <CardDescription>
+                              {daySales.length} {daySales.length === 1 ? "venta" : "ventas"} registradas
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-primary">${dayTotal.toFixed(2)}</div>
+                          <div className="text-sm text-muted-foreground">Total del día</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-right mr-4">
-                        <p className="text-lg font-bold">${sale.total_amount}</p>
-                        <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
-                          {sale.payment_method}
-                        </Badge>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {daySales.map((sale) => (
+                          <div
+                            key={sale.id}
+                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-sm">#{sale.id.slice(-8)}</span>
+                                <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
+                                  {sale.payment_method}
+                                </Badge>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {new Date(sale.created_at).toLocaleTimeString("es-ES", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                                {" • "}
+                                {sale.profiles?.full_name || "N/A"}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {sale.sale_items?.length || 0}{" "}
+                                {sale.sale_items?.length === 1 ? "producto" : "productos"}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <div className="text-xl font-bold">${Number(sale.total_amount).toFixed(2)}</div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => reprintTicket(sale)}
+                                  title="Reimprimir ticket"
+                                >
+                                  <Printer className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => cancelSale(sale.id)}
+                                  title="Cancelar venta"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      {/* Action buttons for each sale */}
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => reprintTicket(sale)}
-                          title="Reimprimir ticket"
-                        >
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => cancelSale(sale.id)}
-                          title="Cancelar venta"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-2">
-                    <p className="text-sm font-medium mb-1">Productos:</p>
-                    <div className="text-sm text-muted-foreground">
-                      {sale.sale_items?.map((item, index) => (
-                        <span key={index}>
-                          {item.products?.name} (x{item.quantity}){index < sale.sale_items.length - 1 && ", "}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {filteredSales.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No se encontraron ventas con los filtros aplicados
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+          </div>
+        )}
       </div>
     </div>
   )
