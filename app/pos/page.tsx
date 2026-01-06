@@ -44,6 +44,7 @@ interface Product {
   barcode?: string
   image_url?: string
   is_active: boolean
+  section?: string // Added section field to Product interface
 }
 
 interface CartItem {
@@ -345,8 +346,10 @@ export default function POSPage() {
         ])
       }
 
-      await sendSaleNotification(sale)
-
+      // const discountReasonText = hasDiscount
+      //   ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
+      //   : ""
+      // generateReceipt(sale, cart, discountAmount, discountReasonText)
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
@@ -359,7 +362,7 @@ export default function POSPage() {
 
       loadProducts()
 
-      alert("Venta procesada exitosamente")
+      // alert("Venta procesada exitosamente")
     } catch (error) {
       console.error("Error processing payment:", error)
       alert("Error al procesar el pago")
@@ -373,15 +376,17 @@ export default function POSPage() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Ticket de Venta - Farmacia Solidaria</title>
+    <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
         body {
-            font-family: 'Courier New', monospace;
+            font-family: 'Montserrat', 'Arial', sans-serif;
             font-size: 13px;
             margin: 0 !important;
             padding: 0 !important;
@@ -399,22 +404,26 @@ export default function POSPage() {
             box-sizing: border-box;
         }
         .header {
-            text-align: left;
-            border-bottom: 1px dashed #000;
+            text-align: center;
+            border-bottom: 1px dashed #8B1538;
             padding-bottom: 5px;
             margin-bottom: 5px;
             width: 100%;
         }
         .logo-text {
-            font-size: 15px;
-            font-weight: bold;
+            font-size: 17px;
+            font-weight: 700;
             margin-bottom: 2px;
             width: 100%;
+            color: #8B1538;
+            letter-spacing: 0.5px;
         }
         .subtitle {
             font-size: 11px;
             margin-bottom: 5px;
             width: 100%;
+            font-weight: 600;
+            color: #8B1538;
         }
         .info-line {
             display: flex;
@@ -425,8 +434,8 @@ export default function POSPage() {
         }
         .items {
             margin: 8px 0;
-            border-top: 1px dashed #000;
-            border-bottom: 1px dashed #000;
+            border-top: 1px dashed #8B1538;
+            border-bottom: 1px dashed #8B1538;
             padding: 5px 0;
             text-align: left;
             width: 100%;
@@ -436,27 +445,33 @@ export default function POSPage() {
             width: 100%;
         }
         .item-name {
-            font-weight: bold;
+            font-weight: 600;
         }
         .item-details {
             font-size: 12px;
         }
+        .item-section {
+            font-size: 10px;
+            color: #8B1538;
+            font-weight: 600;
+        }
         .total-section {
             margin-top: 8px;
-            border-top: 1px dashed #000;
+            border-top: 1px dashed #8B1538;
             padding-top: 5px;
             width: 100%;
         }
         .discount-line {
             color: #008800;
-            font-weight: bold;
+            font-weight: 600;
         }
         .total {
             font-size: 15px;
-            font-weight: bold;
+            font-weight: 700;
             text-align: right;
             margin: 5px 0;
             width: 100%;
+            color: #8B1538;
         }
         .payment-info {
             margin: 8px 0;
@@ -466,15 +481,16 @@ export default function POSPage() {
         .footer {
             text-align: center;
             margin-top: 10px;
-            border-top: 1px dashed #000;
+            border-top: 1px dashed #8B1538;
             padding-top: 5px;
             font-size: 11px;
             width: 100%;
         }
         .thank-you {
             font-size: 13px;
-            font-weight: bold;
+            font-weight: 700;
             margin: 5px 0;
+            color: #8B1538;
         }
         .footer-logo {
             margin-top: 10px;
@@ -516,12 +532,12 @@ export default function POSPage() {
 <body>
     <div class="content">
         <div class="header">
-            <div class="logo-text">FARMACIA SOLIDARIA</div>
-            <div class="subtitle">Cuidando la salud de nuestra comunidad</div>
+            <div class="logo-text">FARMACIA BIENESTAR</div>
+            <div class="subtitle">Tu salud es nuestro compromiso</div>
             <div style="font-size: 10px;">
                 Dirección: Calle Principal #123<br>
                 Tel: (555) 123-4567<br>
-                www.farmaciasolidaria.com
+                www.farmaciabinestar.com
             </div>
         </div>
 
@@ -539,7 +555,7 @@ export default function POSPage() {
         </div>
 
         <div class="items">
-            <div style="font-weight: bold; text-align: center; margin-bottom: 5px;">
+            <div style="font-weight: 700; text-align: center; margin-bottom: 5px; color: #8B1538;">
                 PRODUCTOS VENDIDOS
             </div>
             ${items
@@ -547,6 +563,7 @@ export default function POSPage() {
                 (item) => `
             <div class="item">
                 <div class="item-name">${item.product.name}</div>
+                ${item.product.section ? `<div class="item-section">Sección: ${item.product.section}</div>` : ""}
                 <div class="item-details">
                     ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
                 </div>
@@ -580,7 +597,7 @@ export default function POSPage() {
             ${
               discount > 0
                 ? `
-            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px;">
+            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px; font-weight: 600;">
                 ¡Ahorraste $${discount.toFixed(2)}!
             </div>
             `
@@ -591,7 +608,7 @@ export default function POSPage() {
         <div class="payment-info">
             <div class="info-line">
                 <span>Método de pago:</span>
-                <span>${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+                <span style="font-weight: 600;">${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
             </div>
             ${
               paymentMethod === "efectivo"
@@ -602,7 +619,7 @@ export default function POSPage() {
             </div>
             <div class="info-line">
                 <span>Cambio:</span>
-                <span>$${change.toFixed(2)}</span>
+                <span style="font-weight: 600;">$${change.toFixed(2)}</span>
             </div>`
                 : ""
             }
@@ -610,18 +627,18 @@ export default function POSPage() {
 
         <div class="footer">
             <div class="thank-you">¡Gracias por su compra!</div>
-            <div>
+            <div style="font-weight: 600;">
                 Conserve este ticket<br>
                 Cambios y devoluciones: 30 días<br>
                 ¡Que tenga un excelente día!
             </div>
             <div style="margin-top: 8px; font-size: 10px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
+                Sistema POS - Farmacia Bienestar v1.0
             </div>
 
             <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
+                <img src="/solidaria.jpg" alt="Logo Bienestar" />
             </div>
         </div>
     </div>
@@ -666,28 +683,24 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm">
         <div className="flex h-20 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <div className="p-2 bg-gradient-to-r from-purple-600 to-green-600 rounded-xl">
+            <div className="p-2 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl">
               <ShoppingCart className="h-8 w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
-                Farmacia Solidaria
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+                Farmacia Bienestar
               </h1>
               <p className="text-sm text-muted-foreground">
                 ¡Bienvenido/a {currentUser?.full_name}! 💊 Listo para ayudar
               </p>
             </div>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="border-purple-200 hover:bg-purple-50 bg-transparent"
-          >
+          <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
             <LogOut className="h-4 w-4 mr-2" />
             Cerrar Sesión
           </Button>
@@ -718,7 +731,7 @@ export default function POSPage() {
           </Card>
 
           {/* Welcome Message */}
-          <Card className="bg-gradient-to-r from-purple-500 to-green-500 text-white border-0">
+          <Card className="bg-gradient-to-r from-rose-800 to-red-900 text-white border-0">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-white/20 rounded-full">
@@ -726,16 +739,16 @@ export default function POSPage() {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}! 👋</h2>
-                  <p className="text-purple-100">Estamos aquí para cuidar la salud de nuestra comunidad</p>
+                  <p className="text-rose-100">Tu salud es nuestro compromiso</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Barcode Scanner */}
-          <Card className="border-purple-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-purple-50 to-green-50">
-              <CardTitle className="flex items-center gap-2 text-purple-700">
+          <Card className="border-rose-200 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
+              <CardTitle className="flex items-center gap-2 text-rose-900">
                 <Scan className="h-5 w-5" />
                 Escáner de Código de Barras / QR
               </CardTitle>
@@ -749,12 +762,12 @@ export default function POSPage() {
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleBarcodeSearch()}
-                    className="border-purple-200 focus:border-purple-400"
+                    className="border-rose-200 focus:border-rose-400"
                     autoFocus
                   />
                   <Button
                     onClick={handleBarcodeSearch}
-                    className="bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700"
+                    className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"
                   >
                     <Scan className="h-4 w-4" />
                   </Button>
@@ -762,7 +775,7 @@ export default function POSPage() {
                 <Button
                   onClick={() => setIsQRScannerOpen(true)}
                   variant="outline"
-                  className="w-full border-green-200 text-green-700 hover:bg-green-50"
+                  className="w-full border-rose-200 text-rose-800 hover:bg-rose-50"
                 >
                   📷 Abrir Escáner QR Avanzado
                 </Button>
@@ -774,9 +787,9 @@ export default function POSPage() {
           </Card>
 
           {/* Product Search */}
-          <Card className="border-green-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-purple-50">
-              <CardTitle className="text-green-700">Buscar Medicamentos</CardTitle>
+          <Card className="border-rose-200 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
+              <CardTitle className="text-rose-900">Buscar Medicamentos</CardTitle>
             </CardHeader>
             <CardContent className="p-4">
               <Input
@@ -786,7 +799,7 @@ export default function POSPage() {
                   setSearchTerm(e.target.value)
                   setCurrentPage(1)
                 }}
-                className="border-green-200 focus:border-green-400"
+                className="border-rose-200 focus:border-rose-400"
               />
             </CardContent>
           </Card>
@@ -806,7 +819,7 @@ export default function POSPage() {
               >
                 <CardContent className="p-6">
                   <div className="space-y-4">
-                    <div className="w-full h-32 bg-gradient-to-br from-purple-100 to-green-100 rounded-lg flex items-center justify-center overflow-hidden">
+                    <div className="w-full h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden">
                       {product.image_url ? (
                         <img
                           src={product.image_url || "/placeholder.svg"}
@@ -815,7 +828,7 @@ export default function POSPage() {
                         />
                       ) : (
                         <div className="text-center">
-                          <div className="w-16 h-16 bg-gradient-to-r from-purple-400 to-green-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                          <div className="w-16 h-16 bg-gradient-to-r from-rose-600 to-red-700 rounded-full flex items-center justify-center mx-auto mb-2">
                             <span className="text-2xl">💊</span>
                           </div>
                           <span className="text-xs text-muted-foreground">Sin imagen</span>
@@ -825,26 +838,33 @@ export default function POSPage() {
 
                     <div className="space-y-2">
                       <h3 className="font-bold text-lg text-gray-800 line-clamp-2">{product.name}</h3>
-                      <div className="flex justify-between items-center">
-                        <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
                           ${product.price.toFixed(2)}
                         </span>
-                        <Badge
-                          variant={
-                            product.stock_quantity > 10
-                              ? "default"
-                              : product.stock_quantity > 0
-                                ? "secondary"
-                                : "destructive"
-                          }
-                          className="font-semibold"
-                        >
-                          Stock: {product.stock_quantity}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          {product.section && (
+                            <Badge variant="outline" className="text-xs border-rose-300 text-rose-800 bg-rose-50">
+                              {product.section}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={
+                              product.stock_quantity > 10
+                                ? "default"
+                                : product.stock_quantity > 0
+                                  ? "secondary"
+                                  : "destructive"
+                            }
+                            className="font-semibold"
+                          >
+                            Stock: {product.stock_quantity}
+                          </Badge>
+                        </div>
                       </div>
                       <Button
                         onClick={() => addToCart(product)}
-                        className="w-full bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-semibold py-3"
+                        className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-semibold py-3"
                         disabled={product.stock_quantity === 0}
                       >
                         <Plus className="h-4 w-4 mr-2" />
@@ -876,7 +896,7 @@ export default function POSPage() {
                     variant={currentPage === 1 ? "default" : "outline"}
                     className={
                       currentPage === 1
-                        ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                        ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
                         : "bg-white/80 backdrop-blur-sm"
                     }
                   >
@@ -896,7 +916,7 @@ export default function POSPage() {
                         variant={currentPage === page ? "default" : "outline"}
                         className={
                           currentPage === page
-                            ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                            ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
                             : "bg-white/80 backdrop-blur-sm"
                         }
                       >
@@ -914,7 +934,7 @@ export default function POSPage() {
                       variant={currentPage === totalPages ? "default" : "outline"}
                       className={
                         currentPage === totalPages
-                          ? "bg-gradient-to-r from-purple-600 to-green-600 text-white"
+                          ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
                           : "bg-white/80 backdrop-blur-sm"
                       }
                     >
@@ -943,7 +963,7 @@ export default function POSPage() {
         {/* Cart Section */}
         <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
               🛒 Carrito de Compras
             </h2>
             {cart.length > 0 && (
@@ -960,18 +980,23 @@ export default function POSPage() {
 
           <div className="space-y-3 flex-1 overflow-auto max-h-96">
             {cart.map((item) => (
-              <Card key={item.product.id} className="border-purple-100 shadow-md">
+              <Card key={item.product.id} className="border-rose-100 shadow-md">
                 <CardContent className="p-4">
                   <div className="space-y-3">
                     <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
+                    {item.product.section && (
+                      <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
+                        📍 {item.product.section}
+                      </Badge>
+                    )}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-purple-600">${item.product.price.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-rose-800">${item.product.price.toFixed(2)}</span>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-8 w-8 p-0 border-purple-200"
+                          className="h-8 w-8 p-0 border-rose-200"
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -980,14 +1005,14 @@ export default function POSPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-8 w-8 p-0 border-purple-200"
+                          className="h-8 w-8 p-0 border-rose-200"
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-lg text-green-600">${item.subtotal.toFixed(2)}</span>
+                      <span className="font-bold text-lg text-rose-800">${item.subtotal.toFixed(2)}</span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1015,13 +1040,13 @@ export default function POSPage() {
             <div className="space-y-4 border-t pt-4">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">Total a pagar</p>
-                <div className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
+                <div className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
                   ${total.toFixed(2)}
                 </div>
               </div>
               <Button
                 onClick={() => setIsPaymentDialogOpen(true)}
-                className="w-full bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-bold py-4 text-lg"
+                className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
                 size="lg"
               >
                 <Receipt className="h-5 w-5 mr-2" />💳 Procesar Pago
@@ -1034,13 +1059,13 @@ export default function POSPage() {
       <InstallPrompt />
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="border-purple-200 max-w-lg">
+        <DialogContent className="border-rose-200 max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-xl bg-gradient-to-r from-purple-600 to-green-600 bg-clip-text text-transparent">
+            <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
               💳 Procesar Pago
             </DialogTitle>
             <DialogDescription className="text-lg font-semibold">
-              Subtotal: <span className="text-purple-600">${subtotal.toFixed(2)}</span>
+              Subtotal: <span className="text-rose-800">${subtotal.toFixed(2)}</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -1110,7 +1135,7 @@ export default function POSPage() {
             </Card>
 
             {discountAmount > 0 && (
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
                 <div className="flex justify-between text-sm text-muted-foreground mb-1">
                   <span>Subtotal:</span>
                   <span>${subtotal.toFixed(2)}</span>
@@ -1119,7 +1144,7 @@ export default function POSPage() {
                   <span>Descuento:</span>
                   <span>-${discountAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold text-purple-700 border-t border-purple-200 pt-2">
+                <div className="flex justify-between text-lg font-bold text-rose-900 border-t border-rose-200 pt-2">
                   <span>Total a pagar:</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
@@ -1129,7 +1154,7 @@ export default function POSPage() {
             <div className="space-y-2">
               <Label className="text-base font-semibold">Método de pago</Label>
               <Select value={paymentMethod} onValueChange={(value: "efectivo" | "tarjeta") => setPaymentMethod(value)}>
-                <SelectTrigger className="border-purple-200">
+                <SelectTrigger className="border-rose-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1140,7 +1165,7 @@ export default function POSPage() {
                   </SelectItem>
                   <SelectItem value="tarjeta">
                     <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-purple-600" />💳 Tarjeta
+                      <CreditCard className="h-4 w-4 text-rose-800" />💳 Tarjeta
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -1180,7 +1205,7 @@ export default function POSPage() {
                 processingPayment ||
                 (paymentMethod === "efectivo" && (!cashReceived || Number.parseFloat(cashReceived) < total))
               }
-              className="bg-gradient-to-r from-purple-600 to-green-600 hover:from-purple-700 hover:to-green-700 text-white font-bold"
+              className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold"
             >
               {processingPayment ? "Procesando... ⏳" : "✅ Confirmar Pago"}
             </Button>

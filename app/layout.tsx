@@ -7,28 +7,28 @@ import "./globals.css"
 import { Suspense } from "react"
 
 export const metadata: Metadata = {
-  title: "Farmacia Solidaria",
-  description: "Sistema de gestión integral para Farmacia Solidaria",
+  title: "Farmacia Bienestar",
+  description: "Sistema de gestión integral para Farmacia Bienestar",
   generator: "v0.app",
   manifest: "/manifest.json",
-  keywords: ["farmacia", "pos", "inventario", "ventas", "solidaria"],
-  authors: [{ name: "Farmacia Solidaria" }],
-  creator: "Farmacia Solidaria",
-  publisher: "Farmacia Solidaria",
+  keywords: ["farmacia", "pos", "inventario", "ventas", "bienestar"],
+  authors: [{ name: "Farmacia Bienestar" }],
+  creator: "Farmacia Bienestar",
+  publisher: "Farmacia Bienestar",
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-  metadataBase: new URL("https://farmacia-solidaria.vercel.app"),
+  metadataBase: new URL("https://farmacia-bienestar.vercel.app"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Farmacia Solidaria",
-    description: "Sistema de gestión integral para Farmacia Solidaria",
-    url: "https://farmacia-solidaria.vercel.app",
-    siteName: "Farmacia Solidaria",
+    title: "Farmacia Bienestar",
+    description: "Sistema de gestión integral para Farmacia Bienestar",
+    url: "https://farmacia-bienestar.vercel.app",
+    siteName: "Farmacia Bienestar",
     locale: "es_ES",
     type: "website",
   },
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Farmacia Solidaria",
+    title: "Farmacia Bienestar",
   },
 }
 
@@ -62,16 +62,16 @@ export default function RootLayout({
   return (
     <html lang="es">
       <head>
-        <meta name="application-name" content="Farmacia Solidaria" />
+        <meta name="application-name" content="Farmacia Bienestar" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Farmacia Solidaria" />
+        <meta name="apple-mobile-web-app-title" content="Farmacia Bienestar" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="msapplication-config" content="/browserconfig.xml" />
-        <meta name="msapplication-TileColor" content="#8b5cf6" />
+        <meta name="msapplication-TileColor" content="#8B1538" />
         <meta name="msapplication-tap-highlight" content="no" />
-        <meta name="theme-color" content="#8b5cf6" />
+        <meta name="theme-color" content="#8B1538" />
         <link rel="apple-touch-icon" href="/icon-192.jpg" />
         <link rel="manifest" href="/manifest.json" />
       </head>

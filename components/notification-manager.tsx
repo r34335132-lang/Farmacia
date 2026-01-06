@@ -48,8 +48,7 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
       setPermission(permission)
 
       if (permission === "granted") {
-        // Show welcome notification
-        new Notification("Farmacia Solidaria", {
+        new Notification("Farmacia Bienestar", {
           body: "Notificaciones activadas correctamente",
           icon: "/icon-192.jpg",
           tag: "welcome",

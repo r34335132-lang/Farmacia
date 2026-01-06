@@ -70,7 +70,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
           <img src="/solidaria.jpg" alt="Logo Farmacia" className="mx-auto h-16 mb-2 rounded-lg" />
-          <CardTitle className="text-2xl font-bold">Farmacia Solidaria</CardTitle>
+          <CardTitle className="text-2xl font-bold">Farmacia Binestar</CardTitle>
           <CardDescription>Accede al sistema POS</CardDescription>
         </CardHeader>
         <CardContent>

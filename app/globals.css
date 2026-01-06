@@ -4,40 +4,40 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated color scheme for Farmacia Solidaria - white, purple, green */
+  /* Updated color scheme to burgundy/maroon (guinda) for Farmacia Bienestar */
   --background: oklch(1 0 0); /* White */
   --foreground: oklch(0.145 0 0); /* Dark text */
   --card: oklch(1 0 0); /* White cards */
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.45 0.15 300); /* Purple primary */
-  --primary-foreground: oklch(1 0 0); /* White text on purple */
-  --secondary: oklch(0.55 0.12 140); /* Green secondary */
-  --secondary-foreground: oklch(1 0 0); /* White text on green */
+  --primary: oklch(0.35 0.12 15); /* Burgundy/maroon primary */
+  --primary-foreground: oklch(1 0 0); /* White text on burgundy */
+  --secondary: oklch(0.45 0.1 25); /* Secondary burgundy tone */
+  --secondary-foreground: oklch(1 0 0); /* White text on secondary */
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.55 0.12 140); /* Green accent */
+  --accent: oklch(0.4 0.11 20); /* Accent burgundy */
   --accent-foreground: oklch(1 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(1 0 0);
   --border: oklch(0.922 0 0);
   --input: oklch(0.97 0 0);
-  --ring: oklch(0.45 0.15 300); /* Purple ring */
-  --chart-1: oklch(0.45 0.15 300); /* Purple */
-  --chart-2: oklch(0.55 0.12 140); /* Green */
-  --chart-3: oklch(0.6 0.1 160); /* Light green */
-  --chart-4: oklch(0.4 0.18 280); /* Dark purple */
-  --chart-5: oklch(0.7 0.08 120); /* Very light green */
+  --ring: oklch(0.35 0.12 15); /* Burgundy ring */
+  --chart-1: oklch(0.35 0.12 15); /* Burgundy */
+  --chart-2: oklch(0.45 0.1 25); /* Light burgundy */
+  --chart-3: oklch(0.5 0.08 30); /* Lighter burgundy */
+  --chart-4: oklch(0.3 0.14 10); /* Dark burgundy */
+  --chart-5: oklch(0.55 0.06 35); /* Very light burgundy */
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.45 0.15 300); /* Purple */
+  --sidebar-primary: oklch(0.35 0.12 15); /* Burgundy */
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.145 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.45 0.15 300);
+  --sidebar-ring: oklch(0.35 0.12 15);
 }
 
 .dark {
@@ -47,32 +47,32 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.145 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.55 0.15 300); /* Lighter purple for dark mode */
+  --primary: oklch(0.45 0.12 15); /* Lighter burgundy for dark mode */
   --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.65 0.12 140); /* Lighter green for dark mode */
+  --secondary: oklch(0.55 0.1 25); /* Lighter secondary for dark mode */
   --secondary-foreground: oklch(0.145 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.65 0.12 140); /* Lighter green accent */
+  --accent: oklch(0.5 0.11 20); /* Lighter accent */
   --accent-foreground: oklch(0.145 0 0);
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
-  --ring: oklch(0.55 0.15 300);
-  --chart-1: oklch(0.55 0.15 300);
-  --chart-2: oklch(0.65 0.12 140);
-  --chart-3: oklch(0.7 0.1 160);
-  --chart-4: oklch(0.5 0.18 280);
-  --chart-5: oklch(0.75 0.08 120);
+  --ring: oklch(0.45 0.12 15);
+  --chart-1: oklch(0.45 0.12 15);
+  --chart-2: oklch(0.55 0.1 25);
+  --chart-3: oklch(0.6 0.08 30);
+  --chart-4: oklch(0.4 0.14 10);
+  --chart-5: oklch(0.65 0.06 35);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.55 0.15 300);
+  --sidebar-primary: oklch(0.45 0.12 15);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.55 0.15 300);
+  --sidebar-ring: oklch(0.45 0.12 15);
 }
 
 @theme inline {

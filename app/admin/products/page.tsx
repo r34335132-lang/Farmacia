@@ -54,6 +54,7 @@ interface Product {
   image_url?: string
   expiration_date?: string
   days_before_expiry_alert?: number
+  section?: string // Added section field to Product interface
 }
 
 export default function ProductsPage() {
@@ -84,6 +85,7 @@ export default function ProductsPage() {
     image_url: "",
     expiration_date: "",
     days_before_expiry_alert: "30",
+    section: "", // Added section field to form state
   })
 
   useEffect(() => {
@@ -96,7 +98,8 @@ export default function ProductsPage() {
       (product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.section?.toLowerCase().includes(searchTerm.toLowerCase()), // Added section to filtering
     )
     setFilteredProducts(filtered)
     setCurrentPageActive(1)
@@ -105,7 +108,8 @@ export default function ProductsPage() {
       (product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category?.toLowerCase().includes(searchTerm.toLowerCase()),
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.section?.toLowerCase().includes(searchTerm.toLowerCase()), // Added section to filtering
     )
     setFilteredDeletedProducts(filteredDeleted)
     setCurrentPageDeleted(1)
@@ -231,6 +235,7 @@ export default function ProductsPage() {
         days_before_expiry_alert: formData.days_before_expiry_alert
           ? Number.parseInt(formData.days_before_expiry_alert)
           : 30,
+        section: formData.section || null, // Added section to product data
       }
 
       if (editingProduct) {
@@ -273,6 +278,7 @@ export default function ProductsPage() {
         image_url: "",
         expiration_date: "",
         days_before_expiry_alert: "30",
+        section: "", // Reset section field
       })
       setIsAddDialogOpen(false)
       setEditingProduct(null)
@@ -295,6 +301,7 @@ export default function ProductsPage() {
       image_url: product.image_url || "",
       expiration_date: product.expiration_date || "",
       days_before_expiry_alert: product.days_before_expiry_alert?.toString() || "30",
+      section: product.section || "", // Set section for editing
     })
     setEditingProduct(product)
     setIsAddDialogOpen(true)
@@ -354,12 +361,24 @@ export default function ProductsPage() {
   }
 
   const generateStockReport = () => {
+    const productsBySection = products.reduce((acc: Record<string, any[]>, product) => {
+      const section = product.section || "SIN SECCIÓN"
+      if (!acc[section]) {
+        acc[section] = []
+      }
+      acc[section].push(product)
+      return acc
+    }, {})
+
+    // Sort sections alphabetically
+    const sortedSections = Object.keys(productsBySection).sort()
+
     const reportContent = `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Reporte de Inventario</title>
+          <title>Reporte de Inventario - Farmacia Bienestar</title>
           <style>
             @page {
               size: 55mm auto;
@@ -367,7 +386,7 @@ export default function ProductsPage() {
             }
             
             body {
-              font-family: 'Courier New', monospace;
+              font-family: 'Montserrat', 'Courier New', monospace;
               font-size: 10px;
               line-height: 1.2;
               margin: 0;
@@ -381,13 +400,20 @@ export default function ProductsPage() {
             .header {
               text-align: center;
               margin-bottom: 3mm;
-              border-bottom: 1px dashed #000;
+              border-bottom: 1px dashed #8B1538;
               padding-bottom: 2mm;
+              color: #8B1538;
             }
             
             .title {
               font-size: 12px;
               font-weight: bold;
+              margin-bottom: 1mm;
+            }
+            
+            .subtitle {
+              font-size: 10px;
+              font-weight: 600;
               margin-bottom: 1mm;
             }
             
@@ -406,8 +432,9 @@ export default function ProductsPage() {
               text-align: center;
               margin: 2mm 0;
               padding: 1mm 0;
-              border-top: 1px dashed #000;
-              border-bottom: 1px dashed #000;
+              border-top: 1px dashed #8B1538;
+              border-bottom: 1px dashed #8B1538;
+              color: #8B1538;
             }
             
             .product-line {
@@ -446,9 +473,10 @@ export default function ProductsPage() {
             .footer {
               margin-top: 3mm;
               padding-top: 2mm;
-              border-top: 1px dashed #000;
+              border-top: 1px dashed #8B1538;
               text-align: center;
               font-size: 8px;
+              color: #8B1538;
             }
             
             .total-line {
@@ -457,7 +485,8 @@ export default function ProductsPage() {
               text-align: center;
               margin: 2mm 0;
               padding: 1mm 0;
-              border-top: 1px solid #000;
+              border-top: 1px solid #8B1538;
+              color: #8B1538;
             }
             
             @media print {
@@ -470,7 +499,8 @@ export default function ProductsPage() {
         </head>
         <body>
           <div class="header">
-            <div class="title">REPORTE DE INVENTARIO</div>
+            <div class="title">FARMACIA BIENESTAR</div>
+            <div class="subtitle">REPORTE DE INVENTARIO</div>
             <div class="date">FECHA: ${new Date().toLocaleDateString("es-ES", {
               day: "2-digit",
               month: "2-digit",
@@ -480,9 +510,13 @@ export default function ProductsPage() {
             })}</div>
           </div>
           
+          ${sortedSections
+            .map((section) => {
+              const sectionProducts = productsBySection[section]
+              return `
           <div class="section">
-            <div class="section-title">== PRODUCTOS EN STOCK ==</div>
-            ${products
+            <div class="section-title">== SECCIÓN ${section} ==</div>
+            ${sectionProducts
               .map((product) => {
                 const expirationStatus = getExpirationStatus(product)
                 const statusClass =
@@ -499,7 +533,13 @@ export default function ProductsPage() {
             `
               })
               .join("")}
+            <div style="text-align: center; font-size: 8px; margin-top: 1mm; color: #666;">
+              Subtotal: ${sectionProducts.length} productos
+            </div>
           </div>
+          `
+            })
+            .join("")}
           
           <div class="total-line">
             TOTAL PRODUCTOS: ${products.length}
@@ -513,7 +553,7 @@ export default function ProductsPage() {
                 .map(
                   (product) => `
               <div class="product-line">
-                <div class="product-name">${product.name}</div>
+                <div class="product-name">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
                 <div class="product-stock low-stock">${product.stock_quantity}</div>
               </div>
             `,
@@ -534,7 +574,7 @@ export default function ProductsPage() {
                   const status = getExpirationStatus(product)
                   return `
               <div class="product-line">
-                <div class="product-name expiring">${product.name}</div>
+                <div class="product-name expiring">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
                 <div class="product-stock">${status?.days}d</div>
               </div>
             `
@@ -554,7 +594,7 @@ export default function ProductsPage() {
                 .map(
                   (product) => `
               <div class="product-line">
-                <div class="product-name expired">${product.name}</div>
+                <div class="product-name expired">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
                 <div class="product-stock">VENCIDO</div>
               </div>
             `,
@@ -666,6 +706,7 @@ export default function ProductsPage() {
                       image_url: "",
                       expiration_date: "",
                       days_before_expiry_alert: "30",
+                      section: "", // Reset section when opening dialog for add
                     })
                   }}
                 >
@@ -749,6 +790,15 @@ export default function ProductsPage() {
                         id="category"
                         value={formData.category}
                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="section">Sección (A1, A2, B1, etc.)</Label>
+                      <Input
+                        id="section"
+                        value={formData.section}
+                        onChange={(e) => setFormData({ ...formData, section: e.target.value.toUpperCase() })}
+                        placeholder="Ej: A1, B2, C3"
                       />
                     </div>
                   </div>
@@ -916,6 +966,7 @@ export default function ProductsPage() {
                       <TableHead>Precio</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Categoría</TableHead>
+                      <TableHead>Sección</TableHead> {/* Added Section Header */}
                       <TableHead>Caducidad</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -961,6 +1012,7 @@ export default function ProductsPage() {
                             </div>
                           </TableCell>
                           <TableCell>{product.category || "Sin categoría"}</TableCell>
+                          <TableCell>{product.section || "Sin sección"}</TableCell> {/* Display Section */}
                           <TableCell>
                             {product.expiration_date ? (
                               <div className="flex flex-col gap-1">
@@ -1096,6 +1148,7 @@ export default function ProductsPage() {
                       <TableHead>Precio</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Categoría</TableHead>
+                      <TableHead>Sección</TableHead> {/* Added Section Header */}
                       <TableHead>Estado</TableHead>
                       <TableHead>Acciones</TableHead>
                     </TableRow>
@@ -1128,6 +1181,7 @@ export default function ProductsPage() {
                         <TableCell>${product.price.toFixed(2)}</TableCell>
                         <TableCell>{product.stock_quantity}</TableCell>
                         <TableCell>{product.category || "Sin categoría"}</TableCell>
+                        <TableCell>{product.section || "Sin sección"}</TableCell> {/* Display Section */}
                         <TableCell>
                           <Badge variant="secondary">Eliminado</Badge>
                         </TableCell>
