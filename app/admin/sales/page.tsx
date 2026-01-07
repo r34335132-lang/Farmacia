@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -47,6 +56,8 @@ export default function SalesReports() {
   const [dateFilter, setDateFilter] = useState("today")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
+  const [showDateDialog, setShowDateDialog] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const router = useRouter()
   const supabase = createClient()
 
@@ -195,25 +206,42 @@ export default function SalesReports() {
   }
 
   const generateSalesReport = () => {
-    const getFilterDescription = () => {
-      switch (dateFilter) {
-        case "today":
-          return "HOY"
-        case "week":
-          return "ULTIMA SEMANA"
-        case "month":
-          return "ULTIMO MES"
-        case "all":
-          return "TODAS LAS VENTAS"
-        default:
-          return "FILTRO PERSONALIZADO"
+    const generateReport = (reportDate?: Date) => {
+      const targetDate = reportDate || new Date()
+      const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+      const dateEnd = new Date(dateStart.getTime() + 24 * 60 * 60 * 1000)
+
+      // Filter sales for the selected date
+      const daySales = sales.filter((sale) => {
+        const saleDate = new Date(sale.created_at)
+        return saleDate >= dateStart && saleDate < dateEnd
+      })
+
+      // Calculate totals for the selected date
+      const totalCash = daySales
+        .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+
+      const totalCard = daySales
+        .filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+
+      const countCash = daySales.filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo").length
+      const countCard = daySales.filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta").length
+
+      const getFilterDescription = () => {
+        return targetDate.toLocaleDateString("es-ES", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
       }
-    }
 
-    const totalRevenueValue = totalRevenue()
-    const reportNumber = Math.floor(Math.random() * 1000) + 1
+      const totalRevenueValue = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+      const reportNumber = Math.floor(Math.random() * 1000) + 1
 
-    const reportContent = `
+      const reportContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -356,7 +384,7 @@ export default function SalesReports() {
         <div class="line"></div>
         
         <div class="row">
-            <span>REALIZADO:</span>
+            <span> REALIZADO:</span>
             <span>${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
         </div>
         <div class="row">
@@ -373,7 +401,7 @@ export default function SalesReports() {
         </div>
         
         <div class="center" style="margin: 15px 0;">
-            <strong>${filteredSales.length} VENTAS EN EL TURNO.</strong>
+            <strong>${daySales.length} VENTAS EN EL TURNO.</strong>
         </div>
         
         <div class="section-title">DINERO EN CAJA</div>
@@ -384,7 +412,7 @@ export default function SalesReports() {
         </div>
         <div class="row">
             <span>VENTAS EN EFECTIVO:</span>
-            <span class="right-align">+ $${paymentStats?.totalCash.toFixed(2) || "0.00"}</span>
+            <span class="right-align">+ $${totalCash.toFixed(2)}</span>
         </div>
         <div class="row">
             <span>ABONOS EN EFECTIVO:</span>
@@ -401,7 +429,7 @@ export default function SalesReports() {
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(500 + (paymentStats?.totalCash || 0)).toFixed(2)}</span>
+            <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
         </div>
         
         <div class="section-title">ENTRADAS EFECTIVO</div>
@@ -432,11 +460,11 @@ export default function SalesReports() {
         
         <div class="row">
             <span>EN EFECTIVO</span>
-            <span class="right-align">$${paymentStats?.totalCash.toFixed(2) || "0.00"}</span>
+            <span class="right-align">$${totalCash.toFixed(2)}</span>
         </div>
         <div class="row">
             <span>CON TARJETA</span>
-            <span class="right-align">$${paymentStats?.totalCard.toFixed(2) || "0.00"}</span>
+            <span class="right-align">$${totalCard.toFixed(2)}</span>
         </div>
         <div class="row">
             <span>A CREDITO</span>
@@ -475,7 +503,7 @@ export default function SalesReports() {
             <div>Tel: (555) 123-4567</div>
             <div style="margin-top: 8px;">
                 Período: ${getFilterDescription()}<br>
-                ${paymentStats?.countCash || 0} ventas efectivo, ${paymentStats?.countCard || 0} ventas tarjeta
+                ${countCash} ventas efectivo, ${countCard} ventas tarjeta
             </div>
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
@@ -491,15 +519,344 @@ export default function SalesReports() {
 </html>
     `
 
-    const printWindow = window.open("", "_blank", "width=400,height=600")
-    if (printWindow) {
-      printWindow.document.write(reportContent)
-      printWindow.document.close()
-      printWindow.focus()
-      setTimeout(() => {
-        printWindow.print()
-        printWindow.close()
-      }, 250)
+      const printWindow = window.open("", "_blank", "width=400,height=600")
+      if (printWindow) {
+        printWindow.document.write(reportContent)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+    }
+
+    setShowDateDialog(true)
+  }
+
+  const handleGenerateReportForDate = () => {
+    if (selectedDate) {
+      const dateStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate())
+      const dateEnd = new Date(dateStart.getTime() + 24 * 60 * 60 * 1000)
+
+      const daySales = sales.filter((sale) => {
+        const saleDate = new Date(sale.created_at)
+        return saleDate >= dateStart && saleDate < dateEnd
+      })
+
+      const totalCash = daySales
+        .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+
+      const totalCard = daySales
+        .filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+
+      const countCash = daySales.filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo").length
+      const countCard = daySales.filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta").length
+
+      const totalRevenueValue = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+      const reportNumber = Math.floor(Math.random() * 1000) + 1
+
+      const getFilterDescription = () => {
+        return selectedDate.toLocaleDateString("es-ES", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      }
+
+      const reportContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corte del Turno - Farmacia Solidaria</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 13px;
+            margin: 0 !important; 
+            padding: 0 !important;
+            width: 55mm;
+            max-width: 55mm;
+            background: white;
+            color: #000;
+            line-height: 1.4;
+        }
+        .content {
+            width: 100%;
+            max-width: 55mm;
+            margin: 0;
+            padding: 2mm;
+            box-sizing: border-box;
+        }
+        .center {
+            text-align: center;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+        .title {
+            font-size: 15px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+        .subtitle {
+            font-size: 13px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        .line {
+            border-bottom: 1px solid #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+        .double-line {
+            border-bottom: 2px solid #000;
+            margin: 10px 0;
+            width: 100%;
+        }
+        .dashed-line {
+            border-bottom: 1px dashed #000;
+            margin: 5px 0;
+            width: 100%;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            font-size: 12px;
+            width: 100%;
+        }
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
+            font-size: 11px;
+            width: 100%;
+        }
+        .section-title {
+            text-align: center;
+            font-weight: bold;
+            margin: 15px 0 10px 0;
+            padding: 0 2px;
+            font-size: 13px;
+            width: 100%;
+        }
+        .section-title::before,
+        .section-title::after {
+            content: "== ";
+        }
+        .section-title::after {
+            content: " ==";
+        }
+        .right-align {
+            text-align: right;
+        }
+        .bold {
+            font-weight: bold;
+        }
+        .small {
+            font-size: 10px;
+        }
+        .footer-logo {
+            margin-top: 10px;
+            text-align: center;
+            width: 100%;
+        }
+        .footer-logo img {
+            width: 100%;
+            max-width: 51mm;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        @media print {
+            * {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                width: 55mm !important;
+                max-width: 55mm !important;
+            }
+            .content { 
+                width: 55mm !important;
+                max-width: 55mm !important;
+                margin: 0 !important;
+                padding: 2mm !important;
+                box-sizing: border-box !important;
+            }
+            @page {
+                size: 55mm auto;
+                margin: 0 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="center title">CORTE DEL TURNO</div>
+        <div class="center">CORTE DE TURNO #${reportNumber}</div>
+        
+        <div class="line"></div>
+        
+        <div class="row">
+            <span> REALIZADO:</span>
+            <span>${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
+        </div>
+        <div class="row">
+            <span>CAJERO:</span>
+            <span>ADMINISTRADOR</span>
+        </div>
+        <div class="row">
+            <span>VENTAS TOTALES:</span>
+            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>GANANCIA:</span>
+            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
+        </div>
+        
+        <div class="center" style="margin: 15px 0;">
+            <strong>${daySales.length} VENTAS EN EL TURNO.</strong>
+        </div>
+        
+        <div class="section-title">DINERO EN CAJA</div>
+        
+        <div class="row">
+            <span>FONDO DE CAJA:</span>
+            <span class="right-align">$500.00</span>
+        </div>
+        <div class="row">
+            <span>VENTAS EN EFECTIVO:</span>
+            <span class="right-align">+ $${totalCash.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>ABONOS EN EFECTIVO:</span>
+            <span class="right-align">+ $0.00</span>
+        </div>
+        <div class="row">
+            <span>ENTRADAS:</span>
+            <span class="right-align">+ $0.00</span>
+        </div>
+        <div class="row">
+            <span>SALIDAS:</span>
+            <span class="right-align">- $0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>EFECTIVO EN CAJA =</span>
+            <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
+        </div>
+        
+        <div class="section-title">ENTRADAS EFECTIVO</div>
+        
+        <div class="row">
+            <span>ENTRADA DE DINERO</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL ENTRADAS</span>
+            <span class="right-align">= $0.00</span>
+        </div>
+        
+        <div class="section-title">SALIDAS EFECTIVO</div>
+        
+        <div class="row">
+            <span>SALIDA DE CAJA</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL SALIDAS</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        
+        <div class="section-title">VENTAS</div>
+        
+        <div class="row">
+            <span>EN EFECTIVO</span>
+            <span class="right-align">$${totalCash.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>CON TARJETA</span>
+            <span class="right-align">$${totalCard.toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>A CREDITO</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="row">
+            <span>CON VALES</span>
+            <span class="right-align">$0.00</span>
+        </div>
+        <div class="dashed-line"></div>
+        <div class="row bold">
+            <span>TOTAL VENTAS</span>
+            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
+        </div>
+        
+        <div class="section-title">VENTAS POR DEPTO</div>
+        
+        <div class="row">
+            <span>MEDICAMENTOS</span>
+            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>CUIDADO PERSONAL</span>
+            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
+        </div>
+        <div class="row">
+            <span>VITAMINAS</span>
+            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
+        </div>
+        
+        <div class="double-line"></div>
+        
+        <div class="center small" style="margin-top: 15px;">
+            <div><strong>FARMACIA SOLIDARIA</strong></div>
+            <div>Cuidando la salud de nuestra comunidad</div>
+            <div>Tel: (555) 123-4567</div>
+            <div style="margin-top: 8px;">
+                Período: ${getFilterDescription()}<br>
+                ${countCash} ventas efectivo, ${countCard} ventas tarjeta
+            </div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
+                Sistema POS - Farmacia Solidaria v1.0
+            </div>
+            
+            <div class="footer-logo">
+                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+      `
+
+      const printWindow = window.open("", "_blank", "width=400,height=600")
+      if (printWindow) {
+        printWindow.document.write(reportContent)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+
+      setShowDateDialog(false)
     }
   }
 
@@ -1028,6 +1385,30 @@ export default function SalesReports() {
           </div>
         )}
       </div>
+
+      <Dialog open={showDateDialog} onOpenChange={setShowDateDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Seleccionar Fecha del Corte</DialogTitle>
+            <DialogDescription>Elige el día para generar el reporte de corte de caja</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center py-4">
+            <CalendarComponent
+              mode="single"
+              selected={selectedDate}
+              onSelect={setSelectedDate}
+              initialFocus
+              className="rounded-md border"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDateDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleGenerateReportForDate}>Generar Reporte</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
