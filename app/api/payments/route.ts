@@ -71,23 +71,18 @@ export async function GET() {
 
     // Calcular estadísticas de pagos
     const stats = {
-      totalPayments: allPayments.length,
-      totalAmount: allPayments.reduce((sum, payment) => sum + Number(payment.total_amount), 0),
-      cashPayments: allPayments.filter((p) => p.payment_method === "efectivo").length,
-      cardPayments: allPayments.filter((p) => p.payment_method === "tarjeta").length,
-      cashAmount: allPayments
+      total: allPayments.reduce((sum, payment) => sum + Number(payment.total_amount), 0),
+      totalCash: allPayments
         .filter((p) => p.payment_method === "efectivo")
         .reduce((sum, payment) => sum + Number(payment.total_amount), 0),
-      cardAmount: allPayments
+      totalCard: allPayments
         .filter((p) => p.payment_method === "tarjeta")
         .reduce((sum, payment) => sum + Number(payment.total_amount), 0),
+      countCash: allPayments.filter((p) => p.payment_method === "efectivo").length,
+      countCard: allPayments.filter((p) => p.payment_method === "tarjeta").length,
     }
 
-    return NextResponse.json({
-      payments: allPayments,
-      stats,
-      total: allPayments.length,
-    })
+    return NextResponse.json(stats)
   } catch (error) {
     console.error("Error in payments API:", error)
     return NextResponse.json({ error: "Failed to fetch payments" }, { status: 500 })

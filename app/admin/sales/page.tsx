@@ -752,10 +752,8 @@ export default function SalesReports() {
   }
 
   useEffect(() => {
-    if (sales.length > 0) {
-      filterSales()
-    }
-  }, [sales, filterSales])
+    filterSales()
+  }, [filterSales])
 
   if (loading) {
     return (
@@ -770,33 +768,65 @@ export default function SalesReports() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header con logo */}
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <img src="/solidaria.jpg" alt="Logo Farmacia" className="h-10 w-auto" />
-            <h1 className="text-xl font-bold">Reportes de Ventas</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={generateSalesReport} variant="default" className="gap-2">
+    <div className="min-h-screen bg-gray-50">
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/admin">
+                <Button variant="ghost" size="icon">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Reporte de Ventas</h1>
+                <p className="text-sm text-gray-500">Historial y estadísticas de ventas</p>
+              </div>
+            </div>
+            <Button onClick={generateSalesReport} className="gap-2">
               <Printer className="h-4 w-4" />
-              Corte de Caja
+              Generar Reporte
             </Button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <div className="p-6 space-y-6">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Filtrar por fecha" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Hoy</SelectItem>
+              <SelectItem value="week">Esta Semana</SelectItem>
+              <SelectItem value="month">Este Mes</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Método de pago" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="cash">Efectivo</SelectItem>
+              <SelectItem value="card">Tarjeta</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Input
+            placeholder="Buscar por vendedor o ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1"
+          />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
           {paymentStats && (
-            <Card className="mb-6 border-maroon-200 shadow-lg">
+            <Card className="lg:col-span-4">
               <CardHeader className="bg-gradient-to-r from-maroon-600 to-maroon-700 text-white">
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
@@ -808,20 +838,20 @@ export default function SalesReports() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="p-4 bg-maroon-50 rounded-lg">
                     <div className="text-sm text-maroon-600 mb-1">Total General</div>
-                    <div className="text-2xl font-bold text-maroon-800">{paymentStats.total.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-maroon-800">{(paymentStats?.total ?? 0).toFixed(2)}</div>
                     <div className="text-xs text-maroon-500 mt-1">
-                      {paymentStats.countCash + paymentStats.countCard} ventas
+                      {(paymentStats?.countCash ?? 0) + (paymentStats?.countCard ?? 0)} ventas
                     </div>
                   </div>
                   <div className="p-4 bg-green-50 rounded-lg">
                     <div className="text-sm text-green-600 mb-1">Efectivo</div>
-                    <div className="text-2xl font-bold text-green-800">{paymentStats.totalCash.toFixed(2)}</div>
-                    <div className="text-xs text-green-600 mt-1">{paymentStats.countCash} ventas</div>
+                    <div className="text-2xl font-bold text-green-800">{(paymentStats?.totalCash ?? 0).toFixed(2)}</div>
+                    <div className="text-xs text-green-600 mt-1">{paymentStats?.countCash ?? 0} ventas</div>
                   </div>
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <div className="text-sm text-blue-600 mb-1">Tarjeta</div>
-                    <div className="text-2xl font-bold text-blue-800">{paymentStats.totalCard.toFixed(2)}</div>
-                    <div className="text-xs text-blue-600 mt-1">{paymentStats.countCard} ventas</div>
+                    <div className="text-2xl font-bold text-blue-800">{(paymentStats?.totalCard ?? 0).toFixed(2)}</div>
+                    <div className="text-xs text-blue-600 mt-1">{paymentStats?.countCard ?? 0} ventas</div>
                   </div>
                 </div>
               </CardContent>
@@ -874,7 +904,7 @@ export default function SalesReports() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[400px] w-full">
+              <div className="h-[400px] min-h-[400px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" />
@@ -898,65 +928,9 @@ export default function SalesReports() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-4 text-center text-sm text-muted-foreground">
-                {chartData.length > 0 && (
-                  <p>
-                    Mostrando {chartData.length} día(s) con actividad. Las barras más altas representan los días más
-                    fuertes en ventas.
-                  </p>
-                )}
-              </div>
             </CardContent>
           </Card>
         )}
-
-        {/* Filters */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Filtros</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Período</label>
-                <Select value={dateFilter} onValueChange={setDateFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="today">Hoy</SelectItem>
-                    <SelectItem value="week">Última Semana</SelectItem>
-                    <SelectItem value="month">Último Mes</SelectItem>
-                    <SelectItem value="all">Todas</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Método de Pago</label>
-                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Buscar</label>
-                <Input
-                  placeholder="Buscar por cajero o ticket..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Sales grouped by day */}
         {Object.keys(salesByDay).length === 0 ? (
