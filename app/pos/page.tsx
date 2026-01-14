@@ -1118,6 +1118,20 @@ export default function POSPage() {
                   </div>
                 </div>
 
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setDiscountType("percentage")
+                      setDiscountValue("10")
+                    }}
+                    variant="outline"
+                    className="w-full border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
+                  >
+                    <Tag className="h-4 w-4 mr-2" />🎁 Aplicar Cupón Bienestar (10%)
+                  </Button>
+                </div>
+
                 {discountAmount > 0 && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="flex justify-between items-center text-green-700 font-semibold">
