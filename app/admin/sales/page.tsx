@@ -953,7 +953,7 @@ export default function SalesReports() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Ticket de Venta - Farmacia Solidaria</title>
+    <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
         * {
             margin: 0;
@@ -1049,8 +1049,8 @@ export default function SalesReports() {
 </head>
 <body>
     <div class="content">
-        <div class="center title">FARMACIA SOLIDARIA</div>
-        <div class="center small">Cuidando la salud de nuestra comunidad</div>
+        <div class="center title">FARMACIA BIENESTAR</div>
+        <div class="center small">Tu salud es nuestro compromiso</div>
         <div class="center small">Tel: (555) 123-4567</div>
         
         <div class="line"></div>
@@ -1111,8 +1111,8 @@ export default function SalesReports() {
             <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
             <div>Conserve su ticket</div>
             <div style="margin-top: 8px; font-size: 9px;">
-                REIMPRESIÓN - ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
+                REIMPRESION - ${new Date().toLocaleString("es-ES")}<br>
+                Sistema POS - Farmacia Bienestar v1.0
             </div>
         </div>
     </div>
