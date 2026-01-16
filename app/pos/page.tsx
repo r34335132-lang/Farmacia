@@ -44,7 +44,7 @@ interface Product {
   barcode?: string
   image_url?: string
   is_active: boolean
-  section?: string // Added section field to Product interface
+  section?: string
 }
 
 interface CartItem {
@@ -346,14 +346,10 @@ export default function POSPage() {
         ])
       }
 
-      // const discountReasonText = hasDiscount
-      //   ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-      //   : ""
-      // generateReceipt(sale, cart, discountAmount, discountReasonText)
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
-      generateReceipt(sale, cart, discountAmount, discountReasonText)
+      generateReceipt(sale, cart, discountAmount, discountReasonText, subtotal, total, cashReceived, change)
 
       clearCart()
       setIsPaymentDialogOpen(false)
@@ -361,8 +357,6 @@ export default function POSPage() {
       setPaymentMethod("efectivo")
 
       loadProducts()
-
-      // alert("Venta procesada exitosamente")
     } catch (error) {
       console.error("Error processing payment:", error)
       alert("Error al procesar el pago")
@@ -371,7 +365,16 @@ export default function POSPage() {
     }
   }
 
-  const generateReceipt = (sale: any, items: CartItem[], discount: number, discountReason: string) => {
+  const generateReceipt = (
+    sale: any,
+    items: CartItem[],
+    discount: number,
+    discountReason: string,
+    localSubtotal: number,
+    localTotal: number,
+    localCashReceived: string,
+    localChange: number,
+  ) => {
     const receiptContent = `
 <!DOCTYPE html>
 <html>
@@ -575,7 +578,7 @@ export default function POSPage() {
         <div class="total-section">
             <div class="info-line">
                 <span>Subtotal:</span>
-                <span>$${subtotal.toFixed(2)}</span>
+                <span>$${localSubtotal.toFixed(2)}</span>
             </div>
             ${
               discount > 0
@@ -592,7 +595,7 @@ export default function POSPage() {
                 <span>$0.00</span>
             </div>
             <div class="total">
-                TOTAL: $${total.toFixed(2)}
+                TOTAL: $${localTotal.toFixed(2)}
             </div>
             ${
               discount > 0
@@ -608,18 +611,18 @@ export default function POSPage() {
         <div class="payment-info">
             <div class="info-line">
                 <span>Método de pago:</span>
-                <span style="font-weight: 600;">${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+                <span style="font-weight: 600;">${sale.payment_method === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
             </div>
             ${
-              paymentMethod === "efectivo"
+              sale.payment_method === "efectivo"
                 ? `
             <div class="info-line">
                 <span>Recibido:</span>
-                <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
+                <span>$${Number.parseFloat(localCashReceived || "0").toFixed(2)}</span>
             </div>
             <div class="info-line">
                 <span>Cambio:</span>
-                <span style="font-weight: 600;">$${change.toFixed(2)}</span>
+                <span style="font-weight: 600;">$${localChange.toFixed(2)}</span>
             </div>`
                 : ""
             }
@@ -695,9 +698,7 @@ export default function POSPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
                 Farmacia Bienestar
               </h1>
-              <p className="text-sm text-muted-foreground">
-                ¡Bienvenido/a {currentUser?.full_name}! 💊 Listo para ayudar
-              </p>
+              <p className="text-sm text-muted-foreground">¡Bienvenido/a {currentUser?.full_name}! Listo para ayudar</p>
             </div>
           </div>
           <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
@@ -738,7 +739,7 @@ export default function POSPage() {
                   <ShoppingCart className="h-8 w-8" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}! 👋</h2>
+                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}!</h2>
                   <p className="text-rose-100">Tu salud es nuestro compromiso</p>
                 </div>
               </div>
@@ -777,10 +778,10 @@ export default function POSPage() {
                   variant="outline"
                   className="w-full border-rose-200 text-rose-800 hover:bg-rose-50"
                 >
-                  📷 Abrir Escáner QR Avanzado
+                  Abrir Escáner QR Avanzado
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  💡 Tip: Si el producto no existe en activos, te mostrará si está en eliminados
+                  Tip: Si el producto no existe en activos, te mostrará si está en eliminados
                 </p>
               </div>
             </CardContent>
@@ -964,7 +965,7 @@ export default function POSPage() {
         <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              🛒 Carrito de Compras
+              Carrito de Compras
             </h2>
             {cart.length > 0 && (
               <Button
@@ -986,7 +987,7 @@ export default function POSPage() {
                     <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
                     {item.product.section && (
                       <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
-                        📍 {item.product.section}
+                        {item.product.section}
                       </Badge>
                     )}
                     <div className="flex items-center justify-between">
@@ -1049,7 +1050,8 @@ export default function POSPage() {
                 className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
                 size="lg"
               >
-                <Receipt className="h-5 w-5 mr-2" />💳 Procesar Pago
+                <Receipt className="h-5 w-5 mr-2" />
+                Procesar Pago
               </Button>
             </div>
           )}
@@ -1062,7 +1064,7 @@ export default function POSPage() {
         <DialogContent className="border-rose-200 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              💳 Procesar Pago
+              Procesar Pago
             </DialogTitle>
             <DialogDescription className="text-lg font-semibold">
               Subtotal: <span className="text-rose-800">${subtotal.toFixed(2)}</span>
@@ -1118,20 +1120,6 @@ export default function POSPage() {
                   </div>
                 </div>
 
-                <div className="pt-2">
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setDiscountType("percentage")
-                      setDiscountValue("10")
-                    }}
-                    variant="outline"
-                    className="w-full border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold"
-                  >
-                    <Tag className="h-4 w-4 mr-2" />🎁 Aplicar Cupón Bienestar (10%)
-                  </Button>
-                </div>
-
                 {discountAmount > 0 && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="flex justify-between items-center text-green-700 font-semibold">
@@ -1174,12 +1162,14 @@ export default function POSPage() {
                 <SelectContent>
                   <SelectItem value="efectivo">
                     <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-green-600" />💵 Efectivo
+                      <Banknote className="h-4 w-4 text-green-600" />
+                      Efectivo
                     </div>
                   </SelectItem>
                   <SelectItem value="tarjeta">
                     <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-rose-800" />💳 Tarjeta
+                      <CreditCard className="h-4 w-4 text-rose-800" />
+                      Tarjeta
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -1202,7 +1192,7 @@ export default function POSPage() {
                 />
                 {cashReceived && Number.parseFloat(cashReceived) >= total && (
                   <div className="text-xl font-bold text-green-600 bg-green-50 p-3 rounded-lg text-center">
-                    💰 Cambio: ${change.toFixed(2)}
+                    Cambio: ${change.toFixed(2)}
                   </div>
                 )}
               </div>
@@ -1221,7 +1211,7 @@ export default function POSPage() {
               }
               className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold"
             >
-              {processingPayment ? "Procesando... ⏳" : "✅ Confirmar Pago"}
+              {processingPayment ? "Procesando..." : "Confirmar Pago"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1239,7 +1229,7 @@ export default function POSPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">📷 Escáner QR Avanzado</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">Escáner QR Avanzado</DialogTitle>
             <DialogDescription>
               {scannerMode === "camera"
                 ? "Apunta la cámara hacia el código QR"
@@ -1295,7 +1285,7 @@ export default function POSPage() {
                 )}
 
                 <p className="text-xs text-muted-foreground text-center">
-                  📱 Funciona mejor en dispositivos móviles con cámara trasera
+                  Funciona mejor en dispositivos móviles con cámara trasera
                 </p>
               </div>
             ) : (
@@ -1305,8 +1295,9 @@ export default function POSPage() {
                     <Scan className="h-16 w-16 mx-auto mb-2" />
                     <p className="text-sm">Modo Manual</p>
                     <p className="text-xs mt-2">
-                      🖨️ Perfecto para escáneres físicos
-                      <br />📱 También funciona con códigos QR
+                      Perfecto para escáneres físicos
+                      <br />
+                      También funciona con códigos QR
                     </p>
                   </div>
                 </div>
@@ -1333,7 +1324,7 @@ export default function POSPage() {
                       }}
                       size="sm"
                     >
-                      ✅
+                      OK
                     </Button>
                   </div>
                 </div>
