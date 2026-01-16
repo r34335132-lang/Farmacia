@@ -381,17 +381,15 @@ export default function POSPage() {
 <head>
     <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        body {
-            font-family: 'Montserrat', 'Arial', sans-serif;
+        body { 
+            font-family: 'Courier New', monospace; 
             font-size: 13px;
-            margin: 0 !important;
+            margin: 0 !important; 
             padding: 0 !important;
             width: 55mm;
             max-width: 55mm;
@@ -406,119 +404,65 @@ export default function POSPage() {
             padding: 2mm;
             box-sizing: border-box;
         }
-        .header {
+        .center {
             text-align: center;
-            border-bottom: 1px dashed #8B1538;
-            padding-bottom: 5px;
             margin-bottom: 5px;
             width: 100%;
         }
-        .logo-text {
-            font-size: 17px;
-            font-weight: 700;
-            margin-bottom: 2px;
-            width: 100%;
-            color: #8B1538;
-            letter-spacing: 0.5px;
-        }
-        .subtitle {
-            font-size: 11px;
+        .title {
+            font-size: 15px;
+            font-weight: bold;
             margin-bottom: 5px;
             width: 100%;
-            font-weight: 600;
-            color: #8B1538;
         }
-        .info-line {
+        .line {
+            border-bottom: 1px solid #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+        .dashed-line {
+            border-bottom: 1px dashed #000;
+            margin: 5px 0;
+            width: 100%;
+        }
+        .row {
             display: flex;
             justify-content: space-between;
-            margin: 2px 0;
-            font-size: 13px;
-            width: 100%;
-        }
-        .items {
-            margin: 8px 0;
-            border-top: 1px dashed #8B1538;
-            border-bottom: 1px dashed #8B1538;
-            padding: 5px 0;
-            text-align: left;
-            width: 100%;
-        }
-        .item {
-            margin: 3px 0;
-            width: 100%;
-        }
-        .item-name {
-            font-weight: 600;
-        }
-        .item-details {
-            font-size: 12px;
-        }
-        .item-section {
-            font-size: 10px;
-            color: #8B1538;
-            font-weight: 600;
-        }
-        .total-section {
-            margin-top: 8px;
-            border-top: 1px dashed #8B1538;
-            padding-top: 5px;
-            width: 100%;
-        }
-        .discount-line {
-            color: #008800;
-            font-weight: 600;
-        }
-        .total {
-            font-size: 15px;
-            font-weight: 700;
-            text-align: right;
-            margin: 5px 0;
-            width: 100%;
-            color: #8B1538;
-        }
-        .payment-info {
-            margin: 8px 0;
+            margin-bottom: 2px;
             font-size: 12px;
             width: 100%;
         }
-        .footer {
-            text-align: center;
-            margin-top: 10px;
-            border-top: 1px dashed #8B1538;
-            padding-top: 5px;
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
             font-size: 11px;
             width: 100%;
         }
-        .thank-you {
-            font-size: 13px;
-            font-weight: 700;
-            margin: 5px 0;
-            color: #8B1538;
+        .right-align {
+            text-align: right;
         }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
+        .bold {
+            font-weight: bold;
         }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
+        .small {
+            font-size: 10px;
+        }
+        .discount {
+            color: #000;
         }
         @media print {
             * {
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            html, body {
-                margin: 0 !important;
-                padding: 0 !important;
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important; 
                 width: 55mm !important;
                 max-width: 55mm !important;
             }
-            .content {
+            .content { 
                 width: 55mm !important;
                 max-width: 55mm !important;
                 margin: 0 !important;
@@ -534,114 +478,110 @@ export default function POSPage() {
 </head>
 <body>
     <div class="content">
-        <div class="header">
-            <div class="logo-text">FARMACIA BIENESTAR</div>
-            <div class="subtitle">Tu salud es nuestro compromiso</div>
-            <div style="font-size: 10px;">
-                Dirección: Calle Principal #123<br>
-                Tel: (555) 123-4567<br>
-                www.farmaciabinestar.com
-            </div>
+        <div class="center title">FARMACIA BIENESTAR</div>
+        <div class="center small">Tu salud es nuestro compromiso</div>
+        <div class="center small">Calle Principal #123</div>
+        <div class="center small">Tel: (555) 123-4567</div>
+        
+        <div class="line"></div>
+        
+        <div class="row">
+            <span>TICKET:</span>
+            <span>#${sale.id.slice(-8).toUpperCase()}</span>
         </div>
-
-        <div class="info-line">
-            <span>Fecha:</span>
-            <span>${new Date().toLocaleString("es-ES")}</span>
+        <div class="row">
+            <span>FECHA:</span>
+            <span>${new Date().toLocaleDateString("es-ES")}</span>
         </div>
-        <div class="info-line">
-            <span>Cajero:</span>
+        <div class="row">
+            <span>HORA:</span>
+            <span>${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
+        </div>
+        <div class="row">
+            <span>CAJERO:</span>
             <span>${currentUser.full_name}</span>
         </div>
-        <div class="info-line">
-            <span>Ticket #:</span>
-            <span>${sale.id.slice(-8).toUpperCase()}</span>
+        
+        <div class="line"></div>
+        
+        <div class="center small bold">PRODUCTOS</div>
+        
+        ${items
+          .map(
+            (item) => `
+        <div class="item-row">
+            <span>${item.product.name}</span>
+            <span></span>
         </div>
-
-        <div class="items">
-            <div style="font-weight: 700; text-align: center; margin-bottom: 5px; color: #8B1538;">
-                PRODUCTOS VENDIDOS
-            </div>
-            ${items
-              .map(
-                (item) => `
-            <div class="item">
-                <div class="item-name">${item.product.name}</div>
-                ${item.product.section ? `<div class="item-section">Sección: ${item.product.section}</div>` : ""}
-                <div class="item-details">
-                    ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
-                </div>
-            </div>`,
-              )
-              .join("")}
+        ${item.product.section ? `<div class="item-row"><span>  Sec: ${item.product.section}</span><span></span></div>` : ""}
+        <div class="item-row">
+            <span>  ${item.quantity} x $${item.product.price.toFixed(2)}</span>
+            <span class="right-align">$${item.subtotal.toFixed(2)}</span>
         </div>
-
-        <div class="total-section">
-            <div class="info-line">
-                <span>Subtotal:</span>
-                <span>$${localSubtotal.toFixed(2)}</span>
-            </div>
-            ${
-              discount > 0
-                ? `
-            <div class="info-line discount-line">
-                <span>Descuento (${discountReason}):</span>
-                <span>-$${discount.toFixed(2)}</span>
-            </div>
-            `
-                : ""
-            }
-            <div class="info-line">
-                <span>Impuestos:</span>
-                <span>$0.00</span>
-            </div>
-            <div class="total">
-                TOTAL: $${localTotal.toFixed(2)}
-            </div>
-            ${
-              discount > 0
-                ? `
-            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px; font-weight: 600;">
-                ¡Ahorraste $${discount.toFixed(2)}!
-            </div>
-            `
-                : ""
-            }
+        `,
+          )
+          .join("")}
+        
+        <div class="dashed-line"></div>
+        
+        <div class="row">
+            <span>SUBTOTAL:</span>
+            <span class="right-align">$${localSubtotal.toFixed(2)}</span>
         </div>
-
-        <div class="payment-info">
-            <div class="info-line">
-                <span>Método de pago:</span>
-                <span style="font-weight: 600;">${sale.payment_method === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
-            </div>
-            ${
-              sale.payment_method === "efectivo"
-                ? `
-            <div class="info-line">
-                <span>Recibido:</span>
-                <span>$${Number.parseFloat(localCashReceived || "0").toFixed(2)}</span>
-            </div>
-            <div class="info-line">
-                <span>Cambio:</span>
-                <span style="font-weight: 600;">$${localChange.toFixed(2)}</span>
-            </div>`
-                : ""
-            }
+        ${
+          discount > 0
+            ? `
+        <div class="row discount">
+            <span>DESCUENTO (${discountReason}):</span>
+            <span class="right-align">-$${discount.toFixed(2)}</span>
         </div>
-
-        <div class="footer">
-            <div class="thank-you">¡Gracias por su compra!</div>
-            <div style="font-weight: 600;">
-                Conserve este ticket<br>
-                Cambios y devoluciones: 30 días<br>
-                ¡Que tenga un excelente día!
-            </div>
-            <div style="margin-top: 8px; font-size: 10px;">
-                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
+        `
+            : ""
+        }
+        <div class="row bold">
+            <span>TOTAL:</span>
+            <span class="right-align">$${localTotal.toFixed(2)}</span>
+        </div>
+        ${
+          discount > 0
+            ? `
+        <div class="center small" style="margin-top: 3px;">
+            Ahorraste $${discount.toFixed(2)}
+        </div>
+        `
+            : ""
+        }
+        
+        <div class="dashed-line"></div>
+        
+        <div class="row">
+            <span>PAGO:</span>
+            <span class="right-align">${sale.payment_method === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+        </div>
+        ${
+          sale.payment_method === "efectivo"
+            ? `
+        <div class="row">
+            <span>RECIBIDO:</span>
+            <span class="right-align">$${Number.parseFloat(localCashReceived || "0").toFixed(2)}</span>
+        </div>
+        <div class="row bold">
+            <span>CAMBIO:</span>
+            <span class="right-align">$${localChange.toFixed(2)}</span>
+        </div>
+        `
+            : ""
+        }
+        
+        <div class="line"></div>
+        
+        <div class="center small" style="margin-top: 10px;">
+            <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
+            <div>Conserve su ticket</div>
+            <div>Cambios y devoluciones: 30 dias</div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                ${new Date().toLocaleString("es-ES")}<br>
                 Sistema POS - Farmacia Bienestar v1.0
-            </div>
-
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Bienestar" />
             </div>
         </div>
     </div>
