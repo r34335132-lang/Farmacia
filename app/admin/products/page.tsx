@@ -32,11 +32,13 @@ import {
   Keyboard,
   RotateCcw,
   Archive,
+  Printer,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/image-upload"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Checkbox } from "@/components/ui/checkbox"
 
 const PRODUCTS_PER_PAGE = 50
 
@@ -54,7 +56,7 @@ interface Product {
   image_url?: string
   expiration_date?: string
   days_before_expiry_alert?: number
-  section?: string // Added section field to Product interface
+  section?: string
 }
 
 export default function ProductsPage() {
@@ -70,6 +72,11 @@ export default function ProductsPage() {
   const [scannerMode, setScannerMode] = useState<"manual" | "camera">("manual")
   const [currentPageActive, setCurrentPageActive] = useState(1)
   const [currentPageDeleted, setCurrentPageDeleted] = useState(1)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [selectedSections, setSelectedSections] = useState<string[]>([])
+  const [includeStockBajo, setIncludeStockBajo] = useState(true)
+  const [includePorVencer, setIncludePorVencer] = useState(true)
+  const [includeVencidos, setIncludeVencidos] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
@@ -85,7 +92,7 @@ export default function ProductsPage() {
     image_url: "",
     expiration_date: "",
     days_before_expiry_alert: "30",
-    section: "", // Added section field to form state
+    section: "",
   })
 
   useEffect(() => {
@@ -360,8 +367,42 @@ export default function ProductsPage() {
     return null
   }
 
+  const getUniqueSections = () => {
+    const sections = new Set<string>()
+    products.forEach((product) => {
+      sections.add(product.section || "SIN SECCIÓN")
+    })
+    return Array.from(sections).sort()
+  }
+
+  const toggleSection = (section: string) => {
+    setSelectedSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
+  }
+
+  const selectAllSections = () => {
+    setSelectedSections(getUniqueSections())
+  }
+
+  const deselectAllSections = () => {
+    setSelectedSections([])
+  }
+
+  const openExportDialog = () => {
+    setSelectedSections(getUniqueSections()) // Select all by default
+    setIncludeStockBajo(true)
+    setIncludePorVencer(true)
+    setIncludeVencidos(true)
+    setIsExportDialogOpen(true)
+  }
+
   const generateStockReport = () => {
-    const productsBySection = products.reduce((acc: Record<string, any[]>, product) => {
+    // Filter products by selected sections
+    const filteredBySection = products.filter((product) => {
+      const productSection = product.section || "SIN SECCIÓN"
+      return selectedSections.includes(productSection)
+    })
+
+    const productsBySection = filteredBySection.reduce((acc: Record<string, any[]>, product) => {
       const section = product.section || "SIN SECCIÓN"
       if (!acc[section]) {
         acc[section] = []
@@ -370,269 +411,209 @@ export default function ProductsPage() {
       return acc
     }, {})
 
-    // Sort sections alphabetically
     const sortedSections = Object.keys(productsBySection).sort()
 
-    const reportContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Reporte de Inventario - Farmacia Bienestar</title>
-          <style>
-            @page {
-              size: 55mm auto;
-              margin: 0;
-            }
-            
-            body {
-              font-family: 'Montserrat', 'Courier New', monospace;
-              font-size: 10px;
-              line-height: 1.2;
-              margin: 0;
-              padding: 2mm;
-              width: 55mm;
-              max-width: 55mm;
-              box-sizing: border-box;
-              background: white;
-            }
-            
-            .header {
-              text-align: center;
-              margin-bottom: 3mm;
-              border-bottom: 1px dashed #8B1538;
-              padding-bottom: 2mm;
-              color: #8B1538;
-            }
-            
-            .title {
-              font-size: 12px;
-              font-weight: bold;
-              margin-bottom: 1mm;
-            }
-            
-            .subtitle {
-              font-size: 10px;
-              font-weight: 600;
-              margin-bottom: 1mm;
-            }
-            
-            .date {
-              font-size: 9px;
-              margin-bottom: 1mm;
-            }
-            
-            .section {
-              margin: 3mm 0;
-            }
-            
-            .section-title {
-              font-size: 10px;
-              font-weight: bold;
-              text-align: center;
-              margin: 2mm 0;
-              padding: 1mm 0;
-              border-top: 1px dashed #8B1538;
-              border-bottom: 1px dashed #8B1538;
-              color: #8B1538;
-            }
-            
-            .product-line {
-              display: flex;
-              justify-content: space-between;
-              margin: 1mm 0;
-              font-size: 9px;
-            }
-            
-            .product-name {
-              flex: 1;
-              margin-right: 2mm;
-              word-wrap: break-word;
-              overflow-wrap: break-word;
-            }
-            
-            .product-stock {
-              text-align: right;
-              min-width: 8mm;
-              font-weight: bold;
-            }
-            
-            .low-stock {
-              color: #ff0000;
-            }
-            
-            .expiring {
-              color: #ff6600;
-            }
-            
-            .expired {
-              color: #cc0000;
-              text-decoration: line-through;
-            }
-            
-            .footer {
-              margin-top: 3mm;
-              padding-top: 2mm;
-              border-top: 1px dashed #8B1538;
-              text-align: center;
-              font-size: 8px;
-              color: #8B1538;
-            }
-            
-            .total-line {
-              font-weight: bold;
-              font-size: 10px;
-              text-align: center;
-              margin: 2mm 0;
-              padding: 1mm 0;
-              border-top: 1px solid #8B1538;
-              color: #8B1538;
-            }
-            
-            @media print {
-              body { 
-                width: 55mm;
-                max-width: 55mm;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="title">FARMACIA BIENESTAR</div>
-            <div class="subtitle">REPORTE DE INVENTARIO</div>
-            <div class="date">FECHA: ${new Date().toLocaleDateString("es-ES", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}</div>
-          </div>
-          
-          ${sortedSections
-            .map((section) => {
-              const sectionProducts = productsBySection[section]
-              return `
-          <div class="section">
-            <div class="section-title">== SECCIÓN ${section} ==</div>
-            ${sectionProducts
-              .map((product) => {
-                const expirationStatus = getExpirationStatus(product)
-                const statusClass =
-                  expirationStatus?.status === "expired"
-                    ? "expired"
-                    : expirationStatus?.status === "expiring"
-                      ? "expiring"
-                      : ""
-                return `
-              <div class="product-line">
-                <div class="product-name ${statusClass}">${product.name}${expirationStatus ? ` (${expirationStatus.status === "expired" ? "VENCIDO" : `Vence en ${expirationStatus.days}d`})` : ""}</div>
-                <div class="product-stock ${product.stock_quantity <= product.min_stock_level ? "low-stock" : ""}">${product.stock_quantity}</div>
-              </div>
-            `
-              })
-              .join("")}
-            <div style="text-align: center; font-size: 8px; margin-top: 1mm; color: #666;">
-              Subtotal: ${sectionProducts.length} productos
-            </div>
-          </div>
-          `
-            })
-            .join("")}
-          
-          <div class="total-line">
-            TOTAL PRODUCTOS: ${products.length}
-          </div>
-          
-          <div class="section">
-            <div class="section-title">== PRODUCTOS CON STOCK BAJO ==</div>
-            ${
-              products
-                .filter((p) => p.stock_quantity <= p.min_stock_level)
-                .map(
-                  (product) => `
-              <div class="product-line">
-                <div class="product-name">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
-                <div class="product-stock low-stock">${product.stock_quantity}</div>
-              </div>
-            `,
-                )
-                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto con stock bajo</div>'
-            }
-          </div>
-          
-          <div class="section">
-            <div class="section-title">== PRODUCTOS POR VENCER ==</div>
-            ${
-              products
-                .filter((p) => {
-                  const status = getExpirationStatus(p)
-                  return status && status.status === "expiring"
-                })
-                .map((product) => {
-                  const status = getExpirationStatus(product)
-                  return `
-              <div class="product-line">
-                <div class="product-name expiring">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
-                <div class="product-stock">${status?.days}d</div>
-              </div>
-            `
-                })
-                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto por vencer</div>'
-            }
-          </div>
-          
-          <div class="section">
-            <div class="section-title">== PRODUCTOS VENCIDOS ==</div>
-            ${
-              products
-                .filter((p) => {
-                  const status = getExpirationStatus(p)
-                  return status && status.status === "expired"
-                })
-                .map(
-                  (product) => `
-              <div class="product-line">
-                <div class="product-name expired">${product.name} ${product.section ? `[${product.section}]` : ""}</div>
-                <div class="product-stock">VENCIDO</div>
-              </div>
-            `,
-                )
-                .join("") || '<div style="text-align: center; font-style: italic;">Ningún producto vencido</div>'
-            }
-          </div>
-          
-          <div class="footer">
-            <div>Total de productos: ${products.length}</div>
-            <div>Stock bajo: ${products.filter((p) => p.stock_quantity <= p.min_stock_level).length}</div>
-            <div>Por vencer: ${
-              products.filter((p) => {
-                const s = getExpirationStatus(p)
-                return s && s.status === "expiring"
-              }).length
-            }</div>
-            <div>Vencidos: ${
-              products.filter((p) => {
-                const s = getExpirationStatus(p)
-                return s && s.status === "expired"
-              }).length
-            }</div>
-            <div>Generado: ${new Date().toLocaleString("es-ES")}</div>
-          </div>
-        </body>
-      </html>
-    `
+    // Helper function to pad/truncate text
+    const pad = (text: string, length: number, align: "left" | "right" = "left") => {
+      const str = text.substring(0, length)
+      if (align === "right") {
+        return str.padStart(length, " ")
+      }
+      return str.padEnd(length, " ")
+    }
 
-    const printWindow = window.open("", "_blank")
+    const line = (char = "-") => char.repeat(42)
+    const doubleLine = () => "=".repeat(42)
+    const center = (text: string) => {
+      const padding = Math.max(0, Math.floor((42 - text.length) / 2))
+      return " ".repeat(padding) + text
+    }
+
+    let receipt = ""
+
+    // Header
+    receipt += center("FARMACIA BIENESTAR") + "\n"
+    receipt += center("Tu salud es nuestro compromiso") + "\n"
+    receipt += doubleLine() + "\n"
+    receipt += center("REPORTE DE INVENTARIO") + "\n"
+    receipt += line() + "\n"
+    receipt += `Fecha: ${new Date().toLocaleDateString("es-MX")}\n`
+    receipt += `Hora: ${new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}\n`
+    receipt += doubleLine() + "\n\n"
+
+    // Products by section
+    sortedSections.forEach((section) => {
+      const sectionProducts = productsBySection[section]
+
+      receipt += center(`[ SECCION ${section} ]`) + "\n"
+      receipt += line() + "\n"
+      receipt += pad("PRODUCTO", 30) + pad("STK", 6, "right") + pad("PREC", 6, "right") + "\n"
+      receipt += line("-") + "\n"
+
+      sectionProducts.forEach((product: Product) => {
+        const expirationStatus = getExpirationStatus(product)
+        let name = product.name.substring(0, 28)
+        if (expirationStatus?.status === "expired") {
+          name += " *V*"
+        } else if (expirationStatus?.status === "expiring") {
+          name += " !"
+        }
+        if (product.stock_quantity <= product.min_stock_level) {
+          name += " <B>"
+        }
+
+        receipt += pad(name, 30)
+        receipt += pad(product.stock_quantity.toString(), 6, "right")
+        receipt += pad("$" + product.price.toFixed(0), 6, "right")
+        receipt += "\n"
+      })
+
+      receipt += `${pad("Subtotal:", 30)}${pad(sectionProducts.length.toString(), 6, "right")} prod\n`
+      receipt += line() + "\n\n"
+    })
+
+    // Low stock section
+    if (includeStockBajo) {
+      const lowStockProducts = filteredBySection.filter((p) => p.stock_quantity <= p.min_stock_level)
+      receipt += center("[ STOCK BAJO ]") + "\n"
+      receipt += line() + "\n"
+      if (lowStockProducts.length > 0) {
+        lowStockProducts.forEach((product) => {
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad(product.stock_quantity.toString(), 6, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto con stock bajo") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    // Expiring soon section
+    if (includePorVencer) {
+      const expiringProducts = filteredBySection.filter((p) => {
+        const status = getExpirationStatus(p)
+        return status && status.status === "expiring"
+      })
+      receipt += center("[ POR VENCER ]") + "\n"
+      receipt += line() + "\n"
+      if (expiringProducts.length > 0) {
+        expiringProducts.forEach((product) => {
+          const status = getExpirationStatus(product)
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad(`${status?.days}d`, 6, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto por vencer") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    // Expired section
+    if (includeVencidos) {
+      const expiredProducts = filteredBySection.filter((p) => {
+        const status = getExpirationStatus(p)
+        return status && status.status === "expired"
+      })
+      receipt += center("[ VENCIDOS ]") + "\n"
+      receipt += line() + "\n"
+      if (expiredProducts.length > 0) {
+        expiredProducts.forEach((product) => {
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad("VENCIDO", 8, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto vencido") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    // Totals
+    receipt += doubleLine() + "\n"
+    receipt += center("RESUMEN") + "\n"
+    receipt += line() + "\n"
+    receipt += `Total productos: ${pad(filteredBySection.length.toString(), 20, "right")}\n`
+    receipt += `Secciones: ${pad(sortedSections.length.toString(), 24, "right")}\n`
+    receipt += `Stock bajo: ${pad(filteredBySection.filter((p) => p.stock_quantity <= p.min_stock_level).length.toString(), 23, "right")}\n`
+    receipt += `Por vencer: ${pad(
+      filteredBySection
+        .filter((p) => {
+          const s = getExpirationStatus(p)
+          return s && s.status === "expiring"
+        })
+        .length.toString(),
+      23,
+      "right",
+    )}\n`
+    receipt += `Vencidos: ${pad(
+      filteredBySection
+        .filter((p) => {
+          const s = getExpirationStatus(p)
+          return s && s.status === "expired"
+        })
+        .length.toString(),
+      25,
+      "right",
+    )}\n`
+    receipt += doubleLine() + "\n"
+    receipt += center("Generado: " + new Date().toLocaleString("es-MX")) + "\n"
+    receipt += "\n\n\n"
+
+    // Print
+    const printWindow = window.open("", "_blank", "width=400,height=600")
     if (printWindow) {
-      printWindow.document.write(reportContent)
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Inventario - Farmacia Bienestar</title>
+            <style>
+              @page {
+                size: 80mm auto;
+                margin: 0;
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                line-height: 1.2;
+                margin: 0;
+                padding: 5mm;
+                width: 80mm;
+                max-width: 80mm;
+                background: white;
+                color: black;
+              }
+              pre {
+                margin: 0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+              }
+              @media print {
+                body { width: 80mm; max-width: 80mm; }
+              }
+            </style>
+          </head>
+          <body>
+            <pre>${receipt}</pre>
+          </body>
+        </html>
+      `)
       printWindow.document.close()
       printWindow.focus()
       setTimeout(() => {
         printWindow.print()
       }, 250)
     }
+
+    setIsExportDialogOpen(false)
   }
 
   const totalPagesActive = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
@@ -685,8 +666,8 @@ export default function ProductsPage() {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={generateStockReport}>
-              <Package className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={openExportDialog}>
+              <Printer className="h-4 w-4 mr-2" />
               Exportar Inventario
             </Button>
 
@@ -931,6 +912,96 @@ export default function ProductsPage() {
             </Dialog>
           </div>
         </div>
+
+        <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Exportar Inventario</DialogTitle>
+              <DialogDescription>
+                Selecciona las secciones y opciones que deseas incluir en el reporte
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Section selection */}
+              <div className="space-y-2">
+                <Label className="font-semibold">Secciones a incluir:</Label>
+                <div className="flex gap-2 mb-2">
+                  <Button type="button" variant="outline" size="sm" onClick={selectAllSections}>
+                    Seleccionar todas
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={deselectAllSections}>
+                    Deseleccionar todas
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-md p-2">
+                  {getUniqueSections().map((section) => (
+                    <div key={section} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`section-${section}`}
+                        checked={selectedSections.includes(section)}
+                        onCheckedChange={() => toggleSection(section)}
+                      />
+                      <label htmlFor={`section-${section}`} className="text-sm font-medium leading-none cursor-pointer">
+                        {section}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedSections.length} de {getUniqueSections().length} secciones seleccionadas
+                </p>
+              </div>
+
+              {/* Additional options */}
+              <div className="space-y-2">
+                <Label className="font-semibold">Incluir en el reporte:</Label>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-stock-bajo"
+                      checked={includeStockBajo}
+                      onCheckedChange={(checked) => setIncludeStockBajo(checked as boolean)}
+                    />
+                    <label htmlFor="include-stock-bajo" className="text-sm cursor-pointer">
+                      Productos con stock bajo
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-por-vencer"
+                      checked={includePorVencer}
+                      onCheckedChange={(checked) => setIncludePorVencer(checked as boolean)}
+                    />
+                    <label htmlFor="include-por-vencer" className="text-sm cursor-pointer">
+                      Productos por vencer
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-vencidos"
+                      checked={includeVencidos}
+                      onCheckedChange={(checked) => setIncludeVencidos(checked as boolean)}
+                    />
+                    <label htmlFor="include-vencidos" className="text-sm cursor-pointer">
+                      Productos vencidos
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsExportDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={generateStockReport} disabled={selectedSections.length === 0}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir Reporte
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Tabs defaultValue="active" className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">

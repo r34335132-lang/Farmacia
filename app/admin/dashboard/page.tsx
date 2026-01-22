@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar } from "lucide-react"
+import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar, Sparkles, Store, ClipboardList } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
       <header className="border-b bg-white">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <img src="/solidaria.jpg" alt="Logo Farmacia" className="h-10 w-auto" />
+            <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-10 w-auto rounded-full" />
           </div>
           <Button onClick={handleLogout} variant="outline">
             Cerrar Sesión
@@ -269,6 +269,57 @@ export default function AdminDashboard() {
                   Punto de Venta
                 </CardTitle>
                 <CardDescription>Ir al sistema de cobro</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        </div>
+
+        {/* Online Store Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Link href="/tienda">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <Store className="h-5 w-5" />
+                  Tienda Online
+                </CardTitle>
+                <CardDescription>Ver la tienda publica</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/admin/orders">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <ClipboardList className="h-5 w-5" />
+                  Pedidos Online
+                </CardTitle>
+                <CardDescription>Gestionar pedidos de clientes</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/admin/promotions">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <Sparkles className="h-5 w-5" />
+                  Promociones
+                </CardTitle>
+                <CardDescription>Crear y gestionar ofertas</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/cajero">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-primary">
+                  <ClipboardList className="h-5 w-5" />
+                  Panel Cajero
+                </CardTitle>
+                <CardDescription>Dashboard para atender pedidos</CardDescription>
               </CardHeader>
             </Card>
           </Link>

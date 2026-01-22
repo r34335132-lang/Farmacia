@@ -4,80 +4,80 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Updated color scheme to burgundy/maroon (guinda) for Farmacia Bienestar */
-  --background: oklch(1 0 0); /* White */
-  --foreground: oklch(0.145 0 0); /* Dark text */
-  --card: oklch(1 0 0); /* White cards */
-  --card-foreground: oklch(0.145 0 0);
+  /* Farmacia Bienestar - Burgundy/Wine theme matching brand identity */
+  --background: oklch(0.99 0.005 350); /* Soft off-white with warm tint */
+  --foreground: oklch(0.18 0.04 350); /* Deep burgundy-black text */
+  --card: oklch(1 0 0); /* Pure white cards */
+  --card-foreground: oklch(0.18 0.04 350);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.35 0.12 15); /* Burgundy/maroon primary */
-  --primary-foreground: oklch(1 0 0); /* White text on burgundy */
-  --secondary: oklch(0.45 0.1 25); /* Secondary burgundy tone */
-  --secondary-foreground: oklch(1 0 0); /* White text on secondary */
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.4 0.11 20); /* Accent burgundy */
+  --popover-foreground: oklch(0.18 0.04 350);
+  --primary: oklch(0.35 0.12 350); /* Deep burgundy/wine - main brand color */
+  --primary-foreground: oklch(1 0 0); /* White text on primary */
+  --secondary: oklch(0.97 0.015 350); /* Light burgundy tint */
+  --secondary-foreground: oklch(0.35 0.12 350); /* Burgundy text */
+  --muted: oklch(0.96 0.01 350); /* Light warm gray */
+  --muted-foreground: oklch(0.5 0.03 350); /* Medium warm gray */
+  --accent: oklch(0.45 0.14 350); /* Lighter burgundy accent */
   --accent-foreground: oklch(1 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.55 0.2 25); /* Red for errors */
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.97 0 0);
-  --ring: oklch(0.35 0.12 15); /* Burgundy ring */
-  --chart-1: oklch(0.35 0.12 15); /* Burgundy */
-  --chart-2: oklch(0.45 0.1 25); /* Light burgundy */
-  --chart-3: oklch(0.5 0.08 30); /* Lighter burgundy */
-  --chart-4: oklch(0.3 0.14 10); /* Dark burgundy */
-  --chart-5: oklch(0.55 0.06 35); /* Very light burgundy */
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.35 0.12 15); /* Burgundy */
+  --border: oklch(0.92 0.01 350);
+  --input: oklch(0.97 0.005 350);
+  --ring: oklch(0.35 0.12 350); /* Burgundy ring */
+  --chart-1: oklch(0.35 0.12 350); /* Deep burgundy */
+  --chart-2: oklch(0.45 0.14 350); /* Medium burgundy */
+  --chart-3: oklch(0.55 0.10 350); /* Light burgundy */
+  --chart-4: oklch(0.40 0.08 20); /* Warm rose */
+  --chart-5: oklch(0.50 0.12 340); /* Plum */
+  --radius: 0.75rem;
+  --sidebar: oklch(0.985 0.005 350);
+  --sidebar-foreground: oklch(0.18 0.04 350);
+  --sidebar-primary: oklch(0.35 0.12 350);
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.145 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.35 0.12 15);
+  --sidebar-accent: oklch(0.97 0.015 350);
+  --sidebar-accent-foreground: oklch(0.35 0.12 350);
+  --sidebar-border: oklch(0.92 0.01 350);
+  --sidebar-ring: oklch(0.35 0.12 350);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.45 0.12 15); /* Lighter burgundy for dark mode */
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.55 0.1 25); /* Lighter secondary for dark mode */
-  --secondary-foreground: oklch(0.145 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.5 0.11 20); /* Lighter accent */
-  --accent-foreground: oklch(0.145 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.45 0.12 15);
-  --chart-1: oklch(0.45 0.12 15);
-  --chart-2: oklch(0.55 0.1 25);
-  --chart-3: oklch(0.6 0.08 30);
-  --chart-4: oklch(0.4 0.14 10);
-  --chart-5: oklch(0.65 0.06 35);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.45 0.12 15);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.45 0.12 15);
+  --background: oklch(0.12 0.02 350);
+  --foreground: oklch(0.96 0.01 350);
+  --card: oklch(0.16 0.02 350);
+  --card-foreground: oklch(0.96 0.01 350);
+  --popover: oklch(0.16 0.02 350);
+  --popover-foreground: oklch(0.96 0.01 350);
+  --primary: oklch(0.50 0.12 350);
+  --primary-foreground: oklch(0.12 0.02 350);
+  --secondary: oklch(0.22 0.03 350);
+  --secondary-foreground: oklch(0.85 0.05 350);
+  --muted: oklch(0.22 0.02 350);
+  --muted-foreground: oklch(0.65 0.02 350);
+  --accent: oklch(0.55 0.14 350);
+  --accent-foreground: oklch(0.12 0.02 350);
+  --destructive: oklch(0.5 0.18 25);
+  --destructive-foreground: oklch(0.96 0.01 350);
+  --border: oklch(0.25 0.02 350);
+  --input: oklch(0.22 0.02 350);
+  --ring: oklch(0.50 0.12 350);
+  --chart-1: oklch(0.50 0.12 350);
+  --chart-2: oklch(0.55 0.14 350);
+  --chart-3: oklch(0.60 0.10 350);
+  --chart-4: oklch(0.50 0.08 20);
+  --chart-5: oklch(0.55 0.12 340);
+  --sidebar: oklch(0.16 0.02 350);
+  --sidebar-foreground: oklch(0.96 0.01 350);
+  --sidebar-primary: oklch(0.50 0.12 350);
+  --sidebar-primary-foreground: oklch(0.96 0.01 350);
+  --sidebar-accent: oklch(0.22 0.03 350);
+  --sidebar-accent-foreground: oklch(0.85 0.05 350);
+  --sidebar-border: oklch(0.25 0.02 350);
+  --sidebar-ring: oklch(0.50 0.12 350);
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -121,6 +121,25 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* Custom scrollbar */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 3px;
   }
 }

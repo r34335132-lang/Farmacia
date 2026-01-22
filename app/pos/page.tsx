@@ -30,7 +30,9 @@ import {
   Keyboard,
   Percent,
   Tag,
+  Printer,
 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
 
@@ -44,7 +46,7 @@ interface Product {
   barcode?: string
   image_url?: string
   is_active: boolean
-  section?: string // Added section field to Product interface
+  section?: string
 }
 
 interface CartItem {
@@ -71,6 +73,11 @@ export default function POSPage() {
   const [discountValue, setDiscountValue] = useState("")
   const [boxBalance, setBoxBalance] = useState(500)
   const [currentPage, setCurrentPage] = useState(1)
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false)
+  const [selectedSections, setSelectedSections] = useState<string[]>([])
+  const [includeStockBajo, setIncludeStockBajo] = useState(true)
+  const [includePorVencer, setIncludePorVencer] = useState(true)
+  const [includeVencidos, setIncludeVencidos] = useState(true)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -346,14 +353,10 @@ export default function POSPage() {
         ])
       }
 
-      // const discountReasonText = hasDiscount
-      //   ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-      //   : ""
-      // generateReceipt(sale, cart, discountAmount, discountReasonText)
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
-      generateReceipt(sale, cart, discountAmount, discountReasonText)
+      generateReceipt(sale, cart, discountAmount, discountReasonText, subtotal, total, cashReceived, change)
 
       clearCart()
       setIsPaymentDialogOpen(false)
@@ -361,8 +364,6 @@ export default function POSPage() {
       setPaymentMethod("efectivo")
 
       loadProducts()
-
-      // alert("Venta procesada exitosamente")
     } catch (error) {
       console.error("Error processing payment:", error)
       alert("Error al procesar el pago")
@@ -371,24 +372,31 @@ export default function POSPage() {
     }
   }
 
-  const generateReceipt = (sale: any, items: CartItem[], discount: number, discountReason: string) => {
+  const generateReceipt = (
+    sale: any,
+    items: CartItem[],
+    discount: number,
+    discountReason: string,
+    localSubtotal: number,
+    localTotal: number,
+    localCashReceived: string,
+    localChange: number,
+  ) => {
     const receiptContent = `
 <!DOCTYPE html>
 <html>
 <head>
     <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        body {
-            font-family: 'Montserrat', 'Arial', sans-serif;
+        body { 
+            font-family: 'Courier New', monospace; 
             font-size: 13px;
-            margin: 0 !important;
+            margin: 0 !important; 
             padding: 0 !important;
             width: 55mm;
             max-width: 55mm;
@@ -403,119 +411,65 @@ export default function POSPage() {
             padding: 2mm;
             box-sizing: border-box;
         }
-        .header {
+        .center {
             text-align: center;
-            border-bottom: 1px dashed #8B1538;
-            padding-bottom: 5px;
             margin-bottom: 5px;
             width: 100%;
         }
-        .logo-text {
-            font-size: 17px;
-            font-weight: 700;
-            margin-bottom: 2px;
-            width: 100%;
-            color: #8B1538;
-            letter-spacing: 0.5px;
-        }
-        .subtitle {
-            font-size: 11px;
+        .title {
+            font-size: 15px;
+            font-weight: bold;
             margin-bottom: 5px;
             width: 100%;
-            font-weight: 600;
-            color: #8B1538;
         }
-        .info-line {
+        .line {
+            border-bottom: 1px solid #000;
+            margin: 8px 0;
+            width: 100%;
+        }
+        .dashed-line {
+            border-bottom: 1px dashed #000;
+            margin: 5px 0;
+            width: 100%;
+        }
+        .row {
             display: flex;
             justify-content: space-between;
-            margin: 2px 0;
-            font-size: 13px;
-            width: 100%;
-        }
-        .items {
-            margin: 8px 0;
-            border-top: 1px dashed #8B1538;
-            border-bottom: 1px dashed #8B1538;
-            padding: 5px 0;
-            text-align: left;
-            width: 100%;
-        }
-        .item {
-            margin: 3px 0;
-            width: 100%;
-        }
-        .item-name {
-            font-weight: 600;
-        }
-        .item-details {
-            font-size: 12px;
-        }
-        .item-section {
-            font-size: 10px;
-            color: #8B1538;
-            font-weight: 600;
-        }
-        .total-section {
-            margin-top: 8px;
-            border-top: 1px dashed #8B1538;
-            padding-top: 5px;
-            width: 100%;
-        }
-        .discount-line {
-            color: #008800;
-            font-weight: 600;
-        }
-        .total {
-            font-size: 15px;
-            font-weight: 700;
-            text-align: right;
-            margin: 5px 0;
-            width: 100%;
-            color: #8B1538;
-        }
-        .payment-info {
-            margin: 8px 0;
+            margin-bottom: 2px;
             font-size: 12px;
             width: 100%;
         }
-        .footer {
-            text-align: center;
-            margin-top: 10px;
-            border-top: 1px dashed #8B1538;
-            padding-top: 5px;
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1px;
             font-size: 11px;
             width: 100%;
         }
-        .thank-you {
-            font-size: 13px;
-            font-weight: 700;
-            margin: 5px 0;
-            color: #8B1538;
+        .right-align {
+            text-align: right;
         }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
+        .bold {
+            font-weight: bold;
         }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
+        .small {
+            font-size: 10px;
+        }
+        .discount {
+            color: #000;
         }
         @media print {
             * {
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            html, body {
-                margin: 0 !important;
-                padding: 0 !important;
+            html, body { 
+                margin: 0 !important; 
+                padding: 0 !important; 
                 width: 55mm !important;
                 max-width: 55mm !important;
             }
-            .content {
+            .content { 
                 width: 55mm !important;
                 max-width: 55mm !important;
                 margin: 0 !important;
@@ -531,114 +485,110 @@ export default function POSPage() {
 </head>
 <body>
     <div class="content">
-        <div class="header">
-            <div class="logo-text">FARMACIA BIENESTAR</div>
-            <div class="subtitle">Tu salud es nuestro compromiso</div>
-            <div style="font-size: 10px;">
-                Dirección: Calle Principal #123<br>
-                Tel: (555) 123-4567<br>
-                www.farmaciabinestar.com
-            </div>
+        <div class="center title">FARMACIA BIENESTAR</div>
+        <div class="center small">Tu salud es nuestro compromiso</div>
+        <div class="center small">Calle Principal #123</div>
+        <div class="center small">Tel: (555) 123-4567</div>
+        
+        <div class="line"></div>
+        
+        <div class="row">
+            <span>TICKET:</span>
+            <span>#${sale.id.slice(-8).toUpperCase()}</span>
         </div>
-
-        <div class="info-line">
-            <span>Fecha:</span>
-            <span>${new Date().toLocaleString("es-ES")}</span>
+        <div class="row">
+            <span>FECHA:</span>
+            <span>${new Date().toLocaleDateString("es-ES")}</span>
         </div>
-        <div class="info-line">
-            <span>Cajero:</span>
+        <div class="row">
+            <span>HORA:</span>
+            <span>${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
+        </div>
+        <div class="row">
+            <span>CAJERO:</span>
             <span>${currentUser.full_name}</span>
         </div>
-        <div class="info-line">
-            <span>Ticket #:</span>
-            <span>${sale.id.slice(-8).toUpperCase()}</span>
+        
+        <div class="line"></div>
+        
+        <div class="center small bold">PRODUCTOS</div>
+        
+        ${items
+          .map(
+            (item) => `
+        <div class="item-row">
+            <span>${item.product.name}</span>
+            <span></span>
         </div>
-
-        <div class="items">
-            <div style="font-weight: 700; text-align: center; margin-bottom: 5px; color: #8B1538;">
-                PRODUCTOS VENDIDOS
-            </div>
-            ${items
-              .map(
-                (item) => `
-            <div class="item">
-                <div class="item-name">${item.product.name}</div>
-                ${item.product.section ? `<div class="item-section">Sección: ${item.product.section}</div>` : ""}
-                <div class="item-details">
-                    ${item.quantity} x $${item.product.price.toFixed(2)} = $${item.subtotal.toFixed(2)}
-                </div>
-            </div>`,
-              )
-              .join("")}
+        ${item.product.section ? `<div class="item-row"><span>  Sec: ${item.product.section}</span><span></span></div>` : ""}
+        <div class="item-row">
+            <span>  ${item.quantity} x $${item.product.price.toFixed(2)}</span>
+            <span class="right-align">$${item.subtotal.toFixed(2)}</span>
         </div>
-
-        <div class="total-section">
-            <div class="info-line">
-                <span>Subtotal:</span>
-                <span>$${subtotal.toFixed(2)}</span>
-            </div>
-            ${
-              discount > 0
-                ? `
-            <div class="info-line discount-line">
-                <span>Descuento (${discountReason}):</span>
-                <span>-$${discount.toFixed(2)}</span>
-            </div>
-            `
-                : ""
-            }
-            <div class="info-line">
-                <span>Impuestos:</span>
-                <span>$0.00</span>
-            </div>
-            <div class="total">
-                TOTAL: $${total.toFixed(2)}
-            </div>
-            ${
-              discount > 0
-                ? `
-            <div style="text-align: center; color: #008800; font-size: 12px; margin-top: 5px; font-weight: 600;">
-                ¡Ahorraste $${discount.toFixed(2)}!
-            </div>
-            `
-                : ""
-            }
+        `,
+          )
+          .join("")}
+        
+        <div class="dashed-line"></div>
+        
+        <div class="row">
+            <span>SUBTOTAL:</span>
+            <span class="right-align">$${localSubtotal.toFixed(2)}</span>
         </div>
-
-        <div class="payment-info">
-            <div class="info-line">
-                <span>Método de pago:</span>
-                <span style="font-weight: 600;">${paymentMethod === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
-            </div>
-            ${
-              paymentMethod === "efectivo"
-                ? `
-            <div class="info-line">
-                <span>Recibido:</span>
-                <span>$${Number.parseFloat(cashReceived).toFixed(2)}</span>
-            </div>
-            <div class="info-line">
-                <span>Cambio:</span>
-                <span style="font-weight: 600;">$${change.toFixed(2)}</span>
-            </div>`
-                : ""
-            }
+        ${
+          discount > 0
+            ? `
+        <div class="row discount">
+            <span>DESCUENTO (${discountReason}):</span>
+            <span class="right-align">-$${discount.toFixed(2)}</span>
         </div>
-
-        <div class="footer">
-            <div class="thank-you">¡Gracias por su compra!</div>
-            <div style="font-weight: 600;">
-                Conserve este ticket<br>
-                Cambios y devoluciones: 30 días<br>
-                ¡Que tenga un excelente día!
-            </div>
-            <div style="margin-top: 8px; font-size: 10px;">
-                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
+        `
+            : ""
+        }
+        <div class="row bold">
+            <span>TOTAL:</span>
+            <span class="right-align">$${localTotal.toFixed(2)}</span>
+        </div>
+        ${
+          discount > 0
+            ? `
+        <div class="center small" style="margin-top: 3px;">
+            Ahorraste $${discount.toFixed(2)}
+        </div>
+        `
+            : ""
+        }
+        
+        <div class="dashed-line"></div>
+        
+        <div class="row">
+            <span>PAGO:</span>
+            <span class="right-align">${sale.payment_method === "efectivo" ? "EFECTIVO" : "TARJETA"}</span>
+        </div>
+        ${
+          sale.payment_method === "efectivo"
+            ? `
+        <div class="row">
+            <span>RECIBIDO:</span>
+            <span class="right-align">$${Number.parseFloat(localCashReceived || "0").toFixed(2)}</span>
+        </div>
+        <div class="row bold">
+            <span>CAMBIO:</span>
+            <span class="right-align">$${localChange.toFixed(2)}</span>
+        </div>
+        `
+            : ""
+        }
+        
+        <div class="line"></div>
+        
+        <div class="center small" style="margin-top: 10px;">
+            <div><strong>¡GRACIAS POR SU COMPRA!</strong></div>
+            <div>Conserve su ticket</div>
+            <div>Cambios y devoluciones: 30 dias</div>
+            <div style="margin-top: 8px; font-size: 9px;">
+                ${new Date().toLocaleString("es-ES")}<br>
                 Sistema POS - Farmacia Bienestar v1.0
-            </div>
-
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Bienestar" />
             </div>
         </div>
     </div>
@@ -661,6 +611,265 @@ export default function POSPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/auth/login")
+  }
+
+  // Export inventory functions
+  const getExpirationStatus = (product: Product & { min_stock_level?: number; expiration_date?: string; days_before_expiry_alert?: number }) => {
+    if (!product.expiration_date) return null
+
+    const today = new Date()
+    const expirationDate = new Date(product.expiration_date)
+    const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const alertThreshold = product.days_before_expiry_alert || 30
+
+    if (daysUntilExpiry < 0) {
+      return { status: "expired", days: Math.abs(daysUntilExpiry), variant: "destructive" as const }
+    } else if (daysUntilExpiry <= alertThreshold) {
+      return { status: "expiring", days: daysUntilExpiry, variant: "warning" as const }
+    }
+    return null
+  }
+
+  const getUniqueSections = () => {
+    const sections = new Set<string>()
+    products.forEach((product) => {
+      sections.add(product.section || "SIN SECCION")
+    })
+    return Array.from(sections).sort()
+  }
+
+  const toggleSection = (section: string) => {
+    setSelectedSections((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]))
+  }
+
+  const selectAllSections = () => {
+    setSelectedSections(getUniqueSections())
+  }
+
+  const deselectAllSections = () => {
+    setSelectedSections([])
+  }
+
+  const openExportDialog = () => {
+    setSelectedSections(getUniqueSections())
+    setIncludeStockBajo(true)
+    setIncludePorVencer(true)
+    setIncludeVencidos(true)
+    setIsExportDialogOpen(true)
+  }
+
+  const generateStockReport = () => {
+    const filteredBySection = products.filter((product) => {
+      const productSection = product.section || "SIN SECCION"
+      return selectedSections.includes(productSection)
+    })
+
+    const productsBySection = filteredBySection.reduce((acc: Record<string, any[]>, product) => {
+      const section = product.section || "SIN SECCION"
+      if (!acc[section]) {
+        acc[section] = []
+      }
+      acc[section].push(product)
+      return acc
+    }, {})
+
+    const sortedSections = Object.keys(productsBySection).sort()
+
+    const pad = (text: string, length: number, align: "left" | "right" = "left") => {
+      const str = text.substring(0, length)
+      if (align === "right") {
+        return str.padStart(length, " ")
+      }
+      return str.padEnd(length, " ")
+    }
+
+    const line = (char = "-") => char.repeat(42)
+    const doubleLine = () => "=".repeat(42)
+    const center = (text: string) => {
+      const padding = Math.max(0, Math.floor((42 - text.length) / 2))
+      return " ".repeat(padding) + text
+    }
+
+    let receipt = ""
+
+    receipt += center("FARMACIA BIENESTAR") + "\n"
+    receipt += center("Tu salud es nuestro compromiso") + "\n"
+    receipt += doubleLine() + "\n"
+    receipt += center("REPORTE DE INVENTARIO") + "\n"
+    receipt += line() + "\n"
+    receipt += `Fecha: ${new Date().toLocaleDateString("es-MX")}\n`
+    receipt += `Hora: ${new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}\n`
+    receipt += `Cajero: ${currentUser?.full_name || "N/A"}\n`
+    receipt += doubleLine() + "\n\n"
+
+    sortedSections.forEach((section) => {
+      const sectionProducts = productsBySection[section]
+
+      receipt += center(`[ SECCION ${section} ]`) + "\n"
+      receipt += line() + "\n"
+      receipt += pad("PRODUCTO", 30) + pad("STK", 6, "right") + pad("PREC", 6, "right") + "\n"
+      receipt += line("-") + "\n"
+
+      sectionProducts.forEach((product: any) => {
+        const expirationStatus = getExpirationStatus(product)
+        let name = product.name.substring(0, 28)
+        if (expirationStatus?.status === "expired") {
+          name += " *V*"
+        } else if (expirationStatus?.status === "expiring") {
+          name += " !"
+        }
+        const minStock = product.min_stock_level || 10
+        if (product.stock_quantity <= minStock) {
+          name += " <B>"
+        }
+
+        receipt += pad(name, 30)
+        receipt += pad(product.stock_quantity.toString(), 6, "right")
+        receipt += pad("$" + product.price.toFixed(0), 6, "right")
+        receipt += "\n"
+      })
+
+      receipt += `${pad("Subtotal:", 30)}${pad(sectionProducts.length.toString(), 6, "right")} prod\n`
+      receipt += line() + "\n\n"
+    })
+
+    if (includeStockBajo) {
+      const lowStockProducts = filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 10))
+      receipt += center("[ STOCK BAJO ]") + "\n"
+      receipt += line() + "\n"
+      if (lowStockProducts.length > 0) {
+        lowStockProducts.forEach((product: any) => {
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad(product.stock_quantity.toString(), 6, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto con stock bajo") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    if (includePorVencer) {
+      const expiringProducts = filteredBySection.filter((p: any) => {
+        const status = getExpirationStatus(p)
+        return status && status.status === "expiring"
+      })
+      receipt += center("[ POR VENCER ]") + "\n"
+      receipt += line() + "\n"
+      if (expiringProducts.length > 0) {
+        expiringProducts.forEach((product: any) => {
+          const status = getExpirationStatus(product)
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad(`${status?.days}d`, 6, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto por vencer") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    if (includeVencidos) {
+      const expiredProducts = filteredBySection.filter((p: any) => {
+        const status = getExpirationStatus(p)
+        return status && status.status === "expired"
+      })
+      receipt += center("[ VENCIDOS ]") + "\n"
+      receipt += line() + "\n"
+      if (expiredProducts.length > 0) {
+        expiredProducts.forEach((product: any) => {
+          receipt += pad(product.name.substring(0, 26), 28)
+          receipt += `[${product.section || "S/S"}]`
+          receipt += pad("VENCIDO", 8, "right")
+          receipt += "\n"
+        })
+      } else {
+        receipt += center("Ningun producto vencido") + "\n"
+      }
+      receipt += line() + "\n\n"
+    }
+
+    receipt += doubleLine() + "\n"
+    receipt += center("RESUMEN") + "\n"
+    receipt += line() + "\n"
+    receipt += `Total productos: ${pad(filteredBySection.length.toString(), 20, "right")}\n`
+    receipt += `Secciones: ${pad(sortedSections.length.toString(), 24, "right")}\n`
+    receipt += `Stock bajo: ${pad(filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 10)).length.toString(), 23, "right")}\n`
+    receipt += `Por vencer: ${pad(
+      filteredBySection
+        .filter((p: any) => {
+          const s = getExpirationStatus(p)
+          return s && s.status === "expiring"
+        })
+        .length.toString(),
+      23,
+      "right",
+    )}\n`
+    receipt += `Vencidos: ${pad(
+      filteredBySection
+        .filter((p: any) => {
+          const s = getExpirationStatus(p)
+          return s && s.status === "expired"
+        })
+        .length.toString(),
+      25,
+      "right",
+    )}\n`
+    receipt += doubleLine() + "\n"
+    receipt += center("Generado: " + new Date().toLocaleString("es-MX")) + "\n"
+    receipt += "\n\n\n"
+
+    const printWindow = window.open("", "_blank", "width=400,height=600")
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Inventario - Farmacia Bienestar</title>
+            <style>
+              @page {
+                size: 80mm auto;
+                margin: 0;
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                line-height: 1.2;
+                margin: 0;
+                padding: 5mm;
+                width: 80mm;
+                max-width: 80mm;
+                background: white;
+                color: black;
+              }
+              pre {
+                margin: 0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+              }
+              @media print {
+                body { width: 80mm; max-width: 80mm; }
+              }
+            </style>
+          </head>
+          <body>
+            <pre>${receipt}</pre>
+          </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => {
+        printWindow.print()
+      }, 250)
+    }
+
+    setIsExportDialogOpen(false)
   }
 
   const filteredProducts = products.filter(
@@ -695,15 +904,19 @@ export default function POSPage() {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
                 Farmacia Bienestar
               </h1>
-              <p className="text-sm text-muted-foreground">
-                ¡Bienvenido/a {currentUser?.full_name}! 💊 Listo para ayudar
-              </p>
+              <p className="text-sm text-muted-foreground">¡Bienvenido/a {currentUser?.full_name}! Listo para ayudar</p>
             </div>
           </div>
-          <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
-            <LogOut className="h-4 w-4 mr-2" />
-            Cerrar Sesión
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={openExportDialog} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <Printer className="h-4 w-4 mr-2" />
+              Exportar Inventario
+            </Button>
+            <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar Sesión
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -738,7 +951,7 @@ export default function POSPage() {
                   <ShoppingCart className="h-8 w-8" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}! 👋</h2>
+                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}!</h2>
                   <p className="text-rose-100">Tu salud es nuestro compromiso</p>
                 </div>
               </div>
@@ -777,10 +990,10 @@ export default function POSPage() {
                   variant="outline"
                   className="w-full border-rose-200 text-rose-800 hover:bg-rose-50"
                 >
-                  📷 Abrir Escáner QR Avanzado
+                  Abrir Escáner QR Avanzado
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  💡 Tip: Si el producto no existe en activos, te mostrará si está en eliminados
+                  Tip: Si el producto no existe en activos, te mostrará si está en eliminados
                 </p>
               </div>
             </CardContent>
@@ -964,7 +1177,7 @@ export default function POSPage() {
         <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              🛒 Carrito de Compras
+              Carrito de Compras
             </h2>
             {cart.length > 0 && (
               <Button
@@ -986,7 +1199,7 @@ export default function POSPage() {
                     <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
                     {item.product.section && (
                       <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
-                        📍 {item.product.section}
+                        {item.product.section}
                       </Badge>
                     )}
                     <div className="flex items-center justify-between">
@@ -1049,7 +1262,8 @@ export default function POSPage() {
                 className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
                 size="lg"
               >
-                <Receipt className="h-5 w-5 mr-2" />💳 Procesar Pago
+                <Receipt className="h-5 w-5 mr-2" />
+                Procesar Pago
               </Button>
             </div>
           )}
@@ -1062,7 +1276,7 @@ export default function POSPage() {
         <DialogContent className="border-rose-200 max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              💳 Procesar Pago
+              Procesar Pago
             </DialogTitle>
             <DialogDescription className="text-lg font-semibold">
               Subtotal: <span className="text-rose-800">${subtotal.toFixed(2)}</span>
@@ -1160,12 +1374,14 @@ export default function POSPage() {
                 <SelectContent>
                   <SelectItem value="efectivo">
                     <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-green-600" />💵 Efectivo
+                      <Banknote className="h-4 w-4 text-green-600" />
+                      Efectivo
                     </div>
                   </SelectItem>
                   <SelectItem value="tarjeta">
                     <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-rose-800" />💳 Tarjeta
+                      <CreditCard className="h-4 w-4 text-rose-800" />
+                      Tarjeta
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -1188,7 +1404,7 @@ export default function POSPage() {
                 />
                 {cashReceived && Number.parseFloat(cashReceived) >= total && (
                   <div className="text-xl font-bold text-green-600 bg-green-50 p-3 rounded-lg text-center">
-                    💰 Cambio: ${change.toFixed(2)}
+                    Cambio: ${change.toFixed(2)}
                   </div>
                 )}
               </div>
@@ -1207,7 +1423,7 @@ export default function POSPage() {
               }
               className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold"
             >
-              {processingPayment ? "Procesando... ⏳" : "✅ Confirmar Pago"}
+              {processingPayment ? "Procesando..." : "Confirmar Pago"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1225,7 +1441,7 @@ export default function POSPage() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">📷 Escáner QR Avanzado</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">Escáner QR Avanzado</DialogTitle>
             <DialogDescription>
               {scannerMode === "camera"
                 ? "Apunta la cámara hacia el código QR"
@@ -1281,7 +1497,7 @@ export default function POSPage() {
                 )}
 
                 <p className="text-xs text-muted-foreground text-center">
-                  📱 Funciona mejor en dispositivos móviles con cámara trasera
+                  Funciona mejor en dispositivos móviles con cámara trasera
                 </p>
               </div>
             ) : (
@@ -1291,8 +1507,9 @@ export default function POSPage() {
                     <Scan className="h-16 w-16 mx-auto mb-2" />
                     <p className="text-sm">Modo Manual</p>
                     <p className="text-xs mt-2">
-                      🖨️ Perfecto para escáneres físicos
-                      <br />📱 También funciona con códigos QR
+                      Perfecto para escáneres físicos
+                      <br />
+                      También funciona con códigos QR
                     </p>
                   </div>
                 </div>
@@ -1319,7 +1536,7 @@ export default function POSPage() {
                       }}
                       size="sm"
                     >
-                      ✅
+                      OK
                     </Button>
                   </div>
                 </div>
@@ -1330,6 +1547,112 @@ export default function POSPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsQRScannerOpen(false)}>
               Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Inventory Dialog */}
+      <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
+        <DialogContent className="max-w-md border-rose-200">
+          <DialogHeader>
+            <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent flex items-center gap-2">
+              <Printer className="h-5 w-5 text-rose-800" />
+              Exportar Inventario
+            </DialogTitle>
+            <DialogDescription>
+              Selecciona las secciones que deseas incluir en el reporte de inventario.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Secciones</Label>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={selectAllSections} className="text-xs bg-transparent">
+                    Todas
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={deselectAllSections} className="text-xs bg-transparent">
+                    Ninguna
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                {getUniqueSections().map((section) => (
+                  <div key={section} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`section-${section}`}
+                      checked={selectedSections.includes(section)}
+                      onCheckedChange={() => toggleSection(section)}
+                    />
+                    <label
+                      htmlFor={`section-${section}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {section}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {selectedSections.length} de {getUniqueSections().length} secciones seleccionadas
+              </p>
+            </div>
+
+            <div className="space-y-3 border-t pt-3">
+              <Label className="text-base font-semibold">Incluir secciones especiales</Label>
+
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-stock-bajo"
+                    checked={includeStockBajo}
+                    onCheckedChange={(checked) => setIncludeStockBajo(checked as boolean)}
+                  />
+                  <label htmlFor="include-stock-bajo" className="text-sm cursor-pointer">
+                    Stock Bajo
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-por-vencer"
+                    checked={includePorVencer}
+                    onCheckedChange={(checked) => setIncludePorVencer(checked as boolean)}
+                  />
+                  <label htmlFor="include-por-vencer" className="text-sm cursor-pointer">
+                    Por Vencer
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-vencidos"
+                    checked={includeVencidos}
+                    onCheckedChange={(checked) => setIncludeVencidos(checked as boolean)}
+                  />
+                  <label htmlFor="include-vencidos" className="text-sm cursor-pointer">
+                    Vencidos
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)} className="bg-transparent">
+              Cancelar
+            </Button>
+            <Button
+              onClick={generateStockReport}
+              disabled={selectedSections.length === 0}
+              className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Imprimir Reporte
             </Button>
           </DialogFooter>
         </DialogContent>
