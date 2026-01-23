@@ -358,31 +358,453 @@ export default function TiendaPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-3 shrink-0">
-              <Image
-                src="/images/logo.jpeg"
-                alt="Farmacia Bienestar"
-                width={44}
-                height={44}
-                className="rounded-lg"
-              />
-              <div className="hidden md:block">
-                <h1 className="font-semibold text-lg leading-tight text-primary">Farmacia Bienestar</h1>
-                <p className="text-xs text-muted-foreground">Tienda en Linea</p>
-              </div>
-            </Link>
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b">
+        {/* Desktop Header */}
+        <div className="hidden md:block">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center gap-6">
+              <Link href="/" className="flex items-center gap-4 shrink-0">
+                <Image
+                  src="/images/logo.jpeg"
+                  alt="Farmacia Bienestar"
+                  width={56}
+                  height={56}
+                  className="rounded-xl shadow-sm"
+                />
+                <div>
+                  <h1 className="font-bold text-xl leading-tight text-primary tracking-tight">Farmacia Bienestar</h1>
+                  <p className="text-sm text-muted-foreground font-medium">Tienda en Linea</p>
+                </div>
+              </Link>
 
-            <div className="flex-1 max-w-2xl">
+              <div className="flex-1 max-w-2xl">
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar medicamentos, vitaminas..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-12 bg-muted/50 border-0 focus-visible:ring-primary h-12 text-base rounded-xl"
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8"
+                      onClick={() => setSearchTerm("")}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="lg" className="relative bg-transparent gap-2 h-12 px-5 rounded-xl">
+                    <ShoppingCart className="h-5 w-5" />
+                    <span className="font-semibold">Carrito</span>
+                    {cartItemsCount > 0 && (
+                      <span className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">
+                        {cartItemsCount}
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="flex flex-col w-full sm:max-w-md p-0">
+                  {/* Cart Header */}
+                  <div className="bg-primary text-primary-foreground p-6 pb-8">
+                    <SheetHeader>
+                      <SheetTitle className="flex items-center gap-3 text-primary-foreground">
+                        <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
+                          <ShoppingCart className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-lg">Mi Carrito</span>
+                          <p className="text-sm font-normal text-primary-foreground/80">
+                            {cartItemsCount} {cartItemsCount === 1 ? "producto" : "productos"}
+                          </p>
+                        </div>
+                      </SheetTitle>
+                    </SheetHeader>
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 -mt-4">
+                      <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+                      </div>
+                      <h3 className="font-semibold text-lg mb-2">Tu carrito esta vacio</h3>
+                      <p className="text-muted-foreground text-sm mb-6 max-w-[240px]">
+                        Explora nuestra tienda y agrega productos para comenzar tu pedido
+                      </p>
+                      <Button onClick={() => setIsCartOpen(false)} className="rounded-full px-6">
+                        Explorar productos
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Products List */}
+                      <ScrollArea className="flex-1 -mt-4">
+                        <div className="px-4 pb-4">
+                          <div className="bg-background rounded-2xl shadow-sm border overflow-hidden">
+                            {cart.map((item, index) => {
+                              const discount = getProductDiscount(item.product.id)
+                              const discountedPrice = getDiscountedPrice(item.product)
+                              const itemTotal = discountedPrice * item.quantity
+                              return (
+                                <div
+                                  key={item.product.id}
+                                  className={`p-4 ${index !== cart.length - 1 ? "border-b" : ""}`}
+                                >
+                                  <div className="flex gap-4">
+                                    {/* Product Image */}
+                                    <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden shrink-0 shadow-sm">
+                                      {item.product.image_url ? (
+                                        <Image
+                                          src={item.product.image_url || "/placeholder.svg"}
+                                          alt={item.product.name}
+                                          width={80}
+                                          height={80}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-full w-full flex items-center justify-center">
+                                          <Package className="h-8 w-8 text-muted-foreground" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Product Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <h4 className="font-medium text-sm line-clamp-2 leading-tight">{item.product.name}</h4>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 -mt-1 -mr-2 text-muted-foreground hover:text-destructive"
+                                          onClick={() => removeFromCart(item.product.id)}
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      
+                                      {/* Price */}
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {discount ? (
+                                          <>
+                                            <span className="text-sm font-semibold text-primary">
+                                              ${discountedPrice.toFixed(2)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground line-through">
+                                              ${item.product.price.toFixed(2)}
+                                            </span>
+                                            <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary">
+                                              {discount.discount_type === "percentage"
+                                                ? `-${discount.discount_value}%`
+                                                : `-$${discount.discount_value}`}
+                                            </Badge>
+                                          </>
+                                        ) : (
+                                          <span className="text-sm font-semibold text-foreground">
+                                            ${item.product.price.toFixed(2)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Quantity Controls & Subtotal */}
+                                      <div className="flex items-center justify-between mt-3">
+                                        <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-full hover:bg-background"
+                                            onClick={() => updateQuantity(item.product.id, -1)}
+                                          >
+                                            <Minus className="h-3 w-3" />
+                                          </Button>
+                                          <span className="text-sm font-semibold w-8 text-center">
+                                            {item.quantity}
+                                          </span>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-full hover:bg-background"
+                                            onClick={() => updateQuantity(item.product.id, 1)}
+                                            disabled={item.quantity >= item.product.stock_quantity}
+                                          >
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                        <span className="text-sm font-bold">${itemTotal.toFixed(2)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </ScrollArea>
+
+                      {/* Cart Summary Footer */}
+                      <div className="border-t bg-muted/30 p-4 space-y-4">
+                        <div className="bg-background rounded-xl p-4 space-y-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span>${cartTotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Pago en tienda</span>
+                            <span className="text-emerald-600 font-medium">$0.00</span>
+                          </div>
+                          <Separator />
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">Total a pagar</span>
+                            <span className="text-xl font-bold text-primary">${cartTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        
+                        <Button
+                          className="w-full h-12 rounded-xl text-base font-semibold shadow-lg"
+                          size="lg"
+                          onClick={() => {
+                            setIsCartOpen(false)
+                            setIsCheckoutOpen(true)
+                          }}
+                        >
+                          Continuar con el pedido
+                          <ChevronRight className="h-5 w-5 ml-2" />
+                        </Button>
+                        
+                        <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          Recoge y paga en nuestra sucursal
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
+        </div>
+        
+        {/* Mobile Header */}
+        <div className="md:hidden">
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <Link href="/" className="flex items-center gap-3 shrink-0">
+                <Image
+                  src="/images/logo.jpeg"
+                  alt="Farmacia Bienestar"
+                  width={44}
+                  height={44}
+                  className="rounded-xl shadow-sm"
+                />
+                <div>
+                  <h1 className="font-bold text-base leading-tight text-primary">Farmacia Bienestar</h1>
+                  <p className="text-xs text-muted-foreground">Tienda en Linea</p>
+                </div>
+              </Link>
+              
+              <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon" className="relative bg-transparent h-10 w-10 rounded-xl shrink-0">
+                    <ShoppingCart className="h-5 w-5" />
+                    {cartItemsCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">
+                        {cartItemsCount}
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="flex flex-col w-full sm:max-w-md p-0">
+                  {/* Cart Header */}
+                  <div className="bg-primary text-primary-foreground p-6 pb-8">
+                    <SheetHeader>
+                      <SheetTitle className="flex items-center gap-3 text-primary-foreground">
+                        <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
+                          <ShoppingCart className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-lg">Mi Carrito</span>
+                          <p className="text-sm font-normal text-primary-foreground/80">
+                            {cartItemsCount} {cartItemsCount === 1 ? "producto" : "productos"}
+                          </p>
+                        </div>
+                      </SheetTitle>
+                    </SheetHeader>
+                  </div>
+
+                  {cart.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 -mt-4">
+                      <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mb-4">
+                        <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+                      </div>
+                      <h3 className="font-semibold text-lg mb-2">Tu carrito esta vacio</h3>
+                      <p className="text-muted-foreground text-sm mb-6 max-w-[240px]">
+                        Explora nuestra tienda y agrega productos para comenzar tu pedido
+                      </p>
+                      <Button onClick={() => setIsCartOpen(false)} className="rounded-full px-6">
+                        Explorar productos
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Products List */}
+                      <ScrollArea className="flex-1 -mt-4">
+                        <div className="px-4 pb-4">
+                          <div className="bg-background rounded-2xl shadow-sm border overflow-hidden">
+                            {cart.map((item, index) => {
+                              const discount = getProductDiscount(item.product.id)
+                              const discountedPrice = getDiscountedPrice(item.product)
+                              const itemTotal = discountedPrice * item.quantity
+                              return (
+                                <div
+                                  key={item.product.id}
+                                  className={`p-4 ${index !== cart.length - 1 ? "border-b" : ""}`}
+                                >
+                                  <div className="flex gap-4">
+                                    {/* Product Image */}
+                                    <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden shrink-0 shadow-sm">
+                                      {item.product.image_url ? (
+                                        <Image
+                                          src={item.product.image_url || "/placeholder.svg"}
+                                          alt={item.product.name}
+                                          width={80}
+                                          height={80}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-full w-full flex items-center justify-center">
+                                          <Package className="h-8 w-8 text-muted-foreground" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Product Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <h4 className="font-medium text-sm line-clamp-2 leading-tight">{item.product.name}</h4>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 -mt-1 -mr-2 text-muted-foreground hover:text-destructive"
+                                          onClick={() => removeFromCart(item.product.id)}
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      
+                                      {/* Price */}
+                                      <div className="flex items-center gap-2 mt-1">
+                                        {discount ? (
+                                          <>
+                                            <span className="text-sm font-semibold text-primary">
+                                              ${discountedPrice.toFixed(2)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground line-through">
+                                              ${item.product.price.toFixed(2)}
+                                            </span>
+                                            <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary">
+                                              {discount.discount_type === "percentage"
+                                                ? `-${discount.discount_value}%`
+                                                : `-$${discount.discount_value}`}
+                                            </Badge>
+                                          </>
+                                        ) : (
+                                          <span className="text-sm font-semibold text-foreground">
+                                            ${item.product.price.toFixed(2)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Quantity Controls & Subtotal */}
+                                      <div className="flex items-center justify-between mt-3">
+                                        <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-full hover:bg-background"
+                                            onClick={() => updateQuantity(item.product.id, -1)}
+                                          >
+                                            <Minus className="h-3 w-3" />
+                                          </Button>
+                                          <span className="text-sm font-semibold w-8 text-center">
+                                            {item.quantity}
+                                          </span>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-full hover:bg-background"
+                                            onClick={() => updateQuantity(item.product.id, 1)}
+                                            disabled={item.quantity >= item.product.stock_quantity}
+                                          >
+                                            <Plus className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                        <span className="text-sm font-bold">${itemTotal.toFixed(2)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </ScrollArea>
+
+                      {/* Cart Summary Footer */}
+                      <div className="border-t bg-muted/30 p-4 space-y-4">
+                        <div className="bg-background rounded-xl p-4 space-y-3">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Subtotal</span>
+                            <span>${cartTotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Pago en tienda</span>
+                            <span className="text-emerald-600 font-medium">$0.00</span>
+                          </div>
+                          <Separator />
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">Total a pagar</span>
+                            <span className="text-xl font-bold text-primary">${cartTotal.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        
+                        <Button
+                          className="w-full h-12 rounded-xl text-base font-semibold shadow-lg"
+                          size="lg"
+                          onClick={() => {
+                            setIsCartOpen(false)
+                            setIsCheckoutOpen(true)
+                          }}
+                        >
+                          Continuar con el pedido
+                          <ChevronRight className="h-5 w-5 ml-2" />
+                        </Button>
+                        
+                        <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" />
+                          Recoge y paga en nuestra sucursal
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </SheetContent>
+              </Sheet>
+            </div>
+            
+            {/* Mobile Search */}
+            <div className="mt-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar medicamentos, vitaminas..."
+                  placeholder="Buscar productos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-muted/50 border-0 focus-visible:ring-primary h-11"
+                  className="pl-10 bg-muted/50 border-0 focus-visible:ring-primary h-11 text-sm rounded-xl"
                 />
                 {searchTerm && (
                   <Button
@@ -396,198 +818,10 @@ export default function TiendaPage() {
                 )}
               </div>
             </div>
-
-            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="relative bg-transparent gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  <span className="hidden sm:inline">Carrito</span>
-                  {cartItemsCount > 0 && (
-                    <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium">
-                      {cartItemsCount}
-                    </span>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent className="flex flex-col w-full sm:max-w-md p-0">
-                {/* Cart Header */}
-                <div className="bg-primary text-primary-foreground p-6 pb-8">
-                  <SheetHeader>
-                    <SheetTitle className="flex items-center gap-3 text-primary-foreground">
-                      <div className="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center">
-                        <ShoppingCart className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <span className="text-lg">Mi Carrito</span>
-                        <p className="text-sm font-normal text-primary-foreground/80">
-                          {cartItemsCount} {cartItemsCount === 1 ? "producto" : "productos"}
-                        </p>
-                      </div>
-                    </SheetTitle>
-                  </SheetHeader>
-                </div>
-
-                {cart.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 -mt-4">
-                    <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mb-4">
-                      <ShoppingCart className="h-12 w-12 text-muted-foreground" />
-                    </div>
-                    <h3 className="font-semibold text-lg mb-2">Tu carrito esta vacio</h3>
-                    <p className="text-muted-foreground text-sm mb-6 max-w-[240px]">
-                      Explora nuestra tienda y agrega productos para comenzar tu pedido
-                    </p>
-                    <Button onClick={() => setIsCartOpen(false)} className="rounded-full px-6">
-                      Explorar productos
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Products List */}
-                    <ScrollArea className="flex-1 -mt-4">
-                      <div className="px-4 pb-4">
-                        <div className="bg-background rounded-2xl shadow-sm border overflow-hidden">
-                          {cart.map((item, index) => {
-                            const discount = getProductDiscount(item.product.id)
-                            const discountedPrice = getDiscountedPrice(item.product)
-                            const itemTotal = discountedPrice * item.quantity
-                            return (
-                              <div
-                                key={item.product.id}
-                                className={`p-4 ${index !== cart.length - 1 ? "border-b" : ""}`}
-                              >
-                                <div className="flex gap-4">
-                                  {/* Product Image */}
-                                  <div className="h-20 w-20 rounded-xl bg-muted overflow-hidden shrink-0 shadow-sm">
-                                    {item.product.image_url ? (
-                                      <Image
-                                        src={item.product.image_url || "/placeholder.svg"}
-                                        alt={item.product.name}
-                                        width={80}
-                                        height={80}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="h-full w-full flex items-center justify-center">
-                                        <Package className="h-8 w-8 text-muted-foreground" />
-                                      </div>
-                                    )}
-                                  </div>
-                                  
-                                  {/* Product Info */}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <h4 className="font-medium text-sm line-clamp-2 leading-tight">{item.product.name}</h4>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 -mt-1 -mr-2 text-muted-foreground hover:text-destructive"
-                                        onClick={() => removeFromCart(item.product.id)}
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                    
-                                    {/* Price */}
-                                    <div className="flex items-center gap-2 mt-1">
-                                      {discount ? (
-                                        <>
-                                          <span className="text-sm font-semibold text-primary">
-                                            ${discountedPrice.toFixed(2)}
-                                          </span>
-                                          <span className="text-xs text-muted-foreground line-through">
-                                            ${item.product.price.toFixed(2)}
-                                          </span>
-                                          <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary">
-                                            {discount.discount_type === "percentage"
-                                              ? `-${discount.discount_value}%`
-                                              : `-$${discount.discount_value}`}
-                                          </Badge>
-                                        </>
-                                      ) : (
-                                        <span className="text-sm font-semibold text-foreground">
-                                          ${item.product.price.toFixed(2)}
-                                        </span>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Quantity Controls & Subtotal */}
-                                    <div className="flex items-center justify-between mt-3">
-                                      <div className="flex items-center gap-1 bg-muted rounded-full p-1">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 rounded-full hover:bg-background"
-                                          onClick={() => updateQuantity(item.product.id, -1)}
-                                        >
-                                          <Minus className="h-3 w-3" />
-                                        </Button>
-                                        <span className="text-sm font-semibold w-8 text-center">
-                                          {item.quantity}
-                                        </span>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-7 w-7 rounded-full hover:bg-background"
-                                          onClick={() => updateQuantity(item.product.id, 1)}
-                                          disabled={item.quantity >= item.product.stock_quantity}
-                                        >
-                                          <Plus className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                      <span className="text-sm font-bold">${itemTotal.toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    </ScrollArea>
-
-                    {/* Cart Summary Footer */}
-                    <div className="border-t bg-muted/30 p-4 space-y-4">
-                      <div className="bg-background rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Subtotal</span>
-                          <span>${cartTotal.toFixed(2)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Pago en tienda</span>
-                          <span className="text-emerald-600 font-medium">$0.00</span>
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold">Total a pagar</span>
-                          <span className="text-xl font-bold text-primary">${cartTotal.toFixed(2)}</span>
-                        </div>
-                      </div>
-                      
-                      <Button
-                        className="w-full h-12 rounded-xl text-base font-semibold shadow-lg"
-                        size="lg"
-                        onClick={() => {
-                          setIsCartOpen(false)
-                          setIsCheckoutOpen(true)
-                        }}
-                      >
-                        Continuar con el pedido
-                        <ChevronRight className="h-5 w-5 ml-2" />
-                      </Button>
-                      
-                      <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" />
-                        Recoge y paga en nuestra sucursal
-                      </p>
-                    </div>
-                  </>
-                )}
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
       </header>
-
+      
       {/* Breadcrumb & Section Filter */}
       <div className="border-b bg-muted/30">
         <div className="container mx-auto px-4 py-3">
@@ -619,94 +853,43 @@ export default function TiendaPage() {
           </div>
         </div>
       </div>
-
-      {/* Featured Promotions Banner */}
-      {featuredProducts.length > 0 && !searchTerm && !selectedSection && (
-        <section className="bg-primary text-primary-foreground py-8">
-          <div className="container mx-auto px-4">
-            <div className="flex items-center gap-2 mb-6">
-              <Sparkles className="h-5 w-5" />
-              <h2 className="text-xl font-bold">Ofertas Especiales</h2>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-4">
-              {featuredProducts.slice(0, 4).map((product) => {
-                const promo = getProductDiscount(product.id)
-                const discountedPrice = getDiscountedPrice(product)
-                return (
-                  <Card
-                    key={product.id}
-                    className="bg-white/10 backdrop-blur border-white/20 hover:bg-white/20 transition-all cursor-pointer group overflow-hidden"
-                    onClick={() => addToCart(product)}
-                  >
-                    <div className="aspect-square relative overflow-hidden">
-                      {product.image_url ? (
-                        <Image
-                          src={product.image_url || "/placeholder.svg"}
-                          alt={product.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center bg-white/5">
-                          <Package className="h-12 w-12 text-white/50" />
-                        </div>
-                      )}
-                      {promo && (
-                        <Badge className="absolute top-2 left-2 bg-white text-primary">
-                          {promo.discount_type === "percentage"
-                            ? `-${promo.discount_value}%`
-                            : `-$${promo.discount_value}`}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardContent className="p-4">
-                      <h3 className="font-medium text-sm line-clamp-2 min-h-[2.5rem]">{product.name}</h3>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="font-bold text-lg">${discountedPrice.toFixed(2)}</span>
-                        <span className="text-sm line-through opacity-60">
-                          ${product.price.toFixed(2)}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Section Pills */}
+      
+      {/* Section Pills - Deslizable con touch/mouse */}
       {sections.length > 0 && !searchTerm && (
-        <div className="border-b bg-background sticky top-[73px] z-40">
-          <div className="container mx-auto px-4 py-3">
-            <ScrollArea className="w-full">
-              <div className="flex gap-2">
+        <div className="border-b bg-background sticky top-[105px] md:top-[89px] z-40">
+          <div className="py-3">
+            <div 
+              className="flex gap-2 overflow-x-auto scrollbar-hide px-4 scroll-smooth snap-x snap-mandatory touch-pan-x"
+              style={{ 
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
+              }}
+            >
+              <Button
+                variant={selectedSection === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedSection(null)}
+                className={`shrink-0 rounded-full snap-start ${selectedSection === null ? "" : "bg-transparent"}`}
+              >
+                Todas
+              </Button>
+              {sections.map((section) => (
                 <Button
-                  variant={selectedSection === null ? "default" : "outline"}
+                  key={section}
+                  variant={selectedSection === section ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setSelectedSection(null)}
-                  className={`shrink-0 rounded-full ${selectedSection === null ? "" : "bg-transparent"}`}
+                  onClick={() => setSelectedSection(section)}
+                  className={`shrink-0 rounded-full snap-start ${selectedSection === section ? "" : "bg-transparent"}`}
                 >
-                  Todas las Secciones
+                  {section}
                 </Button>
-                {sections.map((section) => (
-                  <Button
-                    key={section}
-                    variant={selectedSection === section ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedSection(section)}
-                    className={`shrink-0 rounded-full ${selectedSection === section ? "" : "bg-transparent"}`}
-                  >
-                    {section}
-                  </Button>
-                ))}
-              </div>
-            </ScrollArea>
+              ))}
+            </div>
           </div>
         </div>
       )}
-
+      
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {searchTerm && (
@@ -752,41 +935,50 @@ export default function TiendaPage() {
             ))}
           </div>
         ) : (
-          // Grouped by section view
-          <div className="space-y-12">
+          // Grouped by section view - Deslizable en movil
+          <div className="space-y-8 md:space-y-12">
             {Object.entries(productsBySection).sort(([a], [b]) => a.localeCompare(b, 'es')).map(([section, sectionProducts]) => (
-              <section key={section}>
-                <div className="flex items-center justify-between mb-6">
+              <section key={section} className="-mx-4 md:mx-0">
+                <div className="flex items-center justify-between mb-4 px-4 md:px-0">
                   <div className="flex items-center gap-3">
-                    <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${sectionIcons[section] || "bg-muted text-muted-foreground"}`}>
-                      <Package className="h-5 w-5" />
+                    <div className={`h-9 w-9 md:h-10 md:w-10 rounded-xl flex items-center justify-center ${sectionIcons[section] || "bg-muted text-muted-foreground"}`}>
+                      <Package className="h-4 w-4 md:h-5 md:w-5" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold">{section}</h2>
-                      <p className="text-sm text-muted-foreground">{sectionProducts.length} productos</p>
+                      <h2 className="text-lg md:text-xl font-bold">{section}</h2>
+                      <p className="text-xs md:text-sm text-muted-foreground">{sectionProducts.length} productos</p>
                     </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedSection(section)}
-                    className="text-primary"
+                    className="text-primary text-sm"
                   >
                     Ver todos
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {sectionProducts.slice(0, 5).map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      discount={getProductDiscount(product.id)}
-                      discountedPrice={getDiscountedPrice(product)}
-                      inCart={cart.find((item) => item.product.id === product.id)}
-                      onAdd={() => addToCart(product)}
-                      onUpdateQuantity={(delta) => updateQuantity(product.id, delta)}
-                    />
+                {/* Carrusel deslizable en movil, grid en desktop */}
+                <div 
+                  className="flex gap-3 overflow-x-auto scrollbar-hide px-4 md:px-0 pb-2 snap-x snap-mandatory touch-pan-x md:grid md:grid-cols-4 lg:grid-cols-5 md:gap-4 md:overflow-visible"
+                  style={{ 
+                    WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none'
+                  }}
+                >
+                  {sectionProducts.slice(0, 10).map((product) => (
+                    <div key={product.id} className="w-[160px] shrink-0 snap-start md:w-auto">
+                      <ProductCard
+                        product={product}
+                        discount={getProductDiscount(product.id)}
+                        discountedPrice={getDiscountedPrice(product)}
+                        inCart={cart.find((item) => item.product.id === product.id)}
+                        onAdd={() => addToCart(product)}
+                        onUpdateQuantity={(delta) => updateQuantity(product.id, delta)}
+                      />
+                    </div>
                   ))}
                 </div>
               </section>
@@ -1016,9 +1208,9 @@ function ProductCard({
         <h3 className="font-medium text-sm line-clamp-2 min-h-[2.5rem] mb-1">
           {product.name}
         </h3>
-{product.section && (
-  <p className="text-xs text-muted-foreground mb-3">{product.section}</p>
-  )}
+        {product.section && (
+          <p className="text-xs text-muted-foreground mb-3">{product.section}</p>
+        )}
         <div className="flex items-end justify-between gap-2">
           <div>
             {discount ? (
