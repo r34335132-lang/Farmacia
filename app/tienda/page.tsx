@@ -1007,18 +1007,18 @@ export default function TiendaPage() {
                 <Clock className="h-4 w-4 text-primary" />
                 Horario
               </h4>
-              <p className="text-sm text-muted-foreground">Lunes - Sabado: 8:00 AM - 9:00 PM</p>
-              <p className="text-sm text-muted-foreground">Domingo: 9:00 AM - 3:00 PM</p>
+              <p className="text-sm text-muted-foreground">Lunes - Sabado: 8:00 AM - 10:00 PM</p>
+              <p className="text-sm text-muted-foreground">Domingo: 8:00 AM - 10:00 PM</p>
             </div>
             <div>
               <h4 className="font-semibold mb-3 flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary" />
                 Ubicacion
               </h4>
-              <p className="text-sm text-muted-foreground">Calle Principal #123, Colonia Centro</p>
+              <p className="text-sm text-muted-foreground">Blvd. Enrrique Carrola Antuna #1001, Colonia Victoria de Durango Centro</p>
               <div className="flex items-center gap-2 mt-2">
                 <Phone className="h-4 w-4 text-primary" />
-                <span className="text-sm">(123) 456-7890</span>
+                <span className="text-sm">(618) 188-7244</span>
               </div>
             </div>
           </div>
