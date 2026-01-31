@@ -1008,7 +1008,7 @@ export default function TiendaPage() {
                 Horario
               </h4>
               <p className="text-sm text-muted-foreground">Lunes - Sabado: 8:00 AM - 10:00 PM</p>
-              <p className="text-sm text-muted-foreground">Domingo: 8:00 AM - 10:00 PM</p>
+              <p className="text-sm text-muted-foreground">Domingo: 8:00 AM - 9:00 PM</p>
             </div>
             <div>
               <h4 className="font-semibold mb-3 flex items-center gap-2">
