@@ -1015,7 +1015,7 @@ export default function TiendaPage() {
                 <MapPin className="h-4 w-4 text-primary" />
                 Ubicacion
               </h4>
-              <p className="text-sm text-muted-foreground">Blvd. Enrrique Carrola Antuna #1001, Colonia Victoria de Durango Centro</p>
+              <p className="text-sm text-muted-foreground">Blvd. Enrrique Carrola Antuna #1001, Victoria de Durango Centro</p>
               <div className="flex items-center gap-2 mt-2">
                 <Phone className="h-4 w-4 text-primary" />
                 <span className="text-sm">(618) 188-7244</span>

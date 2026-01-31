@@ -422,9 +422,9 @@ export default function HomePage() {
                 Horario
               </h4>
               <p className="text-sm text-muted-foreground mb-1">Lunes - Sabado</p>
-              <p className="text-sm font-medium mb-3">8:00 AM - 9:00 PM</p>
+              <p className="text-sm font-medium mb-3">8:00 AM - 10:00 PM</p>
               <p className="text-sm text-muted-foreground mb-1">Domingo</p>
-              <p className="text-sm font-medium">9:00 AM - 3:00 PM</p>
+              <p className="text-sm font-medium">8:00 AM - 10:00 PM</p>
             </div>
             
             <div>
@@ -432,11 +432,11 @@ export default function HomePage() {
                 <MapPin className="h-4 w-4 text-primary" />
                 Ubicacion
               </h4>
-              <p className="text-sm text-muted-foreground mb-1">Calle Principal #123</p>
-              <p className="text-sm text-muted-foreground mb-4">Colonia Centro</p>
+              <p className="text-sm text-muted-foreground mb-1">Blvd Enrrique Carrola Antuna #1001</p>
+              <p className="text-sm text-muted-foreground mb-4">Victoria de Durango Centro</p>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">(123) 456-7890</span>
+                <span className="text-sm font-medium">(618) 188-7244</span>
               </div>
             </div>
           </div>
