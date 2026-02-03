@@ -49,14 +49,31 @@ interface Product {
   section?: string
 }
 
+interface Promotion {
+  id: string
+  name: string
+  description: string | null
+  discount_type: "percentage" | "fixed"
+  discount_value: number
+  start_date: string
+  end_date: string
+  is_active: boolean
+  product_ids: string[]
+}
+
 interface CartItem {
   product: Product
   quantity: number
   subtotal: number
+  originalPrice: number
+  discountedPrice: number
+  hasPromotion: boolean
+  promotionName?: string
 }
 
 export default function POSPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [promotions, setPromotions] = useState<Promotion[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [barcodeInput, setBarcodeInput] = useState("")
@@ -185,16 +202,73 @@ export default function POSPage() {
       const response = await fetch("/api/products")
       const { products: data, total } = await response.json()
 
-      console.log("[v0] Total products loaded from API:", total)
+      
 
       const activeProducts = data.filter((p: any) => p.is_active !== false)
       setProducts(activeProducts)
       setCurrentPage(1)
+
+      // Load active promotions
+      await loadPromotions()
     } catch (error) {
       console.error("Error loading products:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadPromotions = async () => {
+    try {
+      const now = new Date().toISOString()
+      
+      // Get active promotions
+      const { data: promotionsData } = await supabase
+        .from("promotions")
+        .select("*")
+        .eq("is_active", true)
+        .lte("start_date", now)
+        .gte("end_date", now)
+
+      if (promotionsData) {
+        // Get product associations for each promotion
+        const promotionsWithProducts = await Promise.all(
+          promotionsData.map(async (promo) => {
+            const { data: productPromos } = await supabase
+              .from("product_promotions")
+              .select("product_id")
+              .eq("promotion_id", promo.id)
+            return {
+              ...promo,
+              product_ids: productPromos?.map((pp) => pp.product_id) || [],
+            }
+          })
+        )
+        setPromotions(promotionsWithProducts)
+      }
+    } catch (error) {
+      console.error("Error loading promotions:", error)
+    }
+  }
+
+  // Get promotion for a specific product
+  const getProductPromotion = (productId: string): Promotion | null => {
+    for (const promo of promotions) {
+      if (promo.product_ids.includes(productId)) {
+        return promo
+      }
+    }
+    return null
+  }
+
+  // Calculate discounted price for a product
+  const getDiscountedPrice = (product: Product): number => {
+    const promo = getProductPromotion(product.id)
+    if (!promo) return product.price
+    
+    if (promo.discount_type === "percentage") {
+      return product.price * (1 - promo.discount_value / 100)
+    }
+    return Math.max(0, product.price - promo.discount_value)
   }
 
   const handleBarcodeSearch = async () => {
@@ -227,10 +301,17 @@ export default function POSPage() {
       }
       updateQuantity(product.id, existingItem.quantity + 1)
     } else {
+      const promo = getProductPromotion(product.id)
+      const discountedPrice = getDiscountedPrice(product)
+      
       const newItem: CartItem = {
         product,
         quantity: 1,
-        subtotal: product.price,
+        subtotal: discountedPrice,
+        originalPrice: product.price,
+        discountedPrice: discountedPrice,
+        hasPromotion: promo !== null,
+        promotionName: promo?.name,
       }
       setCart([...cart, newItem])
     }
@@ -251,7 +332,7 @@ export default function POSPage() {
     setCart(
       cart.map((item) =>
         item.product.id === productId
-          ? { ...item, quantity: newQuantity, subtotal: item.product.price * newQuantity }
+          ? { ...item, quantity: newQuantity, subtotal: item.discountedPrice * newQuantity }
           : item,
       ),
     )
@@ -521,8 +602,9 @@ export default function POSPage() {
             <span></span>
         </div>
         ${item.product.section ? `<div class="item-row"><span>  Sec: ${item.product.section}</span><span></span></div>` : ""}
+        ${item.hasPromotion ? `<div class="item-row" style="color: green;"><span>  PROMO: ${item.promotionName || 'Descuento'}</span><span></span></div>` : ""}
         <div class="item-row">
-            <span>  ${item.quantity} x $${item.product.price.toFixed(2)}</span>
+            <span>  ${item.quantity} x $${item.hasPromotion ? item.discountedPrice.toFixed(2) : item.product.price.toFixed(2)}${item.hasPromotion ? ` (antes $${item.originalPrice.toFixed(2)})` : ''}</span>
             <span class="right-align">$${item.subtotal.toFixed(2)}</span>
         </div>
         `,
@@ -535,6 +617,20 @@ export default function POSPage() {
             <span>SUBTOTAL:</span>
             <span class="right-align">$${localSubtotal.toFixed(2)}</span>
         </div>
+        ${(() => {
+          const promoSavings = items.reduce((sum, item) => {
+            if (item.hasPromotion) {
+              return sum + ((item.originalPrice - item.discountedPrice) * item.quantity)
+            }
+            return sum
+          }, 0)
+          return promoSavings > 0 ? `
+        <div class="row" style="color: green;">
+            <span>AHORRO PROMOCIONES:</span>
+            <span class="right-align">-$${promoSavings.toFixed(2)}</span>
+        </div>
+          ` : ""
+        })()}
         ${
           discount > 0
             ? `
@@ -549,15 +645,20 @@ export default function POSPage() {
             <span>TOTAL:</span>
             <span class="right-align">$${localTotal.toFixed(2)}</span>
         </div>
-        ${
-          discount > 0
-            ? `
-        <div class="center small" style="margin-top: 3px;">
-            Ahorraste $${discount.toFixed(2)}
+        ${(() => {
+          const promoSavings = items.reduce((sum, item) => {
+            if (item.hasPromotion) {
+              return sum + ((item.originalPrice - item.discountedPrice) * item.quantity)
+            }
+            return sum
+          }, 0)
+          const totalSavings = promoSavings + discount
+          return totalSavings > 0 ? `
+        <div class="center small" style="margin-top: 3px; color: green;">
+            <strong>Ahorraste $${totalSavings.toFixed(2)}</strong>
         </div>
-        `
-            : ""
-        }
+          ` : ""
+        })()}
         
         <div class="dashed-line"></div>
         
@@ -908,6 +1009,14 @@ export default function POSPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {promotions.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+                <Tag className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">
+                  {promotions.length} {promotions.length === 1 ? 'Promocion' : 'Promociones'} Activas
+                </span>
+              </div>
+            )}
             <Button onClick={openExportDialog} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
               <Printer className="h-4 w-4 mr-2" />
               Exportar Inventario
@@ -1025,69 +1134,106 @@ export default function POSPage() {
 
           {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {paginatedProducts.map((product) => (
-              <Card
-                key={product.id}
-                className="cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 border-0 shadow-lg bg-white/80 backdrop-blur-sm"
-              >
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="w-full h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden">
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url || "/placeholder.svg"}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="text-center">
-                          <div className="w-16 h-16 bg-gradient-to-r from-rose-600 to-red-700 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <span className="text-2xl">💊</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">Sin imagen</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="font-bold text-lg text-gray-800 line-clamp-2">{product.name}</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-                          ${product.price.toFixed(2)}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {product.section && (
-                            <Badge variant="outline" className="text-xs border-rose-300 text-rose-800 bg-rose-50">
-                              {product.section}
+            {paginatedProducts.map((product) => {
+              const promo = getProductPromotion(product.id)
+              const discountedPrice = getDiscountedPrice(product)
+              const hasDiscount = promo !== null
+              
+              return (
+                <Card
+                  key={product.id}
+                  className={`cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 border-0 shadow-lg bg-white/80 backdrop-blur-sm ${hasDiscount ? 'ring-2 ring-green-400' : ''}`}
+                >
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      <div className="w-full h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden relative">
+                        {hasDiscount && (
+                          <div className="absolute top-2 left-2 z-10">
+                            <Badge className="bg-green-500 text-white text-xs font-bold px-2 py-1">
+                              <Percent className="h-3 w-3 mr-1" />
+                              {promo.discount_type === "percentage" 
+                                ? `${promo.discount_value}% OFF` 
+                                : `$${promo.discount_value} OFF`}
                             </Badge>
-                          )}
-                          <Badge
-                            variant={
-                              product.stock_quantity > 10
-                                ? "default"
-                                : product.stock_quantity > 0
-                                  ? "secondary"
-                                  : "destructive"
-                            }
-                            className="font-semibold"
-                          >
-                            Stock: {product.stock_quantity}
-                          </Badge>
-                        </div>
+                          </div>
+                        )}
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url || "/placeholder.svg"}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="text-center">
+                            <div className="w-16 h-16 bg-gradient-to-r from-rose-600 to-red-700 rounded-full flex items-center justify-center mx-auto mb-2">
+                              <span className="text-2xl">{'💊'}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">Sin imagen</span>
+                          </div>
+                        )}
                       </div>
-                      <Button
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-semibold py-3"
-                        disabled={product.stock_quantity === 0}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        {product.stock_quantity === 0 ? "Sin Stock" : "Agregar al Carrito"}
-                      </Button>
+
+                      <div className="space-y-2">
+                        <h3 className="font-bold text-lg text-gray-800 line-clamp-2">{product.name}</h3>
+                        {hasDiscount && (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-300">
+                              <Tag className="h-3 w-3 mr-1" />
+                              {promo.name}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            {hasDiscount ? (
+                              <>
+                                <span className="text-2xl font-bold text-green-600">
+                                  ${discountedPrice.toFixed(2)}
+                                </span>
+                                <span className="text-sm text-muted-foreground line-through">
+                                  ${product.price.toFixed(2)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+                                ${product.price.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {product.section && (
+                              <Badge variant="outline" className="text-xs border-rose-300 text-rose-800 bg-rose-50">
+                                {product.section}
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={
+                                product.stock_quantity > 10
+                                  ? "default"
+                                  : product.stock_quantity > 0
+                                    ? "secondary"
+                                    : "destructive"
+                              }
+                              className="font-semibold"
+                            >
+                              Stock: {product.stock_quantity}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => addToCart(product)}
+                          className={`w-full font-semibold py-3 ${hasDiscount ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' : 'bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950'} text-white`}
+                          disabled={product.stock_quantity === 0}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          {product.stock_quantity === 0 ? "Sin Stock" : hasDiscount ? "Agregar con Descuento" : "Agregar al Carrito"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
 
           {filteredProducts.length > PRODUCTS_PER_PAGE && (
@@ -1193,17 +1339,41 @@ export default function POSPage() {
 
           <div className="space-y-3 flex-1 overflow-auto max-h-96">
             {cart.map((item) => (
-              <Card key={item.product.id} className="border-rose-100 shadow-md">
+              <Card key={item.product.id} className={`shadow-md ${item.hasPromotion ? 'border-green-300 bg-green-50/50' : 'border-rose-100'}`}>
                 <CardContent className="p-4">
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
-                    {item.product.section && (
-                      <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
-                        {item.product.section}
-                      </Badge>
-                    )}
+                    <div className="flex items-start justify-between">
+                      <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
+                      {item.hasPromotion && (
+                        <Badge className="bg-green-500 text-white text-xs ml-2 shrink-0">
+                          <Percent className="h-3 w-3 mr-1" />
+                          Promo
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {item.product.section && (
+                        <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
+                          {item.product.section}
+                        </Badge>
+                      )}
+                      {item.hasPromotion && item.promotionName && (
+                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+                          {item.promotionName}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-rose-800">${item.product.price.toFixed(2)}</span>
+                      <div className="flex flex-col">
+                        {item.hasPromotion ? (
+                          <>
+                            <span className="text-sm font-medium text-green-600">${item.discountedPrice.toFixed(2)}</span>
+                            <span className="text-xs text-muted-foreground line-through">${item.originalPrice.toFixed(2)}</span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-medium text-rose-800">${item.product.price.toFixed(2)}</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
@@ -1225,7 +1395,16 @@ export default function POSPage() {
                       </div>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-lg text-rose-800">${item.subtotal.toFixed(2)}</span>
+                      <div className="flex flex-col">
+                        <span className={`font-bold text-lg ${item.hasPromotion ? 'text-green-600' : 'text-rose-800'}`}>
+                          ${item.subtotal.toFixed(2)}
+                        </span>
+                        {item.hasPromotion && (
+                          <span className="text-xs text-green-600">
+                            Ahorras ${((item.originalPrice - item.discountedPrice) * item.quantity).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1249,24 +1428,45 @@ export default function POSPage() {
             </div>
           )}
 
-          {cart.length > 0 && (
-            <div className="space-y-4 border-t pt-4">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">Total a pagar</p>
-                <div className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-                  ${total.toFixed(2)}
+          {cart.length > 0 && (() => {
+            const promoSavings = cart.reduce((sum, item) => {
+              if (item.hasPromotion) {
+                return sum + ((item.originalPrice - item.discountedPrice) * item.quantity)
+              }
+              return sum
+            }, 0)
+            const hasPromotions = promoSavings > 0
+            
+            return (
+              <div className="space-y-4 border-t pt-4">
+                {hasPromotions && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between text-green-700">
+                      <span className="text-sm font-medium flex items-center gap-1">
+                        <Tag className="h-4 w-4" />
+                        Ahorro por promociones:
+                      </span>
+                      <span className="font-bold">-${promoSavings.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Total a pagar</p>
+                  <div className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+                    ${total.toFixed(2)}
+                  </div>
                 </div>
+                <Button
+                  onClick={() => setIsPaymentDialogOpen(true)}
+                  className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
+                  size="lg"
+                >
+                  <Receipt className="h-5 w-5 mr-2" />
+                  Procesar Pago
+                </Button>
               </div>
-              <Button
-                onClick={() => setIsPaymentDialogOpen(true)}
-                className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
-                size="lg"
-              >
-                <Receipt className="h-5 w-5 mr-2" />
-                Procesar Pago
-              </Button>
-            </div>
-          )}
+            )
+          })()}
         </div>
       </div>
 
