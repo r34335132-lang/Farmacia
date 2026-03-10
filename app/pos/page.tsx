@@ -290,7 +290,7 @@ export default function POSPage() {
   }
 
   const addToCart = (product: Product) => {
-    // 💡 NUEVA VALIDACIÓN: Revisar stock inicial antes de hacer cualquier cosa
+    // 💡 VALIDACIÓN: Revisar stock inicial antes de hacer cualquier cosa
     if (product.stock_quantity < 1) {
       alert("No hay suficiente stock")
       return
@@ -365,6 +365,7 @@ export default function POSPage() {
     }
   }
 
+  // 💡 LÓGICA DE PAGO CORREGIDA
   const handlePayment = async () => {
     if (cart.length === 0) return
 
@@ -420,8 +421,6 @@ export default function POSPage() {
 
       if (itemsError) throw itemsError
 
-      // ❌ SE ELIMINÓ EL CICLO FOR QUE RESTABA EL STOCK MANUALMENTE AQUÍ ❌
-
       // 4. Generamos el ticket y limpiamos
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
@@ -434,60 +433,6 @@ export default function POSPage() {
       setPaymentMethod("efectivo")
 
       // Recargamos los productos para ver el nuevo stock
-      loadProducts()
-    } catch (error) {
-      console.error("Error processing payment:", error)
-      alert("Error al procesar el pago")
-    } finally {
-      setProcessingPayment(false)
-    }
-}
-      const saleItems = cart.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price: item.product.price,
-        subtotal: item.subtotal,
-      }))
-
-      const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
-
-      if (itemsError) throw itemsError
-
-      // 💡 CAMBIO CRÍTICO: Uso de función segura (RPC) para descontar stock
-      for (const item of cart) {
-        const { data: success, error: stockError } = await supabase.rpc('decrement_stock', {
-          product_id_param: item.product.id,
-          decrease_amount: item.quantity
-        })
-
-        if (stockError || !success) {
-          alert(`❌ No se pudo procesar ${item.product.name}. Alguien más lo acaba de comprar o el stock es insuficiente.`);
-          setProcessingPayment(false);
-          return;
-        }
-
-        await supabase.from("stock_movements").insert([
-          {
-            product_id: item.product.id,
-            movement_type: "salida",
-            quantity: -item.quantity,
-            reason: `Venta #${sale.id}`,
-            user_id: currentUser.id,
-          },
-        ])
-      }
-
-      const discountReasonText = hasDiscount
-        ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-        : ""
-      generateReceipt(sale, cart, discountAmount, discountReasonText, subtotal, total, cashReceived, change)
-
-      clearCart()
-      setIsPaymentDialogOpen(false)
-      setCashReceived("")
-      setPaymentMethod("efectivo")
-
       loadProducts()
     } catch (error) {
       console.error("Error processing payment:", error)
