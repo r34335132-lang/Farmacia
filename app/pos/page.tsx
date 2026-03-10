@@ -202,8 +202,6 @@ export default function POSPage() {
       const response = await fetch("/api/products")
       const { products: data, total } = await response.json()
 
-      
-
       const activeProducts = data.filter((p: any) => p.is_active !== false)
       setProducts(activeProducts)
       setCurrentPage(1)
@@ -292,6 +290,12 @@ export default function POSPage() {
   }
 
   const addToCart = (product: Product) => {
+    // 💡 NUEVA VALIDACIÓN: Revisar stock inicial antes de hacer cualquier cosa
+    if (product.stock_quantity < 1) {
+      alert("No hay suficiente stock")
+      return
+    }
+
     const existingItem = cart.find((item) => item.product.id === product.id)
 
     if (existingItem) {
@@ -413,15 +417,18 @@ export default function POSPage() {
 
       if (itemsError) throw itemsError
 
+      // 💡 CAMBIO CRÍTICO: Uso de función segura (RPC) para descontar stock
       for (const item of cart) {
-        const { error: stockError } = await supabase
-          .from("products")
-          .update({
-            stock_quantity: item.product.stock_quantity - item.quantity,
-          })
-          .eq("id", item.product.id)
+        const { data: success, error: stockError } = await supabase.rpc('decrement_stock', {
+          product_id_param: item.product.id,
+          decrease_amount: item.quantity
+        })
 
-        if (stockError) throw stockError
+        if (stockError || !success) {
+          alert(`❌ No se pudo procesar ${item.product.name}. Alguien más lo acaba de comprar o el stock es insuficiente.`);
+          setProcessingPayment(false);
+          return;
+        }
 
         await supabase.from("stock_movements").insert([
           {
