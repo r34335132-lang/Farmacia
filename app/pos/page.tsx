@@ -382,6 +382,7 @@ export default function POSPage() {
       const discountValueNum = Number.parseFloat(discountValue || "0")
       const hasDiscount = discountValueNum > 0
 
+      // 1. Creamos la venta
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert([
@@ -405,6 +406,42 @@ export default function POSPage() {
 
       if (saleError) throw saleError
 
+      // 2. Preparamos los items
+      const saleItems = cart.map((item) => ({
+        sale_id: sale.id,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.product.price,
+        subtotal: item.subtotal,
+      }))
+
+      // 3. Insertamos los items (¡AQUÍ EL TRIGGER DE LA BD ACTÚA SOLO Y RESTA EL INVENTARIO!)
+      const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
+
+      if (itemsError) throw itemsError
+
+      // ❌ SE ELIMINÓ EL CICLO FOR QUE RESTABA EL STOCK MANUALMENTE AQUÍ ❌
+
+      // 4. Generamos el ticket y limpiamos
+      const discountReasonText = hasDiscount
+        ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
+        : ""
+      generateReceipt(sale, cart, discountAmount, discountReasonText, subtotal, total, cashReceived, change)
+
+      clearCart()
+      setIsPaymentDialogOpen(false)
+      setCashReceived("")
+      setPaymentMethod("efectivo")
+
+      // Recargamos los productos para ver el nuevo stock
+      loadProducts()
+    } catch (error) {
+      console.error("Error processing payment:", error)
+      alert("Error al procesar el pago")
+    } finally {
+      setProcessingPayment(false)
+    }
+}
       const saleItems = cart.map((item) => ({
         sale_id: sale.id,
         product_id: item.product.id,
