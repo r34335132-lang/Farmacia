@@ -26,7 +26,7 @@ interface Sale {
   total_amount: number
   payment_method: string
   created_at: string
-  status?: string // Added status field
+  status?: string
   profiles: {
     full_name: string
   }
@@ -54,7 +54,8 @@ export default function SalesReports() {
   const [chartData, setChartData] = useState<any[]>([])
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState("today")
+  // CORRECCIÓN: Cambiamos "today" a "all" por defecto para asegurar que se vean los datos de prueba
+  const [dateFilter, setDateFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [showDateDialog, setShowDateDialog] = useState(false)
@@ -97,8 +98,8 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      // CORRECCIÓN 1: Validamos si data es directamente un array
-      const salesArray = Array.isArray(data) ? data : (data.sales || [])
+      // Adaptado para recibir el formato { sales: [...] } de tu API
+      const salesArray = data.sales || []
       const activeSales = salesArray.filter((sale: Sale) => sale.status !== "cancelled")
       setSales(activeSales)
     } catch (error) {
@@ -115,8 +116,7 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      // CORRECCIÓN 1: Validamos si data es directamente un array
-      const salesArray = Array.isArray(data) ? data : (data.sales || [])
+      const salesArray = data.sales || []
       const cancelled = salesArray.filter((sale: Sale) => sale.status === "cancelled")
       setDeletedSales(cancelled)
     } catch (error) {
@@ -170,7 +170,7 @@ export default function SalesReports() {
     }
 
     if (searchTerm) {
-      // CORRECCIÓN 2: Protegemos contra nulos en full_name e id
+      // CORRECCIÓN: Evitamos crash si sale.profiles es null
       filtered = filtered.filter(
         (sale) =>
           (sale.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -196,8 +196,9 @@ export default function SalesReports() {
 
     setSalesByDay(grouped)
 
+    // CORRECCIÓN: Guardamos la fecha ISO original para poder ordenar la gráfica sin errores
     const chartDataMap = filtered.reduce(
-      (acc: { [key: string]: { date: string; ventas: number; total: number; count: number } }, sale) => {
+      (acc: { [key: string]: { date: string; isoDate: string; ventas: number; total: number; count: number } }, sale) => {
         const dateKey = new Date(sale.created_at).toLocaleDateString("es-ES", {
           day: "2-digit",
           month: "short",
@@ -206,6 +207,7 @@ export default function SalesReports() {
         if (!acc[dateKey]) {
           acc[dateKey] = {
             date: dateKey,
+            isoDate: sale.created_at, // Guardamos la fecha original
             ventas: 0,
             total: 0,
             count: 0,
@@ -221,10 +223,9 @@ export default function SalesReports() {
       {},
     )
 
+    // Ordenamos usando la fecha ISO para evitar que resulte en NaN
     const chartDataArray = Object.values(chartDataMap).sort((a, b) => {
-      const dateA = new Date(a.date)
-      const dateB = new Date(b.date)
-      return dateA.getTime() - dateB.getTime()
+      return new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()
     })
 
     setChartData(chartDataArray)
@@ -236,7 +237,6 @@ export default function SalesReports() {
   }
 
   const generateSalesReport = () => {
-    // La función interna generateReport no se usaba directamente, pero mantenemos tu estructura original
     const generateReport = (reportDate?: Date) => {
       const targetDate = reportDate || new Date()
       const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
@@ -546,7 +546,7 @@ export default function SalesReports() {
     </div>
 </body>
 </html>
-    `
+      `
 
       const printWindow = window.open("", "_blank", "width=400,height=600")
       if (printWindow) {
@@ -1394,7 +1394,7 @@ export default function SalesReports() {
             ) : (
               <div className="space-y-6">
                 {Object.entries(showDeletedSales ? { cancelled: deletedSales } : salesByDay)
-                  // CORRECCIÓN 3: Ajuste en el ordenamiento de fechas
+                  // CORRECCIÓN: Ordenamiento de fechas robusto usando la fecha ISO
                   .sort((a, b) => {
                     if (a[0] === "cancelled") return 1
                     if (b[0] === "cancelled") return -1
