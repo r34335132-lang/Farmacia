@@ -97,7 +97,9 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      const activeSales = (data.sales || []).filter((sale: Sale) => sale.status !== "cancelled")
+      // CORRECCIÓN 1: Validamos si data es directamente un array
+      const salesArray = Array.isArray(data) ? data : (data.sales || [])
+      const activeSales = salesArray.filter((sale: Sale) => sale.status !== "cancelled")
       setSales(activeSales)
     } catch (error) {
       console.error("Error loading sales:", error)
@@ -113,8 +115,9 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      // Filter only cancelled sales
-      const cancelled = (data.sales || []).filter((sale: Sale) => sale.status === "cancelled")
+      // CORRECCIÓN 1: Validamos si data es directamente un array
+      const salesArray = Array.isArray(data) ? data : (data.sales || [])
+      const cancelled = salesArray.filter((sale: Sale) => sale.status === "cancelled")
       setDeletedSales(cancelled)
     } catch (error) {
       console.error("Error loading deleted sales:", error)
@@ -147,7 +150,6 @@ export default function SalesReports() {
 
     const now = new Date()
     if (dateFilter === "today") {
-      // Get today's date in local timezone
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
 
@@ -163,17 +165,16 @@ export default function SalesReports() {
       filtered = filtered.filter((sale) => new Date(sale.created_at) >= monthAgo)
     }
 
-    // Payment method filter
     if (paymentFilter !== "all") {
       filtered = filtered.filter((sale) => sale.payment_method === paymentFilter)
     }
 
-    // Search filter
     if (searchTerm) {
+      // CORRECCIÓN 2: Protegemos contra nulos en full_name e id
       filtered = filtered.filter(
         (sale) =>
-          sale.profiles?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sale.id.toLowerCase().includes(searchTerm.toLowerCase()),
+          (sale.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (sale.id || "").toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
@@ -235,18 +236,17 @@ export default function SalesReports() {
   }
 
   const generateSalesReport = () => {
+    // La función interna generateReport no se usaba directamente, pero mantenemos tu estructura original
     const generateReport = (reportDate?: Date) => {
       const targetDate = reportDate || new Date()
       const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
       const dateEnd = new Date(dateStart.getTime() + 24 * 60 * 60 * 1000)
 
-      // Filter sales for the selected date
       const daySales = sales.filter((sale) => {
         const saleDate = new Date(sale.created_at)
         return saleDate >= dateStart && saleDate < dateEnd
       })
 
-      // Calculate totals for the selected date
       const totalCash = daySales
         .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
         .reduce((sum, s) => sum + Number(s.total_amount), 0)
@@ -895,7 +895,6 @@ export default function SalesReports() {
     }
 
     try {
-      // Fetch sale items first to get product quantities before deletion
       const { data: saleItems, error: fetchError } = await supabase
         .from("sale_items")
         .select("product_id, quantity")
@@ -903,21 +902,17 @@ export default function SalesReports() {
 
       if (fetchError) throw fetchError
 
-      // Get current user for stock movement record
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
-      // Restore inventory for each product
       for (const item of saleItems || []) {
-        // Get current stock quantity
         const { data: product } = await supabase
           .from("products")
           .select("stock_quantity")
           .eq("id", item.product_id)
           .single()
 
-        // Update stock by adding back the sold quantity
         await supabase
           .from("products")
           .update({
@@ -926,7 +921,6 @@ export default function SalesReports() {
           })
           .eq("id", item.product_id)
 
-        // Create reverse stock movement record for audit trail
         await supabase.from("stock_movements").insert({
           product_id: item.product_id,
           movement_type: "entrada",
@@ -936,10 +930,8 @@ export default function SalesReports() {
         })
       }
 
-      // Update sale status to 'cancelled'
       await supabase.from("sales").update({ status: "cancelled" }).eq("id", saleId)
 
-      // Reload sales to update the list
       loadSales()
       alert("Venta cancelada exitosamente y stock restaurado")
     } catch (error) {
@@ -1160,14 +1152,12 @@ export default function SalesReports() {
             </Link>
             <h1 className="text-3xl font-bold">Reportes de Ventas</h1>
           </div>
-          {/* CHANGE: Added button to toggle deleted sales view */}
           <Button variant={showDeletedSales ? "default" : "outline"} onClick={toggleDeletedSalesView}>
             <Trash2 className="h-4 w-4 mr-2" />
             {showDeletedSales ? "Ver Ventas Activas" : "Ver Ventas Eliminadas"}
           </Button>
         </div>
 
-        {/* CHANGE: Conditional rendering for deleted sales or active sales */}
         {showDeletedSales ? (
           <Card>
             <CardHeader>
@@ -1404,10 +1394,13 @@ export default function SalesReports() {
             ) : (
               <div className="space-y-6">
                 {Object.entries(showDeletedSales ? { cancelled: deletedSales } : salesByDay)
-                  .sort(([dateA], [dateB]) => {
-                    // Sort by date descending (most recent first)
-                    if (dateA === "cancelled" || dateB === "cancelled") return 1 // Keep cancelled at the end
-                    return new Date(dateB).getTime() - new Date(dateA).getTime()
+                  // CORRECCIÓN 3: Ajuste en el ordenamiento de fechas
+                  .sort((a, b) => {
+                    if (a[0] === "cancelled") return 1
+                    if (b[0] === "cancelled") return -1
+                    const timeB = new Date(b[1][0]?.created_at || 0).getTime()
+                    const timeA = new Date(a[1][0]?.created_at || 0).getTime()
+                    return timeB - timeA
                   })
                   .map(([date, daySales]) => {
                     if (date === "cancelled") {
