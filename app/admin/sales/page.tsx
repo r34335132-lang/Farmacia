@@ -35,6 +35,7 @@ interface Sale {
     unit_price: number
     products: {
       name: string
+      section?: string // Agregado para poder agrupar por departamento
     }
   }[]
 }
@@ -54,7 +55,6 @@ export default function SalesReports() {
   const [chartData, setChartData] = useState<any[]>([])
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null)
   const [loading, setLoading] = useState(true)
-  // CORRECCIÓN: Cambiamos "today" a "all" por defecto para asegurar que se vean los datos de prueba
   const [dateFilter, setDateFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
@@ -98,7 +98,6 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      // Adaptado para recibir el formato { sales: [...] } de tu API
       const salesArray = data.sales || []
       const activeSales = salesArray.filter((sale: Sale) => sale.status !== "cancelled")
       setSales(activeSales)
@@ -170,7 +169,6 @@ export default function SalesReports() {
     }
 
     if (searchTerm) {
-      // CORRECCIÓN: Evitamos crash si sale.profiles es null
       filtered = filtered.filter(
         (sale) =>
           (sale.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -196,7 +194,6 @@ export default function SalesReports() {
 
     setSalesByDay(grouped)
 
-    // CORRECCIÓN: Guardamos la fecha ISO original para poder ordenar la gráfica sin errores
     const chartDataMap = filtered.reduce(
       (acc: { [key: string]: { date: string; isoDate: string; ventas: number; total: number; count: number } }, sale) => {
         const dateKey = new Date(sale.created_at).toLocaleDateString("es-ES", {
@@ -207,7 +204,7 @@ export default function SalesReports() {
         if (!acc[dateKey]) {
           acc[dateKey] = {
             date: dateKey,
-            isoDate: sale.created_at, // Guardamos la fecha original
+            isoDate: sale.created_at,
             ventas: 0,
             total: 0,
             count: 0,
@@ -223,7 +220,6 @@ export default function SalesReports() {
       {},
     )
 
-    // Ordenamos usando la fecha ISO para evitar que resulte en NaN
     const chartDataArray = Object.values(chartDataMap).sort((a, b) => {
       return new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()
     })
@@ -237,329 +233,6 @@ export default function SalesReports() {
   }
 
   const generateSalesReport = () => {
-    const generateReport = (reportDate?: Date) => {
-      const targetDate = reportDate || new Date()
-      const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-      const dateEnd = new Date(dateStart.getTime() + 24 * 60 * 60 * 1000)
-
-      const daySales = sales.filter((sale) => {
-        const saleDate = new Date(sale.created_at)
-        return saleDate >= dateStart && saleDate < dateEnd
-      })
-
-      const totalCash = daySales
-        .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-
-      const totalCard = daySales
-        .filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-
-      const countCash = daySales.filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo").length
-      const countCard = daySales.filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta").length
-
-      const getFilterDescription = () => {
-        return targetDate.toLocaleDateString("es-ES", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      }
-
-      const totalRevenueValue = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
-      const reportNumber = Math.floor(Math.random() * 1000) + 1
-
-      const reportContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Corte del Turno - Farmacia Solidaria</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .subtitle {
-            font-size: 13px;
-            margin-bottom: 10px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .double-line {
-            border-bottom: 2px solid #000;
-            margin: 10px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .section-title {
-            text-align: center;
-            font-weight: bold;
-            margin: 15px 0 10px 0;
-            padding: 0 2px;
-            font-size: 13px;
-            width: 100%;
-        }
-        .section-title::before,
-        .section-title::after {
-            content: "== ";
-        }
-        .section-title::after {
-            content: " ==";
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
-        }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
-        @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="content">
-        <div class="center title">CORTE DEL TURNO</div>
-        <div class="center">CORTE DE TURNO #${reportNumber}</div>
-        
-        <div class="line"></div>
-        
-        <div class="row">
-            <span> REALIZADO:</span>
-            <span>${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
-        </div>
-        <div class="row">
-            <span>CAJERO:</span>
-            <span>ADMINISTRADOR</span>
-        </div>
-        <div class="row">
-            <span>VENTAS TOTALES:</span>
-            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>GANANCIA:</span>
-            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
-        </div>
-        
-        <div class="center" style="margin: 15px 0;">
-            <strong>${daySales.length} VENTAS EN EL TURNO.</strong>
-        </div>
-        
-        <div class="section-title">DINERO EN CAJA</div>
-        
-        <div class="row">
-            <span>FONDO DE CAJA:</span>
-            <span class="right-align">$500.00</span>
-        </div>
-        <div class="row">
-            <span>VENTAS EN EFECTIVO:</span>
-            <span class="right-align">+ $${totalCash.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>ABONOS EN EFECTIVO:</span>
-            <span class="right-align">+ $0.00</span>
-        </div>
-        <div class="row">
-            <span>ENTRADAS:</span>
-            <span class="right-align">+ $0.00</span>
-        </div>
-        <div class="row">
-            <span>SALIDAS:</span>
-            <span class="right-align">- $0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
-        </div>
-        
-        <div class="section-title">ENTRADAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>ENTRADA DE DINERO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL ENTRADAS</span>
-            <span class="right-align">= $0.00</span>
-        </div>
-        
-        <div class="section-title">SALIDAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>SALIDA DE CAJA</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL SALIDAS</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        
-        <div class="section-title">VENTAS</div>
-        
-        <div class="row">
-            <span>EN EFECTIVO</span>
-            <span class="right-align">$${totalCash.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CON TARJETA</span>
-            <span class="right-align">$${totalCard.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>A CREDITO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="row">
-            <span>CON VALES</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL VENTAS</span>
-            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
-        </div>
-        
-        <div class="section-title">VENTAS POR DEPTO</div>
-        
-        <div class="row">
-            <span>MEDICAMENTOS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CUIDADO PERSONAL</span>
-            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>VITAMINAS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
-        </div>
-        
-        <div class="double-line"></div>
-        
-        <div class="center small" style="margin-top: 15px;">
-            <div><strong>FARMACIA SOLIDARIA</strong></div>
-            <div>Cuidando la salud de nuestra comunidad</div>
-            <div>Tel: (555) 123-4567</div>
-            <div style="margin-top: 8px;">
-                Período: ${getFilterDescription()}<br>
-                ${countCash} ventas efectivo, ${countCard} ventas tarjeta
-            </div>
-            <div style="margin-top: 8px; font-size: 9px;">
-                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
-            </div>
-            
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-      `
-
-      const printWindow = window.open("", "_blank", "width=400,height=600")
-      if (printWindow) {
-        printWindow.document.write(reportContent)
-        printWindow.document.close()
-        printWindow.focus()
-        setTimeout(() => {
-          printWindow.print()
-          printWindow.close()
-        }, 250)
-      }
-    }
-
     setShowDateDialog(true)
   }
 
@@ -572,6 +245,19 @@ export default function SalesReports() {
         const saleDate = new Date(sale.created_at)
         return saleDate >= dateStart && saleDate < dateEnd
       })
+
+      // Lógica dinámica para calcular secciones reales
+      const salesBySection: Record<string, number> = {}
+      daySales.forEach(sale => {
+        if (sale.status === "cancelled") return;
+        sale.sale_items?.forEach(item => {
+          const sectionName = item.products?.section || 'GENERAL';
+          if (!salesBySection[sectionName]) {
+            salesBySection[sectionName] = 0;
+          }
+          salesBySection[sectionName] += (item.quantity * item.unit_price);
+        });
+      });
 
       const totalCash = daySales
         .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
@@ -600,7 +286,7 @@ export default function SalesReports() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Corte del Turno - Farmacia Solidaria</title>
+    <title>Corte del Turno - Farmacia Bienestar</title>
     <style>
         * {
             margin: 0;
@@ -750,10 +436,6 @@ export default function SalesReports() {
             <span>VENTAS TOTALES:</span>
             <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
         </div>
-        <div class="row">
-            <span>GANANCIA:</span>
-            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
-        </div>
         
         <div class="center" style="margin: 15px 0;">
             <strong>${daySales.length} VENTAS EN EL TURNO.</strong>
@@ -787,30 +469,6 @@ export default function SalesReports() {
             <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
         </div>
         
-        <div class="section-title">ENTRADAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>ENTRADA DE DINERO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL ENTRADAS</span>
-            <span class="right-align">= $0.00</span>
-        </div>
-        
-        <div class="section-title">SALIDAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>SALIDA DE CAJA</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL SALIDAS</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        
         <div class="section-title">VENTAS</div>
         
         <div class="row">
@@ -825,10 +483,6 @@ export default function SalesReports() {
             <span>A CREDITO</span>
             <span class="right-align">$0.00</span>
         </div>
-        <div class="row">
-            <span>CON VALES</span>
-            <span class="right-align">$0.00</span>
-        </div>
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>TOTAL VENTAS</span>
@@ -837,24 +491,26 @@ export default function SalesReports() {
         
         <div class="section-title">VENTAS POR DEPTO</div>
         
-        <div class="row">
-            <span>MEDICAMENTOS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CUIDADO PERSONAL</span>
-            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>VITAMINAS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
-        </div>
+        ${Object.entries(salesBySection).length > 0 
+          ? Object.entries(salesBySection).map(([section, total]) => `
+              <div class="row">
+                  <span>${section.toUpperCase()}</span>
+                  <span class="right-align">$${Number(total).toFixed(2)}</span>
+              </div>
+            `).join('')
+          : `
+             <div class="row">
+                  <span>SIN DEPARTAMENTOS</span>
+                  <span class="right-align">$0.00</span>
+             </div>
+            `
+        }
         
         <div class="double-line"></div>
         
         <div class="center small" style="margin-top: 15px;">
-            <div><strong>FARMACIA SOLIDARIA</strong></div>
-            <div>Cuidando la salud de nuestra comunidad</div>
+            <div><strong>FARMACIA BIENESTAR</strong></div>
+            <div>Tu salud es nuestro compromiso</div>
             <div>Tel: (555) 123-4567</div>
             <div style="margin-top: 8px;">
                 Período: ${getFilterDescription()}<br>
@@ -862,11 +518,11 @@ export default function SalesReports() {
             </div>
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
+                Sistema POS - Farmacia Bienestar v1.0
             </div>
             
             <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
+                <img src="/logo.jpeg" alt="Logo Farmacia" />
             </div>
         </div>
     </div>
@@ -1333,6 +989,19 @@ export default function SalesReports() {
                   <p className="text-xs text-muted-foreground">por transacción</p>
                 </CardContent>
               </Card>
+              
+              {/* Nuevo botón para Generar Reporte más visible */}
+              <Card className="bg-rose-50 border-rose-200">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-rose-900">Corte de Caja</CardTitle>
+                  <Printer className="h-4 w-4 text-rose-700" />
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <Button onClick={generateSalesReport} className="w-full bg-rose-800 hover:bg-rose-900">
+                    Generar Reporte de Ventas
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
 
             {chartData.length > 0 && (
@@ -1394,7 +1063,6 @@ export default function SalesReports() {
             ) : (
               <div className="space-y-6">
                 {Object.entries(showDeletedSales ? { cancelled: deletedSales } : salesByDay)
-                  // CORRECCIÓN: Ordenamiento de fechas robusto usando la fecha ISO
                   .sort((a, b) => {
                     if (a[0] === "cancelled") return 1
                     if (b[0] === "cancelled") return -1
