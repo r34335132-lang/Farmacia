@@ -36,7 +36,7 @@ export async function GET() {
           quantity,
           unit_price,
           subtotal,
-          products(name, barcode)
+          products(name, barcode, section)
         )
       `)
       .order("created_at", { ascending: false })
