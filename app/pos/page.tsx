@@ -698,6 +698,97 @@ export default function POSPage() {
     }
   }
 
+  // NUEVA FUNCIÓN: Corte de turno para el cajero
+  const handleCorteTurno = async () => {
+    try {
+      setProcessingPayment(true)
+      const startOfDay = new Date()
+      startOfDay.setHours(0, 0, 0, 0)
+
+      // 1. Obtener todas las ventas del cajero de hoy
+      const { data: todaySales, error } = await supabase
+        .from("sales")
+        .select(`
+          id, total_amount, payment_method, status, created_at,
+          sale_items(quantity, unit_price, subtotal, products(name, section))
+        `)
+        .eq("cashier_id", currentUser.id)
+        .gte("created_at", startOfDay.toISOString())
+
+      if (error) throw error
+
+      // 2. Calcular totales
+      const validSales = todaySales.filter((s) => s.status !== "cancelled")
+      const totalEfectivo = validSales
+        .filter((s) => s.payment_method === "efectivo")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+      const totalTarjeta = validSales
+        .filter((s) => s.payment_method === "tarjeta")
+        .reduce((sum, s) => sum + Number(s.total_amount), 0)
+      const totalVentas = validSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
+
+      const saldoFinalCaja = boxBalance + totalEfectivo // $500 + efectivo
+
+      // 3. Generar Ticket de Corte
+      const ticketContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corte de Turno - Cajero</title>
+    <style>
+        body { font-family: 'Courier New', monospace; font-size: 12px; width: 55mm; margin: 0; padding: 2mm; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    </style>
+</head>
+<body>
+    <div class="center bold" style="font-size: 14px;">CORTE DE TURNO</div>
+    <div class="center">Farmacia Bienestar</div>
+    <div class="line"></div>
+    <div class="row"><span>FECHA:</span><span>${new Date().toLocaleDateString("es-ES")}</span></div>
+    <div class="row"><span>HORA:</span><span>${new Date().toLocaleTimeString("es-ES")}</span></div>
+    <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name}</span></div>
+    <div class="line"></div>
+
+    <div class="center bold">RESUMEN DE VENTAS</div>
+    <div class="row"><span>VENTAS TOTALES (${validSales.length}):</span><span>$${totalVentas.toFixed(2)}</span></div>
+    <div class="row"><span>PAGO EFECTIVO:</span><span>$${totalEfectivo.toFixed(2)}</span></div>
+    <div class="row"><span>PAGO TARJETA:</span><span>$${totalTarjeta.toFixed(2)}</span></div>
+    <div class="line"></div>
+
+    <div class="center bold">ARQUEO DE CAJA</div>
+    <div class="row"><span>FONDO INICIAL:</span><span>$${boxBalance.toFixed(2)}</span></div>
+    <div class="row"><span>ENTRADA EFECTIVO:</span><span>+$${totalEfectivo.toFixed(2)}</span></div>
+    <div class="line"></div>
+    <div class="row bold" style="font-size: 14px;">
+        <span>EFECTIVO EN CAJA:</span><span>$${saldoFinalCaja.toFixed(2)}</span>
+    </div>
+    <div class="line"></div>
+    <div class="center" style="margin-top: 10px;">Firma del Cajero</div>
+    <div class="line" style="margin-top: 30px;"></div>
+</body>
+</html>`
+
+      const printWindow = window.open("", "_blank", "width=400,height=600")
+      if (printWindow) {
+        printWindow.document.write(ticketContent)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+    } catch (error) {
+      console.error("Error al generar corte:", error)
+      alert("Hubo un error al generar el corte de turno.")
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/auth/login")
@@ -1009,6 +1100,10 @@ export default function POSPage() {
             <Button onClick={openExportDialog} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
               <Printer className="h-4 w-4 mr-2" />
               Exportar Inventario
+            </Button>
+            <Button onClick={handleCorteTurno} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <Banknote className="h-4 w-4 mr-2" />
+              Corte de Turno
             </Button>
             <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
               <LogOut className="h-4 w-4 mr-2" />
@@ -1634,7 +1729,7 @@ export default function POSPage() {
             <DialogDescription>
               {scannerMode === "camera"
                 ? "Apunta la cámara hacia el código QR"
-                : "Ingresa el código manualmente o usa la cámara"}
+                : "Ingresa el código manually o usa la cámara"}
             </DialogDescription>
           </DialogHeader>
 
