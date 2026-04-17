@@ -631,7 +631,7 @@ export default function POSPage() {
     }
   }
 
-  // NUEVA FUNCIÓN: Corte de turno por periodos
+  // NUEVA FUNCIÓN: Corte de turno ciego (sin totales visibles)
   const handleCorteTurno = async () => {
     try {
       setProcessingPayment(true)
@@ -639,59 +639,35 @@ export default function POSPage() {
       const startOfDay = new Date(now)
       startOfDay.setHours(0, 0, 0, 0)
 
-      // 1. Determinar desde qué hora buscar ventas
       let startTime = startOfDay
       const lastCutStr = localStorage.getItem(`lastCutTime_${currentUser.id}`)
 
       if (lastCutStr) {
         const lastCutDate = new Date(lastCutStr)
-        // Solo usamos el último corte si fue hecho HOY
         if (lastCutDate > startOfDay) {
           startTime = lastCutDate
         }
       }
 
-      // 2. Obtener todas las ventas del cajero desde el startTime hasta AHORA
-      const { data: shiftSales, error } = await supabase
-        .from("sales")
-        .select(`
-          id, total_amount, payment_method, status, created_at,
-          sale_items(quantity, unit_price, subtotal, products(name, section))
-        `)
-        .eq("cashier_id", currentUser.id)
-        .gte("created_at", startTime.toISOString())
-        .lte("created_at", now.toISOString())
-
-      if (error) throw error
-
-      // 3. Calcular totales del turno
-      const validSales = shiftSales.filter((s) => s.status !== "cancelled")
-      const totalEfectivo = validSales
-        .filter((s) => s.payment_method === "efectivo" || s.payment_method === "cash")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-      const totalTarjeta = validSales
-        .filter((s) => s.payment_method === "tarjeta" || s.payment_method === "card")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-      const totalVentas = validSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
-
-      const saldoFinalCaja = boxBalance + totalEfectivo
-
       const formatTime = (date: Date) => {
         return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
       }
 
-      // 4. Generar Ticket de Corte
+      // Ticket de Corte Ciego - Obliga al cajero a reportar sus propios totales contados
       const ticketContent = `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Corte de Turno - Cajero</title>
+    <title>Corte de Turno Ciego</title>
     <style>
         body { font-family: 'Courier New', monospace; font-size: 12px; width: 55mm; margin: 0; padding: 2mm; }
         .center { text-align: center; }
         .bold { font-weight: bold; }
         .line { border-bottom: 1px dashed #000; margin: 5px 0; }
         .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .mt-10 { margin-top: 15px; }
+        .mt-20 { margin-top: 35px; }
+        .box { margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -703,22 +679,41 @@ export default function POSPage() {
     <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name}</span></div>
     <div class="line"></div>
 
-    <div class="center bold">RESUMEN DEL TURNO</div>
-    <div class="row"><span>VENTAS TOTALES (${validSales.length}):</span><span>$${totalVentas.toFixed(2)}</span></div>
-    <div class="row"><span>PAGO EFECTIVO:</span><span>$${totalEfectivo.toFixed(2)}</span></div>
-    <div class="row"><span>PAGO TARJETA:</span><span>$${totalTarjeta.toFixed(2)}</span></div>
-    <div class="line"></div>
+    <div class="center bold mt-10">DECLARACIÓN DE VALORES</div>
+    <div class="center" style="font-size: 10px; margin-bottom: 15px;">(A llenar por el cajero)</div>
 
-    <div class="center bold">ARQUEO DE CAJA</div>
-    <div class="row"><span>FONDO INICIAL:</span><span>$${boxBalance.toFixed(2)}</span></div>
-    <div class="row"><span>ENTRADA EFECTIVO:</span><span>+$${totalEfectivo.toFixed(2)}</span></div>
-    <div class="line"></div>
-    <div class="row bold" style="font-size: 14px;">
-        <span>CAJA A ENTREGAR:</span><span>$${saldoFinalCaja.toFixed(2)}</span>
+    <div class="box">
+        <div>EFECTIVO CONTADO (Moneda y billete):</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
     </div>
-    <div class="line"></div>
-    <div class="center" style="margin-top: 10px;">Firma del Cajero</div>
-    <div class="line" style="margin-top: 30px;"></div>
+
+    <div class="box">
+        <div>VOUCHERS / TARJETA:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
+    </div>
+
+    <div class="box">
+        <div>VALES / OTROS:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
+    </div>
+    
+    <div class="box">
+        <div>FONDO DE CAJA FIJO:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$__${boxBalance.toFixed(2)}_____________</div>
+    </div>
+
+    <div class="mt-20 center">
+        ___________________________
+    </div>
+    <div class="center bold" style="margin-top: 5px;">
+        NOMBRE Y FIRMA
+    </div>
+    
+    <div class="line mt-10"></div>
+    <div class="center" style="font-size: 9px;">
+        Documento de control interno.<br>
+        Las diferencias seran reportadas por el administrador.
+    </div>
 </body>
 </html>`
 
@@ -731,15 +726,15 @@ export default function POSPage() {
           printWindow.print()
           printWindow.close()
           
-          // 5. Guardamos la hora actual como el último corte
+          // Guardamos la hora actual como el último corte
           localStorage.setItem(`lastCutTime_${currentUser.id}`, now.toISOString())
           
-          alert("✅ Corte impreso correctamente. El próximo corte incluirá las ventas a partir de este momento.")
+          alert("✅ Formato de corte ciego impreso correctamente. Llena los datos y entrega en administración.")
         }, 250)
       }
     } catch (error) {
       console.error("Error al generar corte:", error)
-      alert("Hubo un error al generar el corte de turno.")
+      alert("Hubo un error al imprimir el formato de corte.")
     } finally {
       setProcessingPayment(false)
     }
