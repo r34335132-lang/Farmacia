@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
+import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer, Clock } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
@@ -35,7 +35,7 @@ interface Sale {
     unit_price: number
     products: {
       name: string
-      section?: string // Agregado para poder agrupar por departamento
+      section?: string
     }
   }[]
 }
@@ -232,6 +232,41 @@ export default function SalesReports() {
     return totalRevenue() / filteredSales.length
   }
 
+  // --- NUEVA LÓGICA: Calcular Desglose por Turnos ---
+  const getShiftStats = () => {
+    let shift1Total = 0;
+    let shift1Count = 0;
+    let shift2Total = 0;
+    let shift2Count = 0;
+    let otherTotal = 0;
+    let otherCount = 0;
+
+    filteredSales.forEach((sale) => {
+      const date = new Date(sale.created_at);
+      const hours = date.getHours(); // 0 a 23
+      const amount = Number(sale.total_amount);
+
+      if (hours >= 9 && hours < 15) {
+        // Matutino: 9:00 AM a 2:59 PM
+        shift1Total += amount;
+        shift1Count++;
+      } else if (hours >= 15 && hours < 21) {
+        // Vespertino: 3:00 PM a 8:59 PM
+        shift2Total += amount;
+        shift2Count++;
+      } else {
+        // Fuera de horario (Noche/Madrugada)
+        otherTotal += amount;
+        otherCount++;
+      }
+    });
+
+    return { shift1Total, shift1Count, shift2Total, shift2Count, otherTotal, otherCount };
+  };
+
+  const shiftStats = getShiftStats();
+  // ----------------------------------------------------
+
   const generateSalesReport = () => {
     setShowDateDialog(true)
   }
@@ -246,7 +281,6 @@ export default function SalesReports() {
         return saleDate >= dateStart && saleDate < dateEnd
       })
 
-      // Lógica dinámica para calcular secciones reales
       const salesBySection: Record<string, number> = {}
       daySales.forEach(sale => {
         if (sale.status === "cancelled") return;
@@ -519,10 +553,6 @@ export default function SalesReports() {
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
                 Sistema POS - Farmacia Bienestar v1.0
-            </div>
-            
-            <div class="footer-logo">
-                <img src="/logo.jpeg" alt="Logo Farmacia" />
             </div>
         </div>
     </div>
@@ -990,7 +1020,6 @@ export default function SalesReports() {
                 </CardContent>
               </Card>
               
-              {/* Nuevo botón para Generar Reporte más visible */}
               <Card className="bg-rose-50 border-rose-200">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-rose-900">Corte de Caja</CardTitle>
@@ -1003,6 +1032,44 @@ export default function SalesReports() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* NUEVA SECCIÓN: DESGLOSE POR TURNOS */}
+            <Card className="mb-8 border-slate-200 shadow-sm">
+              <CardHeader className="bg-slate-50 border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <Clock className="h-5 w-5 text-slate-600" />
+                  Desglose de Ventas por Turnos
+                </CardTitle>
+                <CardDescription>
+                  Resumen automático del periodo seleccionado (Matutino: 9am-3pm | Vespertino: 3pm-9pm)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100">
+                    <div className="text-sm text-orange-600 font-semibold mb-1">Turno Matutino (9:00 AM - 3:00 PM)</div>
+                    <div className="text-2xl font-bold text-orange-800">${shiftStats.shift1Total.toFixed(2)}</div>
+                    <div className="text-xs text-orange-600 mt-1">{shiftStats.shift1Count} ventas</div>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <div className="text-sm text-indigo-600 font-semibold mb-1">Turno Vespertino (3:00 PM - 9:00 PM)</div>
+                    <div className="text-2xl font-bold text-indigo-800">${shiftStats.shift2Total.toFixed(2)}</div>
+                    <div className="text-xs text-indigo-600 mt-1">{shiftStats.shift2Count} ventas</div>
+                  </div>
+                  <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
+                    <div className="text-sm text-emerald-800 font-semibold mb-1">Total de Ambos Turnos</div>
+                    <div className="text-2xl font-bold text-emerald-900">${(shiftStats.shift1Total + shiftStats.shift2Total).toFixed(2)}</div>
+                    <div className="text-xs text-emerald-700 mt-1">{shiftStats.shift1Count + shiftStats.shift2Count} ventas conjuntas</div>
+                  </div>
+                </div>
+                {shiftStats.otherCount > 0 && (
+                  <div className="mt-4 p-3 bg-slate-100 rounded-lg text-sm text-slate-600 flex items-center gap-2 border border-slate-200">
+                    <span className="font-semibold">⚠️ Ojo:</span> 
+                    Hay {shiftStats.otherCount} venta(s) registradas fuera de estos horarios por un total de <strong>${shiftStats.otherTotal.toFixed(2)}</strong>.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {chartData.length > 0 && (
               <Card>
