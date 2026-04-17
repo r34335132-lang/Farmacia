@@ -232,7 +232,7 @@ export default function SalesReports() {
     return totalRevenue() / filteredSales.length
   }
 
-  // --- NUEVA LÓGICA: Calcular Desglose por Turnos ---
+  // --- LÓGICA: Calcular Desglose por Turnos ---
   const getShiftStats = () => {
     let shift1Total = 0;
     let shift1Count = 0;
@@ -243,20 +243,16 @@ export default function SalesReports() {
 
     filteredSales.forEach((sale) => {
       const date = new Date(sale.created_at);
-      const hours = date.getHours(); // 0 a 23
-      const amount = Number(sale.total_amount);
+      const hours = date.getHours(); 
 
       if (hours >= 9 && hours < 15) {
-        // Matutino: 9:00 AM a 2:59 PM
-        shift1Total += amount;
+        shift1Total += Number(sale.total_amount);
         shift1Count++;
       } else if (hours >= 15 && hours < 21) {
-        // Vespertino: 3:00 PM a 8:59 PM
-        shift2Total += amount;
+        shift2Total += Number(sale.total_amount);
         shift2Count++;
       } else {
-        // Fuera de horario (Noche/Madrugada)
-        otherTotal += amount;
+        otherTotal += Number(sale.total_amount);
         otherCount++;
       }
     });
@@ -322,132 +318,28 @@ export default function SalesReports() {
 <head>
     <title>Corte del Turno - Farmacia Bienestar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .subtitle {
-            font-size: 13px;
-            margin-bottom: 10px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .double-line {
-            border-bottom: 2px solid #000;
-            margin: 10px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .section-title {
-            text-align: center;
-            font-weight: bold;
-            margin: 15px 0 10px 0;
-            padding: 0 2px;
-            font-size: 13px;
-            width: 100%;
-        }
-        .section-title::before,
-        .section-title::after {
-            content: "== ";
-        }
-        .section-title::after {
-            content: " ==";
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
-        }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0 !important; padding: 0 !important; width: 55mm; max-width: 55mm; background: white; color: #000; line-height: 1.4; }
+        .content { width: 100%; max-width: 55mm; margin: 0; padding: 2mm; box-sizing: border-box; }
+        .center { text-align: center; margin-bottom: 5px; width: 100%; }
+        .title { font-size: 15px; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .line { border-bottom: 1px solid #000; margin: 8px 0; width: 100%; }
+        .double-line { border-bottom: 2px solid #000; margin: 10px 0; width: 100%; }
+        .dashed-line { border-bottom: 1px dashed #000; margin: 5px 0; width: 100%; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; width: 100%; }
+        .section-title { text-align: center; font-weight: bold; margin: 15px 0 10px 0; padding: 0 2px; font-size: 13px; width: 100%; }
+        .section-title::before, .section-title::after { content: "== "; }
+        .section-title::after { content: " =="; }
+        .right-align { text-align: right; }
+        .bold { font-weight: bold; }
+        .small { font-size: 10px; }
+        .footer-logo { margin-top: 10px; text-align: center; width: 100%; }
+        .footer-logo img { width: 100%; max-width: 51mm; height: auto; display: block; margin: 0 auto; }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
+            * { margin: 0 !important; padding: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; width: 55mm !important; max-width: 55mm !important; }
+            .content { width: 55mm !important; max-width: 55mm !important; margin: 0 !important; padding: 2mm !important; box-sizing: border-box !important; }
+            @page { size: 55mm auto; margin: 0 !important; }
         }
     </style>
 </head>
@@ -633,95 +525,22 @@ export default function SalesReports() {
 <head>
     <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0 !important; padding: 0 !important; width: 55mm; max-width: 55mm; background: white; color: #000; line-height: 1.4; }
+        .content { width: 100%; max-width: 55mm; margin: 0; padding: 2mm; box-sizing: border-box; }
+        .center { text-align: center; margin-bottom: 5px; width: 100%; }
+        .title { font-size: 15px; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .line { border-bottom: 1px solid #000; margin: 8px 0; width: 100%; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; width: 100%; }
+        .item-row { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 11px; width: 100%; }
+        .right-align { text-align: right; }
+        .bold { font-weight: bold; }
+        .small { font-size: 10px; }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
+            * { margin: 0 !important; padding: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; width: 55mm !important; max-width: 55mm !important; }
+            .content { width: 55mm !important; max-width: 55mm !important; margin: 0 !important; padding: 2mm !important; box-sizing: border-box !important; }
+            @page { size: 55mm auto; margin: 0 !important; }
         }
     </style>
 </head>
@@ -771,7 +590,7 @@ export default function SalesReports() {
             .join("") || ""
         }
         
-        <div class="dashed-line"></div>
+        <div class="line"></div>
         
         <div class="row bold">
             <span>TOTAL:</span>
@@ -810,9 +629,43 @@ export default function SalesReports() {
     }
   }
 
-  useEffect(() => {
-    filterSales()
-  }, [filterSales])
+  // Componente extraído para renderizar la lista de ventas individualmente
+  const renderSaleItem = (sale: Sale) => (
+    <div key={sale.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors bg-white">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm">#{sale.id.slice(-8)}</span>
+          <Badge variant={sale.payment_method === "efectivo" || sale.payment_method === "cash" ? "default" : "secondary"}>
+            {sale.payment_method}
+          </Badge>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {new Date(sale.created_at).toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          {" • "}
+          {sale.profiles?.full_name || "N/A"}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {sale.sale_items?.length || 0} {sale.sale_items?.length === 1 ? "producto" : "productos"}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <div className="text-xl font-bold">${Number(sale.total_amount).toFixed(2)}</div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => reprintTicket(sale)} title="Reimprimir ticket">
+            <Printer className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => cancelSale(sale.id)} title="Cancelar venta">
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 
   if (loading) {
     return (
@@ -890,8 +743,8 @@ export default function SalesReports() {
                             <td className="p-3">{timeStr}</td>
                             <td className="p-3">{sale.profiles?.full_name || "Desconocido"}</td>
                             <td className="p-3">
-                              <Badge variant={sale.payment_method === "cash" ? "default" : "secondary"}>
-                                {sale.payment_method === "cash" ? "Efectivo" : "Tarjeta"}
+                              <Badge variant={sale.payment_method === "cash" || sale.payment_method === "efectivo" ? "default" : "secondary"}>
+                                {sale.payment_method}
                               </Badge>
                             </td>
                             <td className="p-3 text-right font-semibold">${Number(sale.total_amount).toFixed(2)}</td>
@@ -934,8 +787,8 @@ export default function SalesReports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="cash">Efectivo</SelectItem>
-                  <SelectItem value="card">Tarjeta</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta">Tarjeta</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -1033,7 +886,6 @@ export default function SalesReports() {
               </Card>
             </div>
 
-            {/* NUEVA SECCIÓN: DESGLOSE POR TURNOS */}
             <Card className="mb-8 border-slate-200 shadow-sm">
               <CardHeader className="bg-slate-50 border-b border-slate-100">
                 <CardTitle className="flex items-center gap-2 text-slate-800">
@@ -1113,7 +965,7 @@ export default function SalesReports() {
               </Card>
             )}
 
-            {/* Sales grouped by day */}
+            {/* Sales grouped by day WITH SHIFT SEPARATION */}
             {(!showDeletedSales && (Object.keys(salesByDay).length === 0 || filteredSales.length === 0)) ||
             (showDeletedSales && deletedSales.length === 0) ? (
               <Card>
@@ -1138,6 +990,8 @@ export default function SalesReports() {
                     return timeB - timeA
                   })
                   .map(([date, daySales]) => {
+                    
+                    // Si estamos viendo ventas eliminadas, las renderizamos normalmente sin separarlas por turno
                     if (date === "cancelled") {
                       return (
                         <Card key={date}>
@@ -1217,78 +1071,90 @@ export default function SalesReports() {
                         </Card>
                       )
                     }
+
+                    // --- Lógica para separar el día por turnos ---
                     const dayTotal = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+                    
+                    const shift1Sales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h >= 9 && h < 15
+                    })
+                    const shift2Sales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h >= 15 && h < 21
+                    })
+                    const otherSales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h < 9 || h >= 21
+                    })
+                    // ---------------------------------------------
+
                     return (
                       <Card key={date}>
-                        <CardHeader>
+                        <CardHeader className="bg-slate-50 border-b">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary" />
+                              <Calendar className="h-5 w-5 text-slate-700" />
                               <div>
                                 <CardTitle className="text-xl capitalize">{date}</CardTitle>
                                 <CardDescription>
-                                  {daySales.length} {daySales.length === 1 ? "venta" : "ventas"} registradas
+                                  {daySales.length} {daySales.length === 1 ? "venta en total" : "ventas en total este día"}
                                 </CardDescription>
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-2xl font-bold text-primary">{dayTotal.toFixed(2)}</div>
+                              <div className="text-2xl font-bold text-slate-800">${dayTotal.toFixed(2)}</div>
                             </div>
                           </div>
                         </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {daySales.map((sale) => (
-                              <div
-                                key={sale.id}
-                                className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-sm">#{sale.id.slice(-8)}</span>
-                                    <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
-                                      {sale.payment_method}
-                                    </Badge>
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {new Date(sale.created_at).toLocaleTimeString("es-ES", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                    {" • "}
-                                    {sale.profiles?.full_name || "N/A"}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {sale.sale_items?.length || 0}{" "}
-                                    {sale.sale_items?.length === 1 ? "producto" : "productos"}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="text-right">
-                                    <div className="text-xl font-bold">{Number(sale.total_amount).toFixed(2)}</div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={() => reprintTicket(sale)}
-                                      title="Reimprimir ticket"
-                                    >
-                                      <Printer className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={() => cancelSale(sale.id)}
-                                      title="Cancelar venta"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
+                        
+                        <CardContent className="pt-6">
+                          
+                          {/* TURNO MATUTINO */}
+                          {shift1Sales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-orange-800">☀️ Turno Matutino (9:00 AM - 3:00 PM)</span>
+                                <span className="font-bold text-orange-900">
+                                  ${shift1Sales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
                               </div>
-                            ))}
-                          </div>
+                              <div className="space-y-3">
+                                {shift1Sales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* TURNO VESPERTINO */}
+                          {shift2Sales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-indigo-800">🌆 Turno Vespertino (3:00 PM - 9:00 PM)</span>
+                                <span className="font-bold text-indigo-900">
+                                  ${shift2Sales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="space-y-3">
+                                {shift2Sales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OTROS HORARIOS */}
+                          {otherSales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-slate-100 border border-slate-200 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-slate-700">🌙 Otros Horarios</span>
+                                <span className="font-bold text-slate-800">
+                                  ${otherSales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="space-y-3">
+                                {otherSales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
                         </CardContent>
                       </Card>
                     )
