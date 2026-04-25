@@ -414,12 +414,37 @@ export default function POSPage() {
         subtotal: item.subtotal,
       }))
 
-      // 3. Insertamos los items (Trigger actualiza el stock automáticamente)
+      // 3. Insertamos los items de la venta
       const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
-
       if (itemsError) throw itemsError
 
-      // 4. Generamos el ticket y limpiamos
+      // 4. DESCONTAR EL STOCK MANUALMENTE Y REGISTRAR MOVIMIENTOS
+      for (const item of cart) {
+        // A. Actualizar la cantidad en la tabla products
+        const { error: stockError } = await supabase
+          .from("products")
+          .update({
+            stock_quantity: item.product.stock_quantity - item.quantity,
+          })
+          .eq("id", item.product.id)
+
+        if (stockError) throw stockError
+
+        // B. Registrar el movimiento de salida
+        const { error: movementError } = await supabase.from("stock_movements").insert([
+          {
+            product_id: item.product.id,
+            movement_type: "salida",
+            quantity: item.quantity,
+            reason: `Venta POS #${sale.id.slice(-8)}`,
+            user_id: currentUser.id,
+          },
+        ])
+        
+        if (movementError) console.error("Error registrando movimiento:", movementError)
+      }
+
+      // 5. Generamos el ticket y limpiamos
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
@@ -430,6 +455,7 @@ export default function POSPage() {
       setCashReceived("")
       setPaymentMethod("efectivo")
 
+      // Recargamos los productos para actualizar el stock en pantalla
       loadProducts()
     } catch (error) {
       console.error("Error processing payment:", error)
