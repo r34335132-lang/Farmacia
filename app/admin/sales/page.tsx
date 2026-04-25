@@ -227,6 +227,11 @@ export default function SalesReports() {
     setChartData(chartDataArray)
   }, [sales, dateFilter, paymentFilter, searchTerm])
 
+  // AQUÍ ESTÁ EL ARREGLO PARA QUE LAS VENTAS APAREZCAN
+  useEffect(() => {
+    filterSales()
+  }, [filterSales])
+
   const getAverageTicket = () => {
     if (filteredSales.length === 0) return 0
     return totalRevenue() / filteredSales.length
@@ -426,8 +431,8 @@ export default function SalesReports() {
             `).join('')
           : `
              <div class="row">
-                  <span>SIN DEPARTAMENTOS</span>
-                  <span class="right-align">$0.00</span>
+                 <span>SIN DEPARTAMENTOS</span>
+                 <span class="right-align">$0.00</span>
              </div>
             `
         }
