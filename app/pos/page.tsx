@@ -202,8 +202,6 @@ export default function POSPage() {
       const response = await fetch("/api/products")
       const { products: data, total } = await response.json()
 
-      
-
       const activeProducts = data.filter((p: any) => p.is_active !== false)
       setProducts(activeProducts)
       setCurrentPage(1)
@@ -292,6 +290,11 @@ export default function POSPage() {
   }
 
   const addToCart = (product: Product) => {
+    if (product.stock_quantity < 1) {
+      alert("No hay suficiente stock")
+      return
+    }
+
     const existingItem = cart.find((item) => item.product.id === product.id)
 
     if (existingItem) {
@@ -378,6 +381,7 @@ export default function POSPage() {
       const discountValueNum = Number.parseFloat(discountValue || "0")
       const hasDiscount = discountValueNum > 0
 
+      // 1. Creamos la venta
       const { data: sale, error: saleError } = await supabase
         .from("sales")
         .insert([
@@ -401,6 +405,7 @@ export default function POSPage() {
 
       if (saleError) throw saleError
 
+      // 2. Preparamos los items
       const saleItems = cart.map((item) => ({
         sale_id: sale.id,
         product_id: item.product.id,
@@ -409,11 +414,13 @@ export default function POSPage() {
         subtotal: item.subtotal,
       }))
 
+      // 3. Insertamos los items de la venta
       const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
-
       if (itemsError) throw itemsError
 
+      // 4. DESCONTAR EL STOCK MANUALMENTE Y REGISTRAR MOVIMIENTOS
       for (const item of cart) {
+        // A. Actualizar la cantidad en la tabla products
         const { error: stockError } = await supabase
           .from("products")
           .update({
@@ -423,17 +430,21 @@ export default function POSPage() {
 
         if (stockError) throw stockError
 
-        await supabase.from("stock_movements").insert([
+        // B. Registrar el movimiento de salida
+        const { error: movementError } = await supabase.from("stock_movements").insert([
           {
             product_id: item.product.id,
             movement_type: "salida",
-            quantity: -item.quantity,
-            reason: `Venta #${sale.id}`,
+            quantity: item.quantity,
+            reason: `Venta POS #${sale.id.slice(-8)}`,
             user_id: currentUser.id,
           },
         ])
+        
+        if (movementError) console.error("Error registrando movimiento:", movementError)
       }
 
+      // 5. Generamos el ticket y limpiamos
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
@@ -444,6 +455,7 @@ export default function POSPage() {
       setCashReceived("")
       setPaymentMethod("efectivo")
 
+      // Recargamos los productos para actualizar el stock en pantalla
       loadProducts()
     } catch (error) {
       console.error("Error processing payment:", error)
@@ -469,11 +481,7 @@ export default function POSPage() {
 <head>
     <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Courier New', monospace; 
             font-size: 13px;
@@ -485,82 +493,22 @@ export default function POSPage() {
             color: #000;
             line-height: 1.4;
         }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
-        .discount {
-            color: #000;
-        }
+        .content { width: 100%; max-width: 55mm; margin: 0; padding: 2mm; box-sizing: border-box; }
+        .center { text-align: center; margin-bottom: 5px; width: 100%; }
+        .title { font-size: 15px; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .line { border-bottom: 1px solid #000; margin: 8px 0; width: 100%; }
+        .dashed-line { border-bottom: 1px dashed #000; margin: 5px 0; width: 100%; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; width: 100%; }
+        .item-row { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 11px; width: 100%; }
+        .right-align { text-align: right; }
+        .bold { font-weight: bold; }
+        .small { font-size: 10px; }
+        .discount { color: #000; }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
+            * { margin: 0 !important; padding: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; width: 55mm !important; max-width: 55mm !important; }
+            .content { width: 55mm !important; max-width: 55mm !important; margin: 0 !important; padding: 2mm !important; box-sizing: border-box !important; }
+            @page { size: 55mm auto; margin: 0 !important; }
         }
     </style>
 </head>
@@ -706,6 +654,115 @@ export default function POSPage() {
         printWindow.print()
         printWindow.close()
       }, 250)
+    }
+  }
+
+  // NUEVA FUNCIÓN: Corte de turno ciego (sin totales visibles)
+  const handleCorteTurno = async () => {
+    try {
+      setProcessingPayment(true)
+      const now = new Date()
+      const startOfDay = new Date(now)
+      startOfDay.setHours(0, 0, 0, 0)
+
+      let startTime = startOfDay
+      const lastCutStr = localStorage.getItem(`lastCutTime_${currentUser.id}`)
+
+      if (lastCutStr) {
+        const lastCutDate = new Date(lastCutStr)
+        if (lastCutDate > startOfDay) {
+          startTime = lastCutDate
+        }
+      }
+
+      const formatTime = (date: Date) => {
+        return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
+      }
+
+      // Ticket de Corte Ciego - Obliga al cajero a reportar sus propios totales contados
+      const ticketContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corte de Turno Ciego</title>
+    <style>
+        body { font-family: 'Courier New', monospace; font-size: 12px; width: 55mm; margin: 0; padding: 2mm; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+        .mt-10 { margin-top: 15px; }
+        .mt-20 { margin-top: 35px; }
+        .box { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="center bold" style="font-size: 14px;">CORTE DE TURNO</div>
+    <div class="center">Farmacia Bienestar</div>
+    <div class="line"></div>
+    <div class="row"><span>FECHA:</span><span>${now.toLocaleDateString("es-ES")}</span></div>
+    <div class="row"><span>PERIODO:</span><span>${formatTime(startTime)} - ${formatTime(now)}</span></div>
+    <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name}</span></div>
+    <div class="line"></div>
+
+    <div class="center bold mt-10">DECLARACIÓN DE VALORES</div>
+    <div class="center" style="font-size: 10px; margin-bottom: 15px;">(A llenar por el cajero)</div>
+
+    <div class="box">
+        <div>EFECTIVO CONTADO (Moneda y billete):</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
+    </div>
+
+    <div class="box">
+        <div>VOUCHERS / TARJETA:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
+    </div>
+
+    <div class="box">
+        <div>VALES / OTROS:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$________________________</div>
+    </div>
+    
+    <div class="box">
+        <div>FONDO DE CAJA FIJO:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$__${boxBalance.toFixed(2)}_____________</div>
+    </div>
+
+    <div class="mt-20 center">
+        ___________________________
+    </div>
+    <div class="center bold" style="margin-top: 5px;">
+        NOMBRE Y FIRMA
+    </div>
+    
+    <div class="line mt-10"></div>
+    <div class="center" style="font-size: 9px;">
+        Documento de control interno.<br>
+        Las diferencias seran reportadas por el administrador.
+    </div>
+</body>
+</html>`
+
+      const printWindow = window.open("", "_blank", "width=400,height=600")
+      if (printWindow) {
+        printWindow.document.write(ticketContent)
+        printWindow.document.close()
+        printWindow.focus()
+        setTimeout(() => {
+          printWindow.print()
+          printWindow.close()
+          
+          // Guardamos la hora actual como el último corte
+          localStorage.setItem(`lastCutTime_${currentUser.id}`, now.toISOString())
+          
+          alert("✅ Formato de corte ciego impreso correctamente. Llena los datos y entrega en administración.")
+        }, 250)
+      }
+    } catch (error) {
+      console.error("Error al generar corte:", error)
+      alert("Hubo un error al imprimir el formato de corte.")
+    } finally {
+      setProcessingPayment(false)
     }
   }
 
@@ -994,7 +1051,6 @@ export default function POSPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50">
-      {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm">
         <div className="flex h-20 items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -1021,6 +1077,10 @@ export default function POSPage() {
               <Printer className="h-4 w-4 mr-2" />
               Exportar Inventario
             </Button>
+            <Button onClick={handleCorteTurno} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <Banknote className="h-4 w-4 mr-2" />
+              Corte de Turno
+            </Button>
             <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
               <LogOut className="h-4 w-4 mr-2" />
               Cerrar Sesión
@@ -1030,7 +1090,6 @@ export default function POSPage() {
       </header>
 
       <div className="flex h-[calc(100vh-5rem)]">
-        {/* Products Section */}
         <div className="flex-1 p-6 space-y-6 overflow-auto">
           <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
             <CardContent className="p-6">
@@ -1052,7 +1111,6 @@ export default function POSPage() {
             </CardContent>
           </Card>
 
-          {/* Welcome Message */}
           <Card className="bg-gradient-to-r from-rose-800 to-red-900 text-white border-0">
             <CardContent className="p-6">
               <div className="flex items-center gap-4">
@@ -1067,7 +1125,6 @@ export default function POSPage() {
             </CardContent>
           </Card>
 
-          {/* Barcode Scanner */}
           <Card className="border-rose-200 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
               <CardTitle className="flex items-center gap-2 text-rose-900">
@@ -1108,7 +1165,6 @@ export default function POSPage() {
             </CardContent>
           </Card>
 
-          {/* Product Search */}
           <Card className="border-rose-200 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
               <CardTitle className="text-rose-900">Buscar Medicamentos</CardTitle>
@@ -1132,7 +1188,6 @@ export default function POSPage() {
             {searchTerm && ` (filtrados de ${products.length} totales)`}
           </div>
 
-          {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {paginatedProducts.map((product) => {
               const promo = getProductPromotion(product.id)
@@ -1249,7 +1304,6 @@ export default function POSPage() {
                 </Button>
 
                 <div className="flex gap-2">
-                  {/* Show first page */}
                   <Button
                     onClick={() => setCurrentPage(1)}
                     variant={currentPage === 1 ? "default" : "outline"}
@@ -1262,10 +1316,8 @@ export default function POSPage() {
                     1
                   </Button>
 
-                  {/* Show ellipsis if needed */}
                   {currentPage > 3 && <span className="flex items-center px-2">...</span>}
 
-                  {/* Show pages around current page */}
                   {Array.from({ length: totalPages }, (_, i) => i + 1)
                     .filter((page) => page > 1 && page < totalPages && Math.abs(page - currentPage) <= 1)
                     .map((page) => (
@@ -1283,10 +1335,8 @@ export default function POSPage() {
                       </Button>
                     ))}
 
-                  {/* Show ellipsis if needed */}
                   {currentPage < totalPages - 2 && <span className="flex items-center px-2">...</span>}
 
-                  {/* Show last page */}
                   {totalPages > 1 && (
                     <Button
                       onClick={() => setCurrentPage(totalPages)}
@@ -1319,7 +1369,6 @@ export default function POSPage() {
           )}
         </div>
 
-        {/* Cart Section */}
         <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
@@ -1645,7 +1694,7 @@ export default function POSPage() {
             <DialogDescription>
               {scannerMode === "camera"
                 ? "Apunta la cámara hacia el código QR"
-                : "Ingresa el código manualmente o usa la cámara"}
+                : "Ingresa el código manually o usa la cámara"}
             </DialogDescription>
           </DialogHeader>
 
@@ -1752,7 +1801,6 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Export Inventory Dialog */}
       <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
         <DialogContent className="max-w-md border-rose-200">
           <DialogHeader>

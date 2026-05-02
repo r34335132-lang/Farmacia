@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer } from "lucide-react"
+import { ArrowLeft, Calendar, DollarSign, ShoppingCart, TrendingUp, Trash2, Printer, Clock } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
@@ -26,7 +26,7 @@ interface Sale {
   total_amount: number
   payment_method: string
   created_at: string
-  status?: string // Added status field
+  status?: string
   profiles: {
     full_name: string
   }
@@ -35,6 +35,7 @@ interface Sale {
     unit_price: number
     products: {
       name: string
+      section?: string
     }
   }[]
 }
@@ -54,7 +55,7 @@ export default function SalesReports() {
   const [chartData, setChartData] = useState<any[]>([])
   const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState("today")
+  const [dateFilter, setDateFilter] = useState("all")
   const [paymentFilter, setPaymentFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [showDateDialog, setShowDateDialog] = useState(false)
@@ -97,7 +98,8 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      const activeSales = (data.sales || []).filter((sale: Sale) => sale.status !== "cancelled")
+      const salesArray = data.sales || []
+      const activeSales = salesArray.filter((sale: Sale) => sale.status !== "cancelled")
       setSales(activeSales)
     } catch (error) {
       console.error("Error loading sales:", error)
@@ -113,8 +115,8 @@ export default function SalesReports() {
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
-      // Filter only cancelled sales
-      const cancelled = (data.sales || []).filter((sale: Sale) => sale.status === "cancelled")
+      const salesArray = data.sales || []
+      const cancelled = salesArray.filter((sale: Sale) => sale.status === "cancelled")
       setDeletedSales(cancelled)
     } catch (error) {
       console.error("Error loading deleted sales:", error)
@@ -147,7 +149,6 @@ export default function SalesReports() {
 
     const now = new Date()
     if (dateFilter === "today") {
-      // Get today's date in local timezone
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000)
 
@@ -163,17 +164,15 @@ export default function SalesReports() {
       filtered = filtered.filter((sale) => new Date(sale.created_at) >= monthAgo)
     }
 
-    // Payment method filter
     if (paymentFilter !== "all") {
       filtered = filtered.filter((sale) => sale.payment_method === paymentFilter)
     }
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (sale) =>
-          sale.profiles?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sale.id.toLowerCase().includes(searchTerm.toLowerCase()),
+          (sale.profiles?.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (sale.id || "").toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
@@ -196,7 +195,7 @@ export default function SalesReports() {
     setSalesByDay(grouped)
 
     const chartDataMap = filtered.reduce(
-      (acc: { [key: string]: { date: string; ventas: number; total: number; count: number } }, sale) => {
+      (acc: { [key: string]: { date: string; isoDate: string; ventas: number; total: number; count: number } }, sale) => {
         const dateKey = new Date(sale.created_at).toLocaleDateString("es-ES", {
           day: "2-digit",
           month: "short",
@@ -205,6 +204,7 @@ export default function SalesReports() {
         if (!acc[dateKey]) {
           acc[dateKey] = {
             date: dateKey,
+            isoDate: sale.created_at,
             ventas: 0,
             total: 0,
             count: 0,
@@ -221,345 +221,54 @@ export default function SalesReports() {
     )
 
     const chartDataArray = Object.values(chartDataMap).sort((a, b) => {
-      const dateA = new Date(a.date)
-      const dateB = new Date(b.date)
-      return dateA.getTime() - dateB.getTime()
+      return new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()
     })
 
     setChartData(chartDataArray)
   }, [sales, dateFilter, paymentFilter, searchTerm])
+
+  // AQUÍ ESTÁ EL ARREGLO PARA QUE LAS VENTAS APAREZCAN
+  useEffect(() => {
+    filterSales()
+  }, [filterSales])
 
   const getAverageTicket = () => {
     if (filteredSales.length === 0) return 0
     return totalRevenue() / filteredSales.length
   }
 
+  // --- LÓGICA: Calcular Desglose por Turnos ---
+  const getShiftStats = () => {
+    let shift1Total = 0;
+    let shift1Count = 0;
+    let shift2Total = 0;
+    let shift2Count = 0;
+    let otherTotal = 0;
+    let otherCount = 0;
+
+    filteredSales.forEach((sale) => {
+      const date = new Date(sale.created_at);
+      const hours = date.getHours(); 
+
+      if (hours >= 9 && hours < 15) {
+        shift1Total += Number(sale.total_amount);
+        shift1Count++;
+      } else if (hours >= 15 && hours < 21) {
+        shift2Total += Number(sale.total_amount);
+        shift2Count++;
+      } else {
+        otherTotal += Number(sale.total_amount);
+        otherCount++;
+      }
+    });
+
+    return { shift1Total, shift1Count, shift2Total, shift2Count, otherTotal, otherCount };
+  };
+
+  const shiftStats = getShiftStats();
+  // ----------------------------------------------------
+
   const generateSalesReport = () => {
-    const generateReport = (reportDate?: Date) => {
-      const targetDate = reportDate || new Date()
-      const dateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-      const dateEnd = new Date(dateStart.getTime() + 24 * 60 * 60 * 1000)
-
-      // Filter sales for the selected date
-      const daySales = sales.filter((sale) => {
-        const saleDate = new Date(sale.created_at)
-        return saleDate >= dateStart && saleDate < dateEnd
-      })
-
-      // Calculate totals for the selected date
-      const totalCash = daySales
-        .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-
-      const totalCard = daySales
-        .filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta")
-        .reduce((sum, s) => sum + Number(s.total_amount), 0)
-
-      const countCash = daySales.filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo").length
-      const countCard = daySales.filter((s) => s.payment_method === "card" || s.payment_method === "tarjeta").length
-
-      const getFilterDescription = () => {
-        return targetDate.toLocaleDateString("es-ES", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-      }
-
-      const totalRevenueValue = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
-      const reportNumber = Math.floor(Math.random() * 1000) + 1
-
-      const reportContent = `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Corte del Turno - Farmacia Solidaria</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .subtitle {
-            font-size: 13px;
-            margin-bottom: 10px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .double-line {
-            border-bottom: 2px solid #000;
-            margin: 10px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .section-title {
-            text-align: center;
-            font-weight: bold;
-            margin: 15px 0 10px 0;
-            padding: 0 2px;
-            font-size: 13px;
-            width: 100%;
-        }
-        .section-title::before,
-        .section-title::after {
-            content: "== ";
-        }
-        .section-title::after {
-            content: " ==";
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
-        }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
-        @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="content">
-        <div class="center title">CORTE DEL TURNO</div>
-        <div class="center">CORTE DE TURNO #${reportNumber}</div>
-        
-        <div class="line"></div>
-        
-        <div class="row">
-            <span> REALIZADO:</span>
-            <span>${new Date().toLocaleDateString("es-ES")} ${new Date().toLocaleTimeString("es-ES", { hour12: false })}</span>
-        </div>
-        <div class="row">
-            <span>CAJERO:</span>
-            <span>ADMINISTRADOR</span>
-        </div>
-        <div class="row">
-            <span>VENTAS TOTALES:</span>
-            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>GANANCIA:</span>
-            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
-        </div>
-        
-        <div class="center" style="margin: 15px 0;">
-            <strong>${daySales.length} VENTAS EN EL TURNO.</strong>
-        </div>
-        
-        <div class="section-title">DINERO EN CAJA</div>
-        
-        <div class="row">
-            <span>FONDO DE CAJA:</span>
-            <span class="right-align">$500.00</span>
-        </div>
-        <div class="row">
-            <span>VENTAS EN EFECTIVO:</span>
-            <span class="right-align">+ $${totalCash.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>ABONOS EN EFECTIVO:</span>
-            <span class="right-align">+ $0.00</span>
-        </div>
-        <div class="row">
-            <span>ENTRADAS:</span>
-            <span class="right-align">+ $0.00</span>
-        </div>
-        <div class="row">
-            <span>SALIDAS:</span>
-            <span class="right-align">- $0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>EFECTIVO EN CAJA =</span>
-            <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
-        </div>
-        
-        <div class="section-title">ENTRADAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>ENTRADA DE DINERO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL ENTRADAS</span>
-            <span class="right-align">= $0.00</span>
-        </div>
-        
-        <div class="section-title">SALIDAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>SALIDA DE CAJA</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL SALIDAS</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        
-        <div class="section-title">VENTAS</div>
-        
-        <div class="row">
-            <span>EN EFECTIVO</span>
-            <span class="right-align">$${totalCash.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CON TARJETA</span>
-            <span class="right-align">$${totalCard.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>A CREDITO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="row">
-            <span>CON VALES</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL VENTAS</span>
-            <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
-        </div>
-        
-        <div class="section-title">VENTAS POR DEPTO</div>
-        
-        <div class="row">
-            <span>MEDICAMENTOS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CUIDADO PERSONAL</span>
-            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>VITAMINAS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
-        </div>
-        
-        <div class="double-line"></div>
-        
-        <div class="center small" style="margin-top: 15px;">
-            <div><strong>FARMACIA SOLIDARIA</strong></div>
-            <div>Cuidando la salud de nuestra comunidad</div>
-            <div>Tel: (555) 123-4567</div>
-            <div style="margin-top: 8px;">
-                Período: ${getFilterDescription()}<br>
-                ${countCash} ventas efectivo, ${countCard} ventas tarjeta
-            </div>
-            <div style="margin-top: 8px; font-size: 9px;">
-                Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
-            </div>
-            
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-    `
-
-      const printWindow = window.open("", "_blank", "width=400,height=600")
-      if (printWindow) {
-        printWindow.document.write(reportContent)
-        printWindow.document.close()
-        printWindow.focus()
-        setTimeout(() => {
-          printWindow.print()
-          printWindow.close()
-        }, 250)
-      }
-    }
-
     setShowDateDialog(true)
   }
 
@@ -572,6 +281,18 @@ export default function SalesReports() {
         const saleDate = new Date(sale.created_at)
         return saleDate >= dateStart && saleDate < dateEnd
       })
+
+      const salesBySection: Record<string, number> = {}
+      daySales.forEach(sale => {
+        if (sale.status === "cancelled") return;
+        sale.sale_items?.forEach(item => {
+          const sectionName = item.products?.section || 'GENERAL';
+          if (!salesBySection[sectionName]) {
+            salesBySection[sectionName] = 0;
+          }
+          salesBySection[sectionName] += (item.quantity * item.unit_price);
+        });
+      });
 
       const totalCash = daySales
         .filter((s) => s.payment_method === "cash" || s.payment_method === "efectivo")
@@ -600,134 +321,30 @@ export default function SalesReports() {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Corte del Turno - Farmacia Solidaria</title>
+    <title>Corte del Turno - Farmacia Bienestar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .subtitle {
-            font-size: 13px;
-            margin-bottom: 10px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .double-line {
-            border-bottom: 2px solid #000;
-            margin: 10px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .section-title {
-            text-align: center;
-            font-weight: bold;
-            margin: 15px 0 10px 0;
-            padding: 0 2px;
-            font-size: 13px;
-            width: 100%;
-        }
-        .section-title::before,
-        .section-title::after {
-            content: "== ";
-        }
-        .section-title::after {
-            content: " ==";
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
-        .footer-logo {
-            margin-top: 10px;
-            text-align: center;
-            width: 100%;
-        }
-        .footer-logo img {
-            width: 100%;
-            max-width: 51mm;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0 !important; padding: 0 !important; width: 55mm; max-width: 55mm; background: white; color: #000; line-height: 1.4; }
+        .content { width: 100%; max-width: 55mm; margin: 0; padding: 2mm; box-sizing: border-box; }
+        .center { text-align: center; margin-bottom: 5px; width: 100%; }
+        .title { font-size: 15px; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .line { border-bottom: 1px solid #000; margin: 8px 0; width: 100%; }
+        .double-line { border-bottom: 2px solid #000; margin: 10px 0; width: 100%; }
+        .dashed-line { border-bottom: 1px dashed #000; margin: 5px 0; width: 100%; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; width: 100%; }
+        .section-title { text-align: center; font-weight: bold; margin: 15px 0 10px 0; padding: 0 2px; font-size: 13px; width: 100%; }
+        .section-title::before, .section-title::after { content: "== "; }
+        .section-title::after { content: " =="; }
+        .right-align { text-align: right; }
+        .bold { font-weight: bold; }
+        .small { font-size: 10px; }
+        .footer-logo { margin-top: 10px; text-align: center; width: 100%; }
+        .footer-logo img { width: 100%; max-width: 51mm; height: auto; display: block; margin: 0 auto; }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
+            * { margin: 0 !important; padding: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; width: 55mm !important; max-width: 55mm !important; }
+            .content { width: 55mm !important; max-width: 55mm !important; margin: 0 !important; padding: 2mm !important; box-sizing: border-box !important; }
+            @page { size: 55mm auto; margin: 0 !important; }
         }
     </style>
 </head>
@@ -749,10 +366,6 @@ export default function SalesReports() {
         <div class="row">
             <span>VENTAS TOTALES:</span>
             <span class="right-align">$${totalRevenueValue.toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>GANANCIA:</span>
-            <span class="right-align">$${(totalRevenueValue * 0.3).toFixed(2)}</span>
         </div>
         
         <div class="center" style="margin: 15px 0;">
@@ -787,30 +400,6 @@ export default function SalesReports() {
             <span class="right-align">$${(500 + totalCash).toFixed(2)}</span>
         </div>
         
-        <div class="section-title">ENTRADAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>ENTRADA DE DINERO</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL ENTRADAS</span>
-            <span class="right-align">= $0.00</span>
-        </div>
-        
-        <div class="section-title">SALIDAS EFECTIVO</div>
-        
-        <div class="row">
-            <span>SALIDA DE CAJA</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        <div class="dashed-line"></div>
-        <div class="row bold">
-            <span>TOTAL SALIDAS</span>
-            <span class="right-align">$0.00</span>
-        </div>
-        
         <div class="section-title">VENTAS</div>
         
         <div class="row">
@@ -825,10 +414,6 @@ export default function SalesReports() {
             <span>A CREDITO</span>
             <span class="right-align">$0.00</span>
         </div>
-        <div class="row">
-            <span>CON VALES</span>
-            <span class="right-align">$0.00</span>
-        </div>
         <div class="dashed-line"></div>
         <div class="row bold">
             <span>TOTAL VENTAS</span>
@@ -837,24 +422,26 @@ export default function SalesReports() {
         
         <div class="section-title">VENTAS POR DEPTO</div>
         
-        <div class="row">
-            <span>MEDICAMENTOS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.6).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>CUIDADO PERSONAL</span>
-            <span class="right-align">$${(totalRevenueValue * 0.25).toFixed(2)}</span>
-        </div>
-        <div class="row">
-            <span>VITAMINAS</span>
-            <span class="right-align">$${(totalRevenueValue * 0.15).toFixed(2)}</span>
-        </div>
+        ${Object.entries(salesBySection).length > 0 
+          ? Object.entries(salesBySection).map(([section, total]) => `
+              <div class="row">
+                  <span>${section.toUpperCase()}</span>
+                  <span class="right-align">$${Number(total).toFixed(2)}</span>
+              </div>
+            `).join('')
+          : `
+             <div class="row">
+                 <span>SIN DEPARTAMENTOS</span>
+                 <span class="right-align">$0.00</span>
+             </div>
+            `
+        }
         
         <div class="double-line"></div>
         
         <div class="center small" style="margin-top: 15px;">
-            <div><strong>FARMACIA SOLIDARIA</strong></div>
-            <div>Cuidando la salud de nuestra comunidad</div>
+            <div><strong>FARMACIA BIENESTAR</strong></div>
+            <div>Tu salud es nuestro compromiso</div>
             <div>Tel: (555) 123-4567</div>
             <div style="margin-top: 8px;">
                 Período: ${getFilterDescription()}<br>
@@ -862,11 +449,7 @@ export default function SalesReports() {
             </div>
             <div style="margin-top: 8px; font-size: 9px;">
                 Ticket generado el ${new Date().toLocaleString("es-ES")}<br>
-                Sistema POS - Farmacia Solidaria v1.0
-            </div>
-            
-            <div class="footer-logo">
-                <img src="/solidaria.jpg" alt="Logo Solidaria Salud" />
+                Sistema POS - Farmacia Bienestar v1.0
             </div>
         </div>
     </div>
@@ -895,7 +478,6 @@ export default function SalesReports() {
     }
 
     try {
-      // Fetch sale items first to get product quantities before deletion
       const { data: saleItems, error: fetchError } = await supabase
         .from("sale_items")
         .select("product_id, quantity")
@@ -903,21 +485,17 @@ export default function SalesReports() {
 
       if (fetchError) throw fetchError
 
-      // Get current user for stock movement record
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
-      // Restore inventory for each product
       for (const item of saleItems || []) {
-        // Get current stock quantity
         const { data: product } = await supabase
           .from("products")
           .select("stock_quantity")
           .eq("id", item.product_id)
           .single()
 
-        // Update stock by adding back the sold quantity
         await supabase
           .from("products")
           .update({
@@ -926,7 +504,6 @@ export default function SalesReports() {
           })
           .eq("id", item.product_id)
 
-        // Create reverse stock movement record for audit trail
         await supabase.from("stock_movements").insert({
           product_id: item.product_id,
           movement_type: "entrada",
@@ -936,10 +513,8 @@ export default function SalesReports() {
         })
       }
 
-      // Update sale status to 'cancelled'
       await supabase.from("sales").update({ status: "cancelled" }).eq("id", saleId)
 
-      // Reload sales to update the list
       loadSales()
       alert("Venta cancelada exitosamente y stock restaurado")
     } catch (error) {
@@ -955,95 +530,22 @@ export default function SalesReports() {
 <head>
     <title>Ticket de Venta - Farmacia Bienestar</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 13px;
-            margin: 0 !important; 
-            padding: 0 !important;
-            width: 55mm;
-            max-width: 55mm;
-            background: white;
-            color: #000;
-            line-height: 1.4;
-        }
-        .content {
-            width: 100%;
-            max-width: 55mm;
-            margin: 0;
-            padding: 2mm;
-            box-sizing: border-box;
-        }
-        .center {
-            text-align: center;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .title {
-            font-size: 15px;
-            font-weight: bold;
-            margin-bottom: 5px;
-            width: 100%;
-        }
-        .line {
-            border-bottom: 1px solid #000;
-            margin: 8px 0;
-            width: 100%;
-        }
-        .dashed-line {
-            border-bottom: 1px dashed #000;
-            margin: 5px 0;
-            width: 100%;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2px;
-            font-size: 12px;
-            width: 100%;
-        }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 1px;
-            font-size: 11px;
-            width: 100%;
-        }
-        .right-align {
-            text-align: right;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        .small {
-            font-size: 10px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Courier New', monospace; font-size: 13px; margin: 0 !important; padding: 0 !important; width: 55mm; max-width: 55mm; background: white; color: #000; line-height: 1.4; }
+        .content { width: 100%; max-width: 55mm; margin: 0; padding: 2mm; box-sizing: border-box; }
+        .center { text-align: center; margin-bottom: 5px; width: 100%; }
+        .title { font-size: 15px; font-weight: bold; margin-bottom: 5px; width: 100%; }
+        .line { border-bottom: 1px solid #000; margin: 8px 0; width: 100%; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 12px; width: 100%; }
+        .item-row { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 11px; width: 100%; }
+        .right-align { text-align: right; }
+        .bold { font-weight: bold; }
+        .small { font-size: 10px; }
         @media print {
-            * {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            html, body { 
-                margin: 0 !important; 
-                padding: 0 !important; 
-                width: 55mm !important;
-                max-width: 55mm !important;
-            }
-            .content { 
-                width: 55mm !important;
-                max-width: 55mm !important;
-                margin: 0 !important;
-                padding: 2mm !important;
-                box-sizing: border-box !important;
-            }
-            @page {
-                size: 55mm auto;
-                margin: 0 !important;
-            }
+            * { margin: 0 !important; padding: 0 !important; }
+            html, body { margin: 0 !important; padding: 0 !important; width: 55mm !important; max-width: 55mm !important; }
+            .content { width: 55mm !important; max-width: 55mm !important; margin: 0 !important; padding: 2mm !important; box-sizing: border-box !important; }
+            @page { size: 55mm auto; margin: 0 !important; }
         }
     </style>
 </head>
@@ -1093,7 +595,7 @@ export default function SalesReports() {
             .join("") || ""
         }
         
-        <div class="dashed-line"></div>
+        <div class="line"></div>
         
         <div class="row bold">
             <span>TOTAL:</span>
@@ -1132,9 +634,43 @@ export default function SalesReports() {
     }
   }
 
-  useEffect(() => {
-    filterSales()
-  }, [filterSales])
+  // Componente extraído para renderizar la lista de ventas individualmente
+  const renderSaleItem = (sale: Sale) => (
+    <div key={sale.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors bg-white">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm">#{sale.id.slice(-8)}</span>
+          <Badge variant={sale.payment_method === "efectivo" || sale.payment_method === "cash" ? "default" : "secondary"}>
+            {sale.payment_method}
+          </Badge>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {new Date(sale.created_at).toLocaleTimeString("es-ES", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          {" • "}
+          {sale.profiles?.full_name || "N/A"}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {sale.sale_items?.length || 0} {sale.sale_items?.length === 1 ? "producto" : "productos"}
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="text-right">
+          <div className="text-xl font-bold">${Number(sale.total_amount).toFixed(2)}</div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => reprintTicket(sale)} title="Reimprimir ticket">
+            <Printer className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => cancelSale(sale.id)} title="Cancelar venta">
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 
   if (loading) {
     return (
@@ -1160,14 +696,12 @@ export default function SalesReports() {
             </Link>
             <h1 className="text-3xl font-bold">Reportes de Ventas</h1>
           </div>
-          {/* CHANGE: Added button to toggle deleted sales view */}
           <Button variant={showDeletedSales ? "default" : "outline"} onClick={toggleDeletedSalesView}>
             <Trash2 className="h-4 w-4 mr-2" />
             {showDeletedSales ? "Ver Ventas Activas" : "Ver Ventas Eliminadas"}
           </Button>
         </div>
 
-        {/* CHANGE: Conditional rendering for deleted sales or active sales */}
         {showDeletedSales ? (
           <Card>
             <CardHeader>
@@ -1214,8 +748,8 @@ export default function SalesReports() {
                             <td className="p-3">{timeStr}</td>
                             <td className="p-3">{sale.profiles?.full_name || "Desconocido"}</td>
                             <td className="p-3">
-                              <Badge variant={sale.payment_method === "cash" ? "default" : "secondary"}>
-                                {sale.payment_method === "cash" ? "Efectivo" : "Tarjeta"}
+                              <Badge variant={sale.payment_method === "cash" || sale.payment_method === "efectivo" ? "default" : "secondary"}>
+                                {sale.payment_method}
                               </Badge>
                             </td>
                             <td className="p-3 text-right font-semibold">${Number(sale.total_amount).toFixed(2)}</td>
@@ -1258,8 +792,8 @@ export default function SalesReports() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="cash">Efectivo</SelectItem>
-                  <SelectItem value="card">Tarjeta</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="tarjeta">Tarjeta</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -1343,7 +877,56 @@ export default function SalesReports() {
                   <p className="text-xs text-muted-foreground">por transacción</p>
                 </CardContent>
               </Card>
+              
+              <Card className="bg-rose-50 border-rose-200">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-rose-900">Corte de Caja</CardTitle>
+                  <Printer className="h-4 w-4 text-rose-700" />
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <Button onClick={generateSalesReport} className="w-full bg-rose-800 hover:bg-rose-900">
+                    Generar Reporte de Ventas
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
+
+            <Card className="mb-8 border-slate-200 shadow-sm">
+              <CardHeader className="bg-slate-50 border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <Clock className="h-5 w-5 text-slate-600" />
+                  Desglose de Ventas por Turnos
+                </CardTitle>
+                <CardDescription>
+                  Resumen automático del periodo seleccionado (Matutino: 9am-3pm | Vespertino: 3pm-9pm)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100">
+                    <div className="text-sm text-orange-600 font-semibold mb-1">Turno Matutino (9:00 AM - 3:00 PM)</div>
+                    <div className="text-2xl font-bold text-orange-800">${shiftStats.shift1Total.toFixed(2)}</div>
+                    <div className="text-xs text-orange-600 mt-1">{shiftStats.shift1Count} ventas</div>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <div className="text-sm text-indigo-600 font-semibold mb-1">Turno Vespertino (3:00 PM - 9:00 PM)</div>
+                    <div className="text-2xl font-bold text-indigo-800">${shiftStats.shift2Total.toFixed(2)}</div>
+                    <div className="text-xs text-indigo-600 mt-1">{shiftStats.shift2Count} ventas</div>
+                  </div>
+                  <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-100 shadow-sm">
+                    <div className="text-sm text-emerald-800 font-semibold mb-1">Total de Ambos Turnos</div>
+                    <div className="text-2xl font-bold text-emerald-900">${(shiftStats.shift1Total + shiftStats.shift2Total).toFixed(2)}</div>
+                    <div className="text-xs text-emerald-700 mt-1">{shiftStats.shift1Count + shiftStats.shift2Count} ventas conjuntas</div>
+                  </div>
+                </div>
+                {shiftStats.otherCount > 0 && (
+                  <div className="mt-4 p-3 bg-slate-100 rounded-lg text-sm text-slate-600 flex items-center gap-2 border border-slate-200">
+                    <span className="font-semibold">⚠️ Ojo:</span> 
+                    Hay {shiftStats.otherCount} venta(s) registradas fuera de estos horarios por un total de <strong>${shiftStats.otherTotal.toFixed(2)}</strong>.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {chartData.length > 0 && (
               <Card>
@@ -1387,7 +970,7 @@ export default function SalesReports() {
               </Card>
             )}
 
-            {/* Sales grouped by day */}
+            {/* Sales grouped by day WITH SHIFT SEPARATION */}
             {(!showDeletedSales && (Object.keys(salesByDay).length === 0 || filteredSales.length === 0)) ||
             (showDeletedSales && deletedSales.length === 0) ? (
               <Card>
@@ -1404,12 +987,16 @@ export default function SalesReports() {
             ) : (
               <div className="space-y-6">
                 {Object.entries(showDeletedSales ? { cancelled: deletedSales } : salesByDay)
-                  .sort(([dateA], [dateB]) => {
-                    // Sort by date descending (most recent first)
-                    if (dateA === "cancelled" || dateB === "cancelled") return 1 // Keep cancelled at the end
-                    return new Date(dateB).getTime() - new Date(dateA).getTime()
+                  .sort((a, b) => {
+                    if (a[0] === "cancelled") return 1
+                    if (b[0] === "cancelled") return -1
+                    const timeB = new Date(b[1][0]?.created_at || 0).getTime()
+                    const timeA = new Date(a[1][0]?.created_at || 0).getTime()
+                    return timeB - timeA
                   })
                   .map(([date, daySales]) => {
+                    
+                    // Si estamos viendo ventas eliminadas, las renderizamos normalmente sin separarlas por turno
                     if (date === "cancelled") {
                       return (
                         <Card key={date}>
@@ -1489,78 +1076,90 @@ export default function SalesReports() {
                         </Card>
                       )
                     }
+
+                    // --- Lógica para separar el día por turnos ---
                     const dayTotal = daySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+                    
+                    const shift1Sales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h >= 9 && h < 15
+                    })
+                    const shift2Sales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h >= 15 && h < 21
+                    })
+                    const otherSales = daySales.filter((s) => {
+                      const h = new Date(s.created_at).getHours()
+                      return h < 9 || h >= 21
+                    })
+                    // ---------------------------------------------
+
                     return (
                       <Card key={date}>
-                        <CardHeader>
+                        <CardHeader className="bg-slate-50 border-b">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <Calendar className="h-5 w-5 text-primary" />
+                              <Calendar className="h-5 w-5 text-slate-700" />
                               <div>
                                 <CardTitle className="text-xl capitalize">{date}</CardTitle>
                                 <CardDescription>
-                                  {daySales.length} {daySales.length === 1 ? "venta" : "ventas"} registradas
+                                  {daySales.length} {daySales.length === 1 ? "venta en total" : "ventas en total este día"}
                                 </CardDescription>
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-2xl font-bold text-primary">{dayTotal.toFixed(2)}</div>
+                              <div className="text-2xl font-bold text-slate-800">${dayTotal.toFixed(2)}</div>
                             </div>
                           </div>
                         </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            {daySales.map((sale) => (
-                              <div
-                                key={sale.id}
-                                className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
-                              >
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-sm">#{sale.id.slice(-8)}</span>
-                                    <Badge variant={sale.payment_method === "efectivo" ? "default" : "secondary"}>
-                                      {sale.payment_method}
-                                    </Badge>
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {new Date(sale.created_at).toLocaleTimeString("es-ES", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                    {" • "}
-                                    {sale.profiles?.full_name || "N/A"}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {sale.sale_items?.length || 0}{" "}
-                                    {sale.sale_items?.length === 1 ? "producto" : "productos"}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="text-right">
-                                    <div className="text-xl font-bold">{Number(sale.total_amount).toFixed(2)}</div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={() => reprintTicket(sale)}
-                                      title="Reimprimir ticket"
-                                    >
-                                      <Printer className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={() => cancelSale(sale.id)}
-                                      title="Cancelar venta"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
+                        
+                        <CardContent className="pt-6">
+                          
+                          {/* TURNO MATUTINO */}
+                          {shift1Sales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-orange-800">☀️ Turno Matutino (9:00 AM - 3:00 PM)</span>
+                                <span className="font-bold text-orange-900">
+                                  ${shift1Sales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
                               </div>
-                            ))}
-                          </div>
+                              <div className="space-y-3">
+                                {shift1Sales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* TURNO VESPERTINO */}
+                          {shift2Sales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-indigo-800">🌆 Turno Vespertino (3:00 PM - 9:00 PM)</span>
+                                <span className="font-bold text-indigo-900">
+                                  ${shift2Sales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="space-y-3">
+                                {shift2Sales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OTROS HORARIOS */}
+                          {otherSales.length > 0 && (
+                            <div className="mb-6 last:mb-0">
+                              <div className="flex items-center justify-between bg-slate-100 border border-slate-200 p-3 rounded-lg mb-3 shadow-sm">
+                                <span className="font-semibold text-slate-700">🌙 Otros Horarios</span>
+                                <span className="font-bold text-slate-800">
+                                  ${otherSales.reduce((acc, s) => acc + Number(s.total_amount), 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="space-y-3">
+                                {otherSales.map(renderSaleItem)}
+                              </div>
+                            </div>
+                          )}
+
                         </CardContent>
                       </Card>
                     )
