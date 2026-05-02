@@ -106,7 +106,7 @@ export default function ProductsPage() {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.section?.toLowerCase().includes(searchTerm.toLowerCase()), // Added section to filtering
+        product.section?.toLowerCase().includes(searchTerm.toLowerCase()), 
     )
     setFilteredProducts(filtered)
     setCurrentPageActive(1)
@@ -116,27 +116,11 @@ export default function ProductsPage() {
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.section?.toLowerCase().includes(searchTerm.toLowerCase()), // Added section to filtering
+        product.section?.toLowerCase().includes(searchTerm.toLowerCase()),
     )
     setFilteredDeletedProducts(filteredDeleted)
     setCurrentPageDeleted(1)
 
-    if (searchTerm) {
-      console.log(
-        "[v0] ===== BÚSQUEDA ADMIN =====",
-        "\nSearch term: '" + searchTerm + "'",
-        "\nTotal productos activos:",
-        products.length,
-        "\nProductos encontrados:",
-        filtered.length,
-        "\nProductos eliminados encontrados:",
-        filteredDeleted.length,
-        "\nPrimeros 3 activos:",
-        filtered.slice(0, 3).map((p) => p.name),
-        "\nÚltimos 3 activos:",
-        filtered.slice(-3).map((p) => p.name),
-      )
-    }
   }, [products, deletedProducts, searchTerm])
 
   const checkAuth = async () => {
@@ -161,21 +145,9 @@ export default function ProductsPage() {
       const response = await fetch("/api/products")
       const { products: data, total } = await response.json()
 
-      console.log("[v0] Total products loaded from API:", total)
-
       const allProducts = data || []
       const activeProds = allProducts.filter((p: any) => p.is_active !== false)
       const inactiveProds = allProducts.filter((p: any) => p.is_active === false)
-
-      console.log(
-        "[v0] ===== ADMIN PRODUCTS =====",
-        "\nTotal productos:",
-        allProducts.length,
-        "\nActivos:",
-        activeProds.length,
-        "\nEliminados:",
-        inactiveProds.length,
-      )
 
       setProducts(activeProds)
       setDeletedProducts(inactiveProds)
@@ -188,21 +160,27 @@ export default function ProductsPage() {
     }
   }
 
-  const loadDeletedProducts = async () => {
-    // Mantenerla vacía o removerla completamente
-  }
-
   const handleRestore = async (productId: string) => {
     if (!confirm("¿Estás seguro de que quieres recuperar este producto?")) return
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
       const { error } = await supabase.from("products").update({ is_active: true }).eq("id", productId)
 
       if (error) throw error
 
-      // Reload both lists
-      loadProducts()
+      // REGISTRO EN BITÁCORA
+      if (user) {
+        await supabase.from("stock_movements").insert({
+          product_id: productId,
+          user_id: user.id,
+          movement_type: 'ajuste',
+          quantity: 0,
+          reason: 'Producto restaurado (reactivado) desde panel admin',
+        })
+      }
 
+      loadProducts()
       alert("Producto recuperado exitosamente")
     } catch (error) {
       console.error("Error restoring product:", error)
@@ -229,6 +207,8 @@ export default function ProductsPage() {
     }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
+
       const productData = {
         name: formData.name,
         description: formData.description,
@@ -242,11 +222,15 @@ export default function ProductsPage() {
         days_before_expiry_alert: formData.days_before_expiry_alert
           ? Number.parseInt(formData.days_before_expiry_alert)
           : 30,
-        section: formData.section || null, // Added section to product data
+        section: formData.section || null,
       }
 
       if (editingProduct) {
-        // Update existing product
+        // --- ACTUALIZAR PRODUCTO EXISTENTE ---
+        const oldStock = editingProduct.stock_quantity
+        const newStock = productData.stock_quantity
+        const difference = newStock - oldStock
+
         const { error } = await supabase.from("products").update(productData).eq("id", editingProduct.id)
 
         if (error) {
@@ -254,22 +238,49 @@ export default function ProductsPage() {
           alert(`Error al actualizar: ${error.message}`)
           return
         }
+
+        // REGISTRO EN BITÁCORA SOLO SI CAMBIÓ EL STOCK
+        if (difference !== 0 && user) {
+          await supabase.from("stock_movements").insert({
+            product_id: editingProduct.id,
+            user_id: user.id,
+            movement_type: difference > 0 ? 'entrada' : 'salida',
+            quantity: Math.abs(difference),
+            reason: 'Modificación de inventario desde panel admin',
+          })
+        }
+
         alert("Producto actualizado exitosamente")
       } else {
-        // Create new product without barcode uniqueness validation
-        const { error } = await supabase.from("products").insert([productData])
+        // --- CREAR NUEVO PRODUCTO ---
+        // Le agregamos .select().single() para que nos devuelva el ID recién creado
+        const { data: newProduct, error } = await supabase
+          .from("products")
+          .insert([productData])
+          .select()
+          .single()
 
         if (error) {
           console.error("Error creating product:", error)
           if (error.message.includes("duplicate")) {
-            alert(
-              "Este código de barras ya existe. Puedes usar el mismo código para un producto diferente si lo deseas.",
-            )
+            alert("Este código de barras ya existe. Puedes usar el mismo código para un producto diferente si lo deseas.")
           } else {
             alert(`Error al guardar: ${error.message}`)
           }
           return
         }
+
+        // REGISTRO EN BITÁCORA DE ENTRADA INICIAL
+        if (newProduct && newProduct.stock_quantity > 0 && user) {
+          await supabase.from("stock_movements").insert({
+            product_id: newProduct.id,
+            user_id: user.id,
+            movement_type: 'entrada',
+            quantity: newProduct.stock_quantity,
+            reason: 'Stock inicial por creación de producto',
+          })
+        }
+
         alert("Producto registrado exitosamente")
       }
 
@@ -285,7 +296,7 @@ export default function ProductsPage() {
         image_url: "",
         expiration_date: "",
         days_before_expiry_alert: "30",
-        section: "", // Reset section field
+        section: "",
       })
       setIsAddDialogOpen(false)
       setEditingProduct(null)
@@ -308,7 +319,7 @@ export default function ProductsPage() {
       image_url: product.image_url || "",
       expiration_date: product.expiration_date || "",
       days_before_expiry_alert: product.days_before_expiry_alert?.toString() || "30",
-      section: product.section || "", // Set section for editing
+      section: product.section || "",
     })
     setEditingProduct(product)
     setIsAddDialogOpen(true)
@@ -318,9 +329,22 @@ export default function ProductsPage() {
     if (!confirm("¿Estás seguro de que quieres eliminar este producto?")) return
 
     try {
+      const { data: { user } } = await supabase.auth.getUser()
       const { error } = await supabase.from("products").update({ is_active: false }).eq("id", productId)
 
       if (error) throw error
+
+      // REGISTRO EN BITÁCORA
+      if (user) {
+        await supabase.from("stock_movements").insert({
+          product_id: productId,
+          user_id: user.id,
+          movement_type: 'ajuste',
+          quantity: 0,
+          reason: 'Producto marcado como inactivo/eliminado por admin',
+        })
+      }
+
       loadProducts()
     } catch (error) {
       console.error("Error deleting product:", error)
@@ -396,7 +420,6 @@ export default function ProductsPage() {
   }
 
   const generateStockReport = () => {
-    // Filter products by selected sections
     const filteredBySection = products.filter((product) => {
       const productSection = product.section || "SIN SECCIÓN"
       return selectedSections.includes(productSection)
@@ -413,7 +436,6 @@ export default function ProductsPage() {
 
     const sortedSections = Object.keys(productsBySection).sort()
 
-    // Helper function to pad/truncate text
     const pad = (text: string, length: number, align: "left" | "right" = "left") => {
       const str = text.substring(0, length)
       if (align === "right") {
@@ -431,7 +453,6 @@ export default function ProductsPage() {
 
     let receipt = ""
 
-    // Header
     receipt += center("FARMACIA BIENESTAR") + "\n"
     receipt += center("Tu salud es nuestro compromiso") + "\n"
     receipt += doubleLine() + "\n"
@@ -441,7 +462,6 @@ export default function ProductsPage() {
     receipt += `Hora: ${new Date().toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}\n`
     receipt += doubleLine() + "\n\n"
 
-    // Products by section
     sortedSections.forEach((section) => {
       const sectionProducts = productsBySection[section]
 
@@ -472,7 +492,6 @@ export default function ProductsPage() {
       receipt += line() + "\n\n"
     })
 
-    // Low stock section
     if (includeStockBajo) {
       const lowStockProducts = filteredBySection.filter((p) => p.stock_quantity <= p.min_stock_level)
       receipt += center("[ STOCK BAJO ]") + "\n"
@@ -490,7 +509,6 @@ export default function ProductsPage() {
       receipt += line() + "\n\n"
     }
 
-    // Expiring soon section
     if (includePorVencer) {
       const expiringProducts = filteredBySection.filter((p) => {
         const status = getExpirationStatus(p)
@@ -512,7 +530,6 @@ export default function ProductsPage() {
       receipt += line() + "\n\n"
     }
 
-    // Expired section
     if (includeVencidos) {
       const expiredProducts = filteredBySection.filter((p) => {
         const status = getExpirationStatus(p)
@@ -533,7 +550,6 @@ export default function ProductsPage() {
       receipt += line() + "\n\n"
     }
 
-    // Totals
     receipt += doubleLine() + "\n"
     receipt += center("RESUMEN") + "\n"
     receipt += line() + "\n"
@@ -564,7 +580,6 @@ export default function ProductsPage() {
     receipt += center("Generado: " + new Date().toLocaleString("es-MX")) + "\n"
     receipt += "\n\n\n"
 
-    // Print
     const printWindow = window.open("", "_blank", "width=400,height=600")
     if (printWindow) {
       printWindow.document.write(`
@@ -636,7 +651,6 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-white">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -653,7 +667,6 @@ export default function ProductsPage() {
       </header>
 
       <div className="p-6 space-y-6">
-        {/* Search and Add */}
         <div className="flex flex-col sm:flex-col gap-4 justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -687,7 +700,7 @@ export default function ProductsPage() {
                       image_url: "",
                       expiration_date: "",
                       days_before_expiry_alert: "30",
-                      section: "", // Reset section when opening dialog for add
+                      section: "", 
                     })
                   }}
                 >
@@ -923,7 +936,6 @@ export default function ProductsPage() {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Section selection */}
               <div className="space-y-2">
                 <Label className="font-semibold">Secciones a incluir:</Label>
                 <div className="flex gap-2 mb-2">
@@ -953,7 +965,6 @@ export default function ProductsPage() {
                 </p>
               </div>
 
-              {/* Additional options */}
               <div className="space-y-2">
                 <Label className="font-semibold">Incluir en el reporte:</Label>
                 <div className="space-y-2">
@@ -1037,7 +1048,7 @@ export default function ProductsPage() {
                       <TableHead>Precio</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Categoría</TableHead>
-                      <TableHead>Sección</TableHead> {/* Added Section Header */}
+                      <TableHead>Sección</TableHead> 
                       <TableHead>Caducidad</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Acciones</TableHead>
@@ -1083,7 +1094,7 @@ export default function ProductsPage() {
                             </div>
                           </TableCell>
                           <TableCell>{product.category || "Sin categoría"}</TableCell>
-                          <TableCell>{product.section || "Sin sección"}</TableCell> {/* Display Section */}
+                          <TableCell>{product.section || "Sin sección"}</TableCell> 
                           <TableCell>
                             {product.expiration_date ? (
                               <div className="flex flex-col gap-1">
@@ -1219,7 +1230,7 @@ export default function ProductsPage() {
                       <TableHead>Precio</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Categoría</TableHead>
-                      <TableHead>Sección</TableHead> {/* Added Section Header */}
+                      <TableHead>Sección</TableHead> 
                       <TableHead>Estado</TableHead>
                       <TableHead>Acciones</TableHead>
                     </TableRow>
@@ -1252,7 +1263,7 @@ export default function ProductsPage() {
                         <TableCell>${product.price.toFixed(2)}</TableCell>
                         <TableCell>{product.stock_quantity}</TableCell>
                         <TableCell>{product.category || "Sin categoría"}</TableCell>
-                        <TableCell>{product.section || "Sin sección"}</TableCell> {/* Display Section */}
+                        <TableCell>{product.section || "Sin sección"}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">Eliminado</Badge>
                         </TableCell>
