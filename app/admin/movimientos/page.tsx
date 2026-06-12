@@ -36,16 +36,15 @@ export default function MovimientosPage() {
   }, [searchTerm, filtroDias, page]);
 
   const fetchMovimientos = async () => {
-    // Ajusta las columnas seleccionadas según tu base de datos.
-    // Aquí asumimos que haces un join con la tabla "productos" para buscar por nombre.
+    // Usamos 'stock_movements' y 'products' basados en tu esquema SQL real
     let query = supabase
-      .from("movimientos")
-      .select("*, productos!inner(nombre)", { count: "exact" })
+      .from("stock_movements")
+      .select("*, products!inner(name)", { count: "exact" })
       .order("created_at", { ascending: false });
 
-    // 1. Filtro de Búsqueda por Producto
+    // 1. Filtro de Búsqueda por Producto (columna 'name')
     if (searchTerm) {
-      query = query.ilike("productos.nombre", `%${searchTerm}%`);
+      query = query.ilike("products.name", `%${searchTerm}%`);
     }
 
     // 2. Filtro por Días
@@ -132,10 +131,10 @@ export default function MovimientosPage() {
                   <TableCell>
                     {new Date(mov.created_at).toLocaleDateString()}
                   </TableCell>
-                  {/* Ajusta "mov.productos.nombre" de acuerdo a tu esquema real */}
-                  <TableCell>{mov.productos?.nombre || "N/A"}</TableCell>
-                  <TableCell>{mov.tipo_movimiento}</TableCell>
-                  <TableCell className="text-right">{mov.cantidad}</TableCell>
+                  {/* Se mapea a mov.products.name basado en la relación de BD */}
+                  <TableCell>{mov.products?.name || "N/A"}</TableCell>
+                  <TableCell className="capitalize">{mov.movement_type}</TableCell>
+                  <TableCell className="text-right">{mov.quantity}</TableCell>
                 </TableRow>
               ))
             )}
