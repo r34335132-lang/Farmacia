@@ -1,4 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -7,138 +19,154 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
-// Forzamos el renderizado dinámico
-export const dynamic = 'force-dynamic';
+export default function MovimientosPage() {
+  const [movimientos, setMovimientos] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filtroDias, setFiltroDias] = useState("7"); // Por defecto últimos 7 días
+  const [page, setPage] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  
+  const itemsPerPage = 15; // Cantidad de movimientos por página
+  const supabase = createClient();
 
-export default async function MovimientosPage() {
-  const supabase = await createClient();
+  useEffect(() => {
+    fetchMovimientos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filtroDias, page]);
 
-  // Consultar usando tu tabla stock_movements y sus columnas reales
-  const { data: movimientos, error } = await supabase
-    .from("stock_movements")
-    .select(`
-      id,
-      quantity,
-      movement_type,
-      reason,
-      created_at,
-      products ( name ),
-      profiles ( full_name, email )
-    `)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const fetchMovimientos = async () => {
+    // Ajusta las columnas seleccionadas según tu base de datos.
+    // Aquí asumimos que haces un join con la tabla "productos" para buscar por nombre.
+    let query = supabase
+      .from("movimientos")
+      .select("*, productos!inner(nombre)", { count: "exact" })
+      .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error cargando movimientos:", error);
-  }
-
-  // Formato de fecha
-  const formatearFecha = (fechaString: string) => {
-    const fecha = new Date(fechaString);
-    return new Intl.DateTimeFormat("es-MX", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    }).format(fecha);
-  };
-
-  // Asignar color basado en tus 3 tipos permitidos ('entrada', 'salida', 'ajuste')
-  const getBadgeColor = (type: string) => {
-    switch (type) {
-      case 'entrada': 
-        return 'bg-green-500 hover:bg-green-600';
-      case 'salida': 
-        return 'bg-red-500 hover:bg-red-600';
-      case 'ajuste': 
-        return 'bg-orange-500 hover:bg-orange-600';
-      default: 
-        return 'bg-gray-500 hover:bg-gray-600';
+    // 1. Filtro de Búsqueda por Producto
+    if (searchTerm) {
+      query = query.ilike("productos.nombre", `%${searchTerm}%`);
     }
+
+    // 2. Filtro por Días
+    if (filtroDias !== "todos") {
+      const fechaLimite = new Date();
+      fechaLimite.setDate(fechaLimite.getDate() - parseInt(filtroDias));
+      query = query.gte("created_at", fechaLimite.toISOString());
+    }
+
+    // 3. Paginación
+    const from = page * itemsPerPage;
+    const to = from + itemsPerPage - 1;
+    query = query.range(from, to);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error("Error obteniendo movimientos:", error);
+      return;
+    }
+
+    if (data) setMovimientos(data);
+    if (count !== null) setTotalItems(count);
   };
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Bitácora de Inventario</h2>
+    <div className="p-6 space-y-6">
+      <h1 className="text-2xl font-bold">Historial de Movimientos</h1>
+
+      {/* Controles de Filtros y Búsqueda */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <Input
+          placeholder="Buscar producto..."
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setPage(0); // Reiniciar a la página 0 al buscar
+          }}
+          className="max-w-sm"
+        />
+
+        <Select
+          value={filtroDias}
+          onValueChange={(value) => {
+            setFiltroDias(value);
+            setPage(0); // Reiniciar a la página 0 al cambiar el filtro
+          }}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por tiempo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">Últimas 24 horas</SelectItem>
+            <SelectItem value="7">Últimos 7 días</SelectItem>
+            <SelectItem value="30">Últimos 30 días</SelectItem>
+            <SelectItem value="todos">Todo el historial</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Últimos Movimientos</CardTitle>
-          <CardDescription>
-            Historial de auditoría de entradas, salidas y ajustes de stock.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha y Hora</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Cantidad</TableHead>
-                  <TableHead>Razón</TableHead>
+      {/* Tabla de Resultados */}
+      <div className="border rounded-md">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fecha</TableHead>
+              <TableHead>Producto</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {movimientos.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center h-24">
+                  No se encontraron movimientos.
+                </TableCell>
+              </TableRow>
+            ) : (
+              movimientos.map((mov) => (
+                <TableRow key={mov.id}>
+                  <TableCell>
+                    {new Date(mov.created_at).toLocaleDateString()}
+                  </TableCell>
+                  {/* Ajusta "mov.productos.nombre" de acuerdo a tu esquema real */}
+                  <TableCell>{mov.productos?.nombre || "N/A"}</TableCell>
+                  <TableCell>{mov.tipo_movimiento}</TableCell>
+                  <TableCell className="text-right">{mov.cantidad}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movimientos && movimientos.length > 0 ? (
-                  movimientos.map((mov: any) => (
-                    <TableRow key={mov.id}>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {formatearFecha(mov.created_at)}
-                      </TableCell>
-                      
-                      <TableCell>
-                        {mov.products?.name || "Producto eliminado"}
-                      </TableCell>
-                      
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">
-                            {mov.profiles?.full_name || "Desconocido"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {mov.profiles?.email || ""}
-                          </span>
-                        </div>
-                      </TableCell>
-                      
-                      <TableCell>
-                        <Badge className={`text-white uppercase ${getBadgeColor(mov.movement_type)}`}>
-                          {mov.movement_type}
-                        </Badge>
-                      </TableCell>
-                      
-                      <TableCell className="text-right font-bold">
-                        {mov.movement_type === 'entrada' ? '+' : mov.movement_type === 'salida' ? '-' : ''}
-                        {mov.quantity}
-                      </TableCell>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-                      <TableCell className="text-muted-foreground text-sm">
-                        {mov.reason || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                      No hay movimientos registrados en la base de datos.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Controles de Paginación */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Mostrando {page * itemsPerPage + 1} - {Math.min((page + 1) * itemsPerPage, totalItems)} de {totalItems} movimientos
+        </p>
+        <div className="space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= totalPages - 1}
+          >
+            Siguiente
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
