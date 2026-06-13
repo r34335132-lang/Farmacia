@@ -36,7 +36,6 @@ export default function MovimientosPage() {
   }, [searchTerm, filtroDias, page]);
 
   const fetchMovimientos = async () => {
-    // Usamos 'stock_movements' y 'products' basados en tu esquema SQL real
     let query = supabase
       .from("stock_movements")
       .select("*, products!inner(name)", { count: "exact" })
@@ -112,7 +111,7 @@ export default function MovimientosPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Fecha</TableHead>
+              <TableHead>Fecha y Hora</TableHead>
               <TableHead>Producto</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Cantidad</TableHead>
@@ -129,9 +128,16 @@ export default function MovimientosPage() {
               movimientos.map((mov) => (
                 <TableRow key={mov.id}>
                   <TableCell>
-                    {new Date(mov.created_at).toLocaleDateString()}
+                    {/* Se modificó aquí para incluir la hora con formato detallado */}
+                    {new Date(mov.created_at).toLocaleString([], {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit'
+                    })}
                   </TableCell>
-                  {/* Se mapea a mov.products.name basado en la relación de BD */}
                   <TableCell>{mov.products?.name || "N/A"}</TableCell>
                   <TableCell className="capitalize">{mov.movement_type}</TableCell>
                   <TableCell className="text-right">{mov.quantity}</TableCell>
