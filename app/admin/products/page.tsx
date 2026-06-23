@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -65,6 +65,20 @@ interface Product {
   section?: string
   branch_id?: string
   branches?: BranchInfo | BranchInfo[] | null
+  sku_group_id?: string
+  promotion_price?: number | null
+}
+
+interface BranchPricingRow {
+  branch_id: string
+  branch_name: string
+  enabled: boolean
+  product_id?: string
+  price: string
+  stock_quantity: string
+  min_stock_level: string
+  promotion_price: string
+  expiration_date: string
 }
 
 export default function ProductsPage() {
@@ -87,6 +101,9 @@ export default function ProductsPage() {
   const [includeVencidos, setIncludeVencidos] = useState(true)
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [branchFilter, setBranchFilter] = useState<string>("all")
+  const [branchPricing, setBranchPricing] = useState<BranchPricingRow[]>([])
+  const [skuGroupId, setSkuGroupId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list")
   const router = useRouter()
   const supabase = createClient()
 
@@ -125,6 +142,20 @@ export default function ProductsPage() {
       if (!formData.branch_id && data.branches?.[0]) {
         setFormData((prev) => ({ ...prev, branch_id: data.branches[0].id }))
       }
+      if (data.branches?.length) {
+        setBranchPricing(
+          data.branches.map((branch: BranchInfo) => ({
+            branch_id: branch.id,
+            branch_name: branch.name,
+            enabled: branch.id === data.branches[0]?.id,
+            price: "",
+            stock_quantity: "0",
+            min_stock_level: "10",
+            promotion_price: "",
+            expiration_date: "",
+          })),
+        )
+      }
     }
   }
 
@@ -134,6 +165,80 @@ export default function ProductsPage() {
     const branch = branches.find((b) => b.id === product.branch_id)
     return branch?.name || "Sin sucursal"
   }
+
+  const buildDefaultBranchPricing = (preset?: Partial<BranchPricingRow>): BranchPricingRow[] => {
+    return branches.map((branch) => ({
+      branch_id: branch.id,
+      branch_name: branch.name,
+      enabled: branchFilter !== "all" ? branch.id === branchFilter : branch.id === branches[0]?.id,
+      product_id: undefined,
+      price: preset?.price || "",
+      stock_quantity: preset?.stock_quantity || "0",
+      min_stock_level: preset?.min_stock_level || "10",
+      promotion_price: preset?.promotion_price || "",
+      expiration_date: preset?.expiration_date || "",
+    }))
+  }
+
+  const loadBranchVariants = async (barcode?: string | null, groupId?: string | null) => {
+    if (!barcode && !groupId) {
+      setBranchPricing(buildDefaultBranchPricing())
+      setSkuGroupId(null)
+      return
+    }
+
+    const params = groupId ? `sku_group_id=${groupId}` : `barcode=${encodeURIComponent(barcode || "")}`
+    try {
+      const res = await fetch(`/api/products/branch-variants?${params}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+
+      const variants: Product[] = data.variants || []
+      setSkuGroupId(data.sku_group_id || null)
+
+      if (variants.length === 0) {
+        setBranchPricing(buildDefaultBranchPricing())
+        return
+      }
+
+      setBranchPricing(
+        branches.map((branch) => {
+          const variant = variants.find((v) => v.branch_id === branch.id)
+          return {
+            branch_id: branch.id,
+            branch_name: branch.name,
+            enabled: Boolean(variant),
+            product_id: variant?.id,
+            price: variant ? variant.price.toString() : "",
+            stock_quantity: variant ? variant.stock_quantity.toString() : "0",
+            min_stock_level: variant ? variant.min_stock_level.toString() : "10",
+            promotion_price: variant?.promotion_price ? variant.promotion_price.toString() : "",
+            expiration_date: variant?.expiration_date || "",
+          }
+        }),
+      )
+    } catch (error) {
+      console.error("Error loading branch variants:", error)
+      setBranchPricing(buildDefaultBranchPricing())
+    }
+  }
+
+  const updateBranchPricingRow = (branchId: string, updates: Partial<BranchPricingRow>) => {
+    setBranchPricing((rows) =>
+      rows.map((row) => (row.branch_id === branchId ? { ...row, ...updates } : row)),
+    )
+  }
+
+  const groupedByBarcode = useMemo(() => {
+    if (branchFilter !== "all" || viewMode !== "grouped") return []
+    const map = new Map<string, Product[]>()
+    for (const product of filteredProducts) {
+      const key = product.barcode?.trim() || product.sku_group_id || product.id
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(product)
+    }
+    return Array.from(map.entries()).map(([key, items]) => ({ key, items }))
+  }, [filteredProducts, branchFilter, viewMode])
 
   useEffect(() => {
     const filtered = products.filter(
@@ -232,100 +337,63 @@ export default function ProductsPage() {
       return
     }
 
-    if (!formData.price || Number.parseFloat(formData.price) <= 0) {
-      alert("El precio debe ser mayor a 0")
+    const enabledRows = branchPricing.filter((row) => row.enabled)
+    if (enabledRows.length === 0) {
+      alert("Activa al menos una sucursal con precio y stock")
       return
     }
 
-    if (!formData.stock_quantity || Number.parseInt(formData.stock_quantity) < 0) {
-      alert("El stock debe ser 0 o mayor")
-      return
-    }
-
-    if (!formData.branch_id) {
-      alert("Debe seleccionar una sucursal")
-      return
+    for (const row of enabledRows) {
+      if (!row.price || Number.parseFloat(row.price) <= 0) {
+        alert(`Ingresa un precio válido para ${row.branch_name}`)
+        return
+      }
+      if (row.stock_quantity === "" || Number.parseInt(row.stock_quantity) < 0) {
+        alert(`Ingresa stock válido para ${row.branch_name}`)
+        return
+      }
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-
-      const productData = {
-        name: formData.name,
-        description: formData.description,
-        barcode: formData.barcode || null,
-        price: Number.parseFloat(formData.price),
-        stock_quantity: Number.parseInt(formData.stock_quantity),
-        min_stock_level: Number.parseInt(formData.min_stock_level),
-        category: formData.category,
-        image_url: formData.image_url || null,
-        expiration_date: formData.expiration_date || null,
-        days_before_expiry_alert: formData.days_before_expiry_alert
-          ? Number.parseInt(formData.days_before_expiry_alert)
-          : 30,
-        section: formData.section || null,
-        branch_id: formData.branch_id,
+      const payload = {
+        sku_group_id: skuGroupId,
+        shared: {
+          name: formData.name,
+          description: formData.description,
+          barcode: formData.barcode || null,
+          category: formData.category,
+          image_url: formData.image_url || null,
+          section: formData.section || null,
+          days_before_expiry_alert: formData.days_before_expiry_alert
+            ? Number.parseInt(formData.days_before_expiry_alert)
+            : 30,
+        },
+        branches: branchPricing.map((row) => ({
+          branch_id: row.branch_id,
+          product_id: row.product_id || null,
+          enabled: row.enabled,
+          price: row.enabled ? Number.parseFloat(row.price) : 0,
+          stock_quantity: row.enabled ? Number.parseInt(row.stock_quantity) : 0,
+          min_stock_level: row.enabled ? Number.parseInt(row.min_stock_level || "10") : 10,
+          promotion_price: row.promotion_price ? Number.parseFloat(row.promotion_price) : null,
+          expiration_date: row.expiration_date || null,
+        })),
       }
 
-      if (editingProduct) {
-        const oldStock = editingProduct.stock_quantity
-        const newStock = productData.stock_quantity
-        const difference = newStock - oldStock
+      const res = await fetch("/api/products/branch-variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
-        const { error } = await supabase.from("products").update(productData).eq("id", editingProduct.id)
-
-        if (error) {
-          console.error("Error updating product:", error)
-          alert(`Error al actualizar: ${error.message}`)
-          return
-        }
-
-        // REGISTRO EN BITÁCORA SOLO SI CAMBIÓ EL STOCK
-        if (difference !== 0 && user) {
-          await supabase.from("stock_movements").insert({
-            product_id: editingProduct.id,
-            user_id: user.id,
-            movement_type: difference > 0 ? 'entrada' : 'salida',
-            quantity: Math.abs(difference),
-            reason: 'Modificación de inventario desde panel admin',
-          })
-        }
-
-        alert("Producto actualizado exitosamente")
-      } else {
-        // --- CREAR NUEVO PRODUCTO ---
-        // Le agregamos .select().single() para que nos devuelva el ID recién creado
-        const { data: newProduct, error } = await supabase
-          .from("products")
-          .insert([productData])
-          .select()
-          .single()
-
-        if (error) {
-          console.error("Error creating product:", error)
-          if (error.message.includes("duplicate") || error.code === "23505") {
-            alert("Este código de barras ya existe en esta sucursal. Puede existir en otra sucursal sin problema.")
-          } else {
-            alert(`Error al guardar: ${error.message}`)
-          }
-          return
-        }
-
-        // REGISTRO EN BITÁCORA DE ENTRADA INICIAL
-        if (newProduct && newProduct.stock_quantity > 0 && user) {
-          await supabase.from("stock_movements").insert({
-            product_id: newProduct.id,
-            user_id: user.id,
-            movement_type: 'entrada',
-            quantity: newProduct.stock_quantity,
-            reason: 'Stock inicial por creación de producto',
-          })
-        }
-
-        alert("Producto registrado exitosamente")
+      const result = await res.json()
+      if (!res.ok) {
+        alert(result.error || "Error al guardar el producto")
+        return
       }
 
-      // Reset form and close dialog
+      alert(editingProduct ? "Producto actualizado en todas las sucursales" : "Producto registrado correctamente")
+
       setFormData({
         name: "",
         description: "",
@@ -340,6 +408,8 @@ export default function ProductsPage() {
         section: "",
         branch_id: branches[0]?.id || "",
       })
+      setBranchPricing(buildDefaultBranchPricing())
+      setSkuGroupId(null)
       setIsAddDialogOpen(false)
       setEditingProduct(null)
       loadProducts()
@@ -349,7 +419,7 @@ export default function ProductsPage() {
     }
   }
 
-  const handleEdit = (product: Product) => {
+  const handleEdit = async (product: Product) => {
     setFormData({
       name: product.name,
       description: product.description || "",
@@ -365,6 +435,7 @@ export default function ProductsPage() {
       branch_id: product.branch_id || branches[0]?.id || "",
     })
     setEditingProduct(product)
+    await loadBranchVariants(product.barcode, product.sku_group_id)
     setIsAddDialogOpen(true)
   }
 
@@ -735,6 +806,18 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
 
+          {branchFilter === "all" && (
+            <Select value={viewMode} onValueChange={(v: "list" | "grouped") => setViewMode(v)}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="list">Vista por fila</SelectItem>
+                <SelectItem value="grouped">Agrupado por producto</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={openExportDialog}>
               <Printer className="h-4 w-4 mr-2" />
@@ -746,6 +829,7 @@ export default function ProductsPage() {
                 <Button
                   onClick={() => {
                     setEditingProduct(null)
+                    setSkuGroupId(null)
                     setFormData({
                       name: "",
                       description: "",
@@ -760,17 +844,18 @@ export default function ProductsPage() {
                       section: "",
                       branch_id: branches[0]?.id || "",
                     })
+                    setBranchPricing(buildDefaultBranchPricing())
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Agregar Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
                   <DialogDescription>
-                    {editingProduct ? "Modifica los datos del producto" : "Completa la información del nuevo producto"}
+                    Datos compartidos del producto y precio/stock independiente por sucursal
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -779,25 +864,6 @@ export default function ProductsPage() {
                     currentImage={formData.image_url}
                     className="space-y-2"
                   />
-
-                  <div className="space-y-2">
-                    <Label htmlFor="branch_id">Sucursal *</Label>
-                    <Select
-                      value={formData.branch_id}
-                      onValueChange={(value) => setFormData({ ...formData, branch_id: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar sucursal" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre del producto *</Label>
@@ -825,6 +891,11 @@ export default function ProductsPage() {
                         id="barcode"
                         value={formData.barcode}
                         onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                        onBlur={() => {
+                          if (formData.barcode.trim()) {
+                            loadBranchVariants(formData.barcode.trim(), skuGroupId)
+                          }
+                        }}
                         placeholder="Escanea o ingresa manualmente"
                         autoFocus={scannerMode === "manual"}
                         onKeyDown={(e) => {
@@ -844,18 +915,6 @@ export default function ProductsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="price">Precio *</Label>
-                      <Input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        required
-                        value={formData.price}
-                        onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
                       <Label htmlFor="category">Categoría</Label>
                       <Input
                         id="category"
@@ -874,52 +933,117 @@ export default function ProductsPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="stock_quantity">Stock actual *</Label>
-                      <Input
-                        id="stock_quantity"
-                        type="number"
-                        required
-                        value={formData.stock_quantity}
-                        onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="min_stock_level">Stock mínimo</Label>
-                      <Input
-                        id="min_stock_level"
-                        type="number"
-                        value={formData.min_stock_level}
-                        onChange={(e) => setFormData({ ...formData, min_stock_level: e.target.value })}
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="days_before_expiry_alert">Días de alerta de caducidad</Label>
+                    <Input
+                      id="days_before_expiry_alert"
+                      type="number"
+                      value={formData.days_before_expiry_alert}
+                      onChange={(e) => setFormData({ ...formData, days_before_expiry_alert: e.target.value })}
+                      placeholder="30"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="expiration_date">Fecha de caducidad</Label>
-                      <Input
-                        id="expiration_date"
-                        type="date"
-                        value={formData.expiration_date}
-                        onChange={(e) => setFormData({ ...formData, expiration_date: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="days_before_expiry_alert">Días de alerta</Label>
-                      <Input
-                        id="days_before_expiry_alert"
-                        type="number"
-                        value={formData.days_before_expiry_alert}
-                        onChange={(e) => setFormData({ ...formData, days_before_expiry_alert: e.target.value })}
-                        placeholder="30"
-                      />
-                      <p className="text-xs text-muted-foreground">Días antes de vencer para alertar</p>
-                    </div>
-                  </div>
+                  <Card className="border-primary/20">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Precio y stock por sucursal</CardTitle>
+                      <CardDescription>
+                        Cada sucursal puede tener precio, promoción y stock diferentes.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-10">Activa</TableHead>
+                            <TableHead>Sucursal</TableHead>
+                            <TableHead>Precio *</TableHead>
+                            <TableHead>Promo</TableHead>
+                            <TableHead>Stock *</TableHead>
+                            <TableHead>Mín.</TableHead>
+                            <TableHead>Caducidad</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {branchPricing.map((row) => (
+                            <TableRow key={row.branch_id}>
+                              <TableCell>
+                                <Checkbox
+                                  checked={row.enabled}
+                                  onCheckedChange={(checked) =>
+                                    updateBranchPricingRow(row.branch_id, { enabled: checked === true })
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium whitespace-nowrap">{row.branch_name}</TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-24"
+                                  disabled={!row.enabled}
+                                  value={row.price}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { price: e.target.value })
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-24"
+                                  disabled={!row.enabled}
+                                  value={row.promotion_price}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { promotion_price: e.target.value })
+                                  }
+                                  placeholder="—"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  className="w-20"
+                                  disabled={!row.enabled}
+                                  value={row.stock_quantity}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { stock_quantity: e.target.value })
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  className="w-16"
+                                  disabled={!row.enabled}
+                                  value={row.min_stock_level}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { min_stock_level: e.target.value })
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="date"
+                                  className="w-36"
+                                  disabled={!row.enabled}
+                                  value={row.expiration_date}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { expiration_date: e.target.value })
+                                  }
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
 
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -1116,6 +1240,46 @@ export default function ProductsPage() {
                 <CardDescription>Gestiona el inventario activo de la farmacia</CardDescription>
               </CardHeader>
               <CardContent>
+                {viewMode === "grouped" && branchFilter === "all" ? (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>Código</TableHead>
+                          <TableHead>Precios y stock por sucursal</TableHead>
+                          <TableHead>Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupedByBarcode.map(({ key, items }) => (
+                          <TableRow key={key}>
+                            <TableCell className="font-medium">{items[0]?.name}</TableCell>
+                            <TableCell className="font-mono text-sm">{items[0]?.barcode || "—"}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-2">
+                                {items.map((p) => (
+                                  <Badge key={p.id} variant="outline" className="text-xs">
+                                    {getBranchName(p)}: ${p.price.toFixed(2)} · Stock {p.stock_quantity}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Button variant="outline" size="sm" onClick={() => handleEdit(items[0])}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {groupedByBarcode.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">No hay productos para agrupar</div>
+                    )}
+                  </>
+                ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1281,6 +1445,8 @@ export default function ProductsPage() {
                       Página {currentPageActive} de {totalPagesActive}
                     </div>
                   </div>
+                )}
+                </>
                 )}
               </CardContent>
             </Card>
