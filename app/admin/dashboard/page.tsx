@@ -208,10 +208,22 @@ export default function AdminDashboard() {
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-10 w-auto rounded-full" />
+            <div className="hidden sm:block">
+              <h1 className="font-semibold text-lg leading-tight text-primary">Farmacia Bienestar</h1>
+              <p className="text-xs text-muted-foreground">Panel administrativo</p>
+            </div>
           </div>
-          <Button onClick={handleLogout} variant="outline">
-            Cerrar Sesión
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/pos">
+              <Button variant="outline" className="border-rose-200 text-rose-800">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                POS
+              </Button>
+            </Link>
+            <Button onClick={handleLogout} variant="outline">
+              Cerrar Sesión
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -386,14 +398,26 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/pos">
+          <Link href="/admin/branches">
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
+                  <Store className="h-5 w-5" />
+                  Gestionar Sucursales
+                </CardTitle>
+                <CardDescription>Crear y administrar farmacias</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/pos">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-rose-200 bg-rose-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-rose-900">
                   <ShoppingCart className="h-5 w-5" />
                   Punto de Venta
                 </CardTitle>
-                <CardDescription>Ir al sistema de cobro</CardDescription>
+                <CardDescription>Ir al POS (elige sucursal al entrar)</CardDescription>
               </CardHeader>
             </Card>
           </Link>

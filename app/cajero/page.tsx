@@ -102,6 +102,7 @@ interface Product {
   expiration_date?: string
   days_before_expiry_alert?: number
   section?: string
+  branch_id?: string
 }
 
 interface Sale {
@@ -147,9 +148,11 @@ function CajeroContent() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("pending")
+  const [activeView, setActiveView] = useState<"menu" | "orders" | "inventory" | "sales">("menu")
   const [isUpdating, setIsUpdating] = useState(false)
   const [pickupCodeSearch, setPickupCodeSearch] = useState("")
-  const [activeView, setActiveView] = useState<"menu" | "orders" | "inventory" | "sales">("menu")
+  const [activeBranch, setActiveBranch] = useState<{ id: string; name: string } | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // Inventory state - solo foto y seccion
   const [products, setProducts] = useState<Product[]>([])
@@ -244,6 +247,13 @@ function CajeroContent() {
           role: "cajero"
         })
       }
+
+      const branchRes = await fetch("/api/branches")
+      if (branchRes.ok) {
+        const branchData = await branchRes.json()
+        setActiveBranch(branchData.activeBranch)
+        setIsAdmin(branchData.isAdmin)
+      }
     } catch (error) {
       console.error("Error checking auth:", error)
     } finally {
@@ -277,15 +287,11 @@ function CajeroContent() {
     if (!user) return
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("*")
-        .eq("cashier_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(50)
-
-      if (error) throw error
-      setSales(data || [])
+      const response = await fetch("/api/sales")
+      if (!response.ok) throw new Error("Failed to fetch sales")
+      const data = await response.json()
+      const mySales = (data.sales || []).filter((sale: Sale) => sale.cashier_id === user.id)
+      setSales(mySales)
     } catch (error) {
       console.error("Error loading sales:", error)
     } finally {
@@ -525,8 +531,6 @@ function CajeroContent() {
   useEffect(() => {
     if (user && activeView === "orders") {
       loadOrders()
-
-      // Subscribe to new orders with alert
       const channel = supabase
         .channel("orders-changes-cajero")
         .on(
@@ -560,15 +564,18 @@ function CajeroContent() {
     if (user && activeView === "sales") {
       loadSales()
     }
-  }, [user, activeView])
+  }, [user, activeView, activeBranch?.id])
 
   async function loadOrders() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false })
+      let query = supabase.from("orders").select("*").order("created_at", { ascending: false })
+
+      if (activeBranch?.id) {
+        query = query.eq("branch_id", activeBranch.id)
+      }
+
+      const { data, error } = await query
 
       if (error) throw error
       if (data) {
@@ -708,7 +715,10 @@ function CajeroContent() {
                 />
                 <div>
                   <h1 className="font-bold text-lg text-primary">Panel de Cajero</h1>
-                  <p className="text-xs text-muted-foreground">Bienvenido, {user?.full_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user?.full_name}
+                    {activeBranch ? ` · ${activeBranch.name}` : ""}
+                  </p>
                 </div>
               </div>
               <Button variant="outline" onClick={handleLogout}>
@@ -1061,7 +1071,7 @@ function CajeroContent() {
                     Productos
                   </CardTitle>
                   <CardDescription>
-                    {filteredProducts.length} productos encontrados - Solo puedes editar foto y seccion
+                    {filteredProducts.length} productos de {activeBranch?.name || "tu sucursal"} - Solo puedes editar foto y seccion
                   </CardDescription>
                 </div>
                 <Badge variant="outline" className="text-amber-600 border-amber-300">

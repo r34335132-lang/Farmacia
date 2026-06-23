@@ -161,12 +161,22 @@ export default function HomePage() {
                 </Button>
               </Link>
               {isAuthenticated ? (
-                <Link href={userRole === "admin" ? "/admin/dashboard" : userRole === "cajero" ? "/cajero" : "/pos"}>
-                  <Button>
-                    <Users className="h-4 w-4 mr-2" />
-                    Panel
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link href={userRole === "admin" ? "/admin/dashboard" : userRole === "cajero" ? "/cajero" : "/pos"}>
+                    <Button variant="outline">
+                      <Users className="h-4 w-4 mr-2" />
+                      Panel
+                    </Button>
+                  </Link>
+                  {userRole === "admin" && (
+                    <Link href="/pos">
+                      <Button>
+                        <ShoppingBag className="h-4 w-4 mr-2" />
+                        POS
+                      </Button>
+                    </Link>
+                  )}
+                </div>
               ) : (
                 <Link href="/auth/login">
                   <Button variant="outline" className="bg-transparent">

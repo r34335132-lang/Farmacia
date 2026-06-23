@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useSearchParams } from "next/navigation"
 import {
   Search,
@@ -36,6 +37,12 @@ import {
   Home,
 } from "lucide-react"
 
+interface Branch {
+  id: string
+  name: string
+  address?: string | null
+}
+
 interface Product {
   id: string
   name: string
@@ -47,6 +54,7 @@ interface Product {
   section: string | null
   image_url: string | null
   created_at: string
+  branch_id?: string
 }
 
 interface Promotion {
@@ -111,6 +119,8 @@ export default function TiendaPage() {
   const [copiedCode, setCopiedCode] = useState(false)
   const searchParams = useSearchParams()
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -119,15 +129,46 @@ export default function TiendaPage() {
     if (sectionParam) {
       setSelectedSection(sectionParam)
     }
-    loadData()
+    loadBranches()
   }, [searchParams])
 
+  useEffect(() => {
+    if (selectedBranchId) {
+      loadData()
+    }
+  }, [selectedBranchId])
+
+  async function loadBranches() {
+    try {
+      const res = await fetch("/api/branches/public")
+      const data = await res.json()
+      const list = data.branches || []
+      setBranches(list)
+
+      const saved = localStorage.getItem("tienda_branch_id")
+      const validSaved = list.find((b: Branch) => b.id === saved)
+      setSelectedBranchId(validSaved?.id || list[0]?.id || null)
+    } catch (error) {
+      console.error("Error loading branches:", error)
+      setLoading(false)
+    }
+  }
+
+  const handleBranchChange = (branchId: string) => {
+    setSelectedBranchId(branchId)
+    localStorage.setItem("tienda_branch_id", branchId)
+    setCart([])
+  }
+
   async function loadData() {
+    if (!selectedBranchId) return
     setLoading(true)
     try {
       const { data: productsData } = await supabase
         .from("products")
         .select("*")
+        .eq("branch_id", selectedBranchId)
+        .eq("is_active", true)
         .gt("stock_quantity", 0)
         .order("name")
 
@@ -166,9 +207,11 @@ export default function TiendaPage() {
   }
 
   const sections = useMemo(() => {
-    const sects = new Set(products.map((p) => p.section).filter(Boolean))
-    return Array.from(sects).sort((a, b) => a.localeCompare(b, 'es')) as string[]
+    const sects = new Set(products.map((p) => p.section).filter((s): s is string => Boolean(s)))
+    return Array.from(sects).sort((a, b) => a.localeCompare(b, "es"))
   }, [products])
+
+  const selectedBranch = branches.find((b) => b.id === selectedBranchId) || null
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
@@ -290,6 +333,7 @@ export default function TiendaPage() {
           total: cartTotal,
           status: "pending",
           notes: null,
+          branch_id: selectedBranchId,
         })
         .select()
         .single()
@@ -373,9 +417,27 @@ export default function TiendaPage() {
                 />
                 <div>
                   <h1 className="font-bold text-xl leading-tight text-primary tracking-tight">Farmacia Bienestar</h1>
-                  <p className="text-sm text-muted-foreground font-medium">Tienda en Linea</p>
+                  <p className="text-sm text-muted-foreground font-medium">
+                    {selectedBranch ? `Recoger en: ${selectedBranch.name}` : "Tienda en Linea"}
+                  </p>
                 </div>
               </Link>
+
+              {branches.length > 1 && (
+                <Select value={selectedBranchId || undefined} onValueChange={handleBranchChange}>
+                  <SelectTrigger className="w-52 h-11">
+                    <MapPin className="h-4 w-4 mr-2 shrink-0" />
+                    <SelectValue placeholder="Sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <div className="flex-1 max-w-2xl">
                 <div className="relative">
@@ -587,6 +649,23 @@ export default function TiendaPage() {
                 </SheetContent>
               </Sheet>
             </div>
+            {branches.length > 1 && (
+              <div className="mt-3">
+                <Select value={selectedBranchId || undefined} onValueChange={handleBranchChange}>
+                  <SelectTrigger className="w-full h-10">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Elegir sucursal de recogida" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
         
@@ -604,7 +683,9 @@ export default function TiendaPage() {
                 />
                 <div>
                   <h1 className="font-bold text-base leading-tight text-primary">Farmacia Bienestar</h1>
-                  <p className="text-xs text-muted-foreground">Tienda en Linea</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedBranch ? selectedBranch.name : "Tienda en Linea"}
+                  </p>
                 </div>
               </Link>
               

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -110,6 +110,9 @@ export default function POSPage() {
   const [availableBranches, setAvailableBranches] = useState<BranchInfo[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null)
   const [isCartOpen, setIsCartOpen] = useState(false)
+  const [authReady, setAuthReady] = useState(false)
+  const [branchConfirmed, setBranchConfirmed] = useState(false)
+  const [pendingBranchId, setPendingBranchId] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -149,10 +152,32 @@ export default function POSPage() {
   }, [])
 
   useEffect(() => {
-    if (activeBranch || selectedBranchId || (!isAdmin && activeBranch)) {
-      loadProducts()
+    if (!authReady) return
+
+    if (isAdmin) {
+      if (!branchConfirmed || !selectedBranchId) {
+        setLoading(false)
+        return
+      }
+    } else if (!activeBranch?.id) {
+      setLoading(false)
+      return
     }
-  }, [selectedBranchId, activeBranch?.id, isAdmin])
+
+    loadProducts()
+  }, [authReady, selectedBranchId, activeBranch?.id, isAdmin, branchConfirmed])
+
+  const confirmAdminBranch = () => {
+    if (!pendingBranchId) return
+    const branch = availableBranches.find((b) => b.id === pendingBranchId)
+    if (!branch) return
+
+    setSelectedBranchId(pendingBranchId)
+    setActiveBranch(branch)
+    setBranchConfirmed(true)
+    sessionStorage.setItem("pos_admin_branch_id", pendingBranchId)
+    setLoading(true)
+  }
 
   const getBranchName = (product: Product) => {
     if (Array.isArray(product.branches)) return product.branches[0]?.name
@@ -230,25 +255,36 @@ export default function POSPage() {
       const branchData = await branchRes.json()
       setIsAdmin(branchData.isAdmin)
       setAvailableBranches(branchData.branches || [])
-      setActiveBranch(branchData.activeBranch)
+
       if (branchData.isAdmin) {
-        const defaultBranch = branchData.branches?.[0]
-        setSelectedBranchId(branchData.activeBranchId || defaultBranch?.id || null)
-        if (defaultBranch && !branchData.activeBranch) {
+        const savedBranchId = sessionStorage.getItem("pos_admin_branch_id")
+        const validSaved = branchData.branches?.find((b: BranchInfo) => b.id === savedBranchId)
+        const defaultBranch = validSaved || branchData.branches?.[0] || null
+
+        if (defaultBranch) {
+          setPendingBranchId(defaultBranch.id)
+          setSelectedBranchId(defaultBranch.id)
           setActiveBranch(defaultBranch)
+          setBranchConfirmed(false)
         }
       } else {
+        setActiveBranch(branchData.activeBranch)
         setSelectedBranchId(branchData.activeBranchId)
+        setBranchConfirmed(true)
       }
-    } else {
+    }
+
+    setAuthReady(true)
+    if (!branchRes.ok) {
       setLoading(false)
     }
   }
 
   const loadProducts = async () => {
     try {
-      const branchQuery =
-        isAdmin && selectedBranchId ? `?branch_id=${selectedBranchId}` : ""
+      setLoading(true)
+      const branchId = isAdmin ? selectedBranchId : activeBranch?.id
+      const branchQuery = branchId ? `?branch_id=${branchId}` : ""
       const response = await fetch(`/api/products${branchQuery}`)
       const { products: data } = await response.json()
 
@@ -1070,6 +1106,77 @@ export default function POSPage() {
     )
   }
 
+  if (authReady && isAdmin && !branchConfirmed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-rose-200">
+          <CardHeader className="text-center">
+            <div className="mx-auto p-3 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl w-fit mb-2">
+              <Store className="h-8 w-8 text-white" />
+            </div>
+            <CardTitle className="text-2xl">Selecciona la sucursal</CardTitle>
+            <CardDescription>
+              Como administrador, elige en qué farmacia vas a operar el punto de venta.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {availableBranches.length === 0 ? (
+              <div className="text-center space-y-3">
+                <p className="text-muted-foreground">No hay sucursales activas.</p>
+                <Button onClick={() => router.push("/admin/branches")}>Crear sucursales</Button>
+              </div>
+            ) : (
+              <>
+                <Select value={pendingBranchId || undefined} onValueChange={setPendingBranchId}>
+                  <SelectTrigger className="h-12 text-base border-rose-200">
+                    <SelectValue placeholder="Elegir sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableBranches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={confirmAdminBranch}
+                  disabled={!pendingBranchId}
+                  className="w-full h-12 text-base bg-gradient-to-r from-rose-800 to-red-900 text-white"
+                >
+                  Entrar al POS
+                </Button>
+                <Button variant="outline" className="w-full" onClick={() => router.push("/admin/dashboard")}>
+                  Volver al dashboard
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (authReady && !isAdmin && !activeBranch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle>Sin sucursal asignada</CardTitle>
+            <CardDescription>
+              Tu usuario no tiene una sucursal asignada. Contacta al administrador.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={handleLogout} variant="outline" className="w-full">
+              Cerrar sesión
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50 overflow-x-hidden">
       <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-30">
@@ -1093,9 +1200,12 @@ export default function POSPage() {
               <Select
                 value={selectedBranchId || undefined}
                 onValueChange={(value) => {
+                  setPendingBranchId(value)
                   setSelectedBranchId(value)
                   const branch = availableBranches.find((b) => b.id === value)
                   if (branch) setActiveBranch(branch)
+                  sessionStorage.setItem("pos_admin_branch_id", value)
+                  setLoading(true)
                 }}
               >
                 <SelectTrigger className="w-full sm:w-52 border-rose-200 h-11">
