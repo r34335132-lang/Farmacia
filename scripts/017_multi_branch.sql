@@ -332,3 +332,11 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_branch_sales_summary(UUID, DATE, DATE) TO authenticated;
+
+-- 13. Permissions (RLS off — consistent with rest of project)
+ALTER TABLE public.branches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_branches DISABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.branches TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_branches TO authenticated;
+GRANT SELECT ON public.branches TO anon;
+

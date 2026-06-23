@@ -68,14 +68,19 @@ export default function BranchesPage() {
   const loadBranches = async () => {
     try {
       const res = await fetch("/api/branches?manage=true")
-      if (!res.ok) throw new Error("No se pudieron cargar las sucursales")
       const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudieron cargar las sucursales")
+      }
       setBranches(data.branches || [])
     } catch (error) {
       console.error(error)
       toast({
-        title: "Error",
-        description: "No se pudieron cargar las sucursales",
+        title: "Error al cargar sucursales",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Verifica que ejecutaste las migraciones 017 y 019 en Supabase",
         variant: "destructive",
       })
     } finally {
@@ -250,6 +255,12 @@ export default function BranchesPage() {
             <CardTitle>Sucursales registradas</CardTitle>
             <CardDescription>
               Cada sucursal tiene su propio inventario, stock y ventas. Los cajeros se asignan desde Usuarios.
+              {branches.length === 0 && (
+                <span className="block mt-2 text-amber-600">
+                  Si no puedes crear sucursales, ejecuta en Supabase SQL Editor: scripts/017_multi_branch.sql y
+                  scripts/019_branches_permissions.sql
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>

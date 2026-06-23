@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { resolveBranchContext } from "@/lib/branch"
+import { formatBranchDbError, resolveBranchContext } from "@/lib/branch"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +19,11 @@ export async function GET(request: Request) {
     if (manage && context.isAdmin) {
       const { data, error } = await supabase.from("branches").select("*").order("name")
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("GET branches manage error:", error)
+        return NextResponse.json(
+          { error: formatBranchDbError(error.message), code: error.code },
+          { status: 500 },
+        )
       }
       return NextResponse.json({
         branches: data || [],
@@ -73,7 +77,11 @@ export async function POST(request: Request) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("POST branch error:", error)
+      return NextResponse.json(
+        { error: formatBranchDbError(error.message), code: error.code },
+        { status: 400 },
+      )
     }
 
     return NextResponse.json({ success: true, branch: data })
@@ -112,7 +120,11 @@ export async function PATCH(request: Request) {
     const { data, error } = await supabase.from("branches").update(updates).eq("id", id).select().single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      console.error("PATCH branch error:", error)
+      return NextResponse.json(
+        { error: formatBranchDbError(error.message), code: error.code },
+        { status: 400 },
+      )
     }
 
     return NextResponse.json({ success: true, branch: data })

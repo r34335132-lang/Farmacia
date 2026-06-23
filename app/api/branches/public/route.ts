@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { formatBranchDbError } from "@/lib/branch"
 
 export const dynamic = "force-dynamic"
 
@@ -15,7 +16,10 @@ export async function GET() {
 
     if (error) {
       console.error("Error fetching public branches:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(
+        { error: formatBranchDbError(error.message), code: error.code },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({ branches: data || [] })

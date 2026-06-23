@@ -41,13 +41,28 @@ export async function getUserProfile(supabase: SupabaseClient, userId: string) {
 }
 
 export async function getAllBranches(supabase: SupabaseClient): Promise<Branch[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("branches")
     .select("*")
     .eq("is_active", true)
     .order("name")
 
+  if (error) {
+    console.error("getAllBranches error:", error.message)
+    return []
+  }
+
   return (data as Branch[]) || []
+}
+
+export function formatBranchDbError(message: string): string {
+  if (message.includes("does not exist") || message.includes("no existe")) {
+    return "La tabla branches no existe. Ejecuta scripts/017_multi_branch.sql en Supabase."
+  }
+  if (message.includes("row-level security") || message.includes("permission denied")) {
+    return "Sin permisos en la tabla branches. Ejecuta scripts/019_branches_permissions.sql en Supabase."
+  }
+  return message
 }
 
 export async function getUserAssignedBranches(
