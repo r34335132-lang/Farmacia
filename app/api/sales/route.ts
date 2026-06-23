@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
     const requestedBranchId = searchParams.get("branch_id")
+    const statusFilter = searchParams.get("status")
 
     const context = await resolveBranchContext(supabase, requestedBranchId)
     if ("error" in context) {
@@ -30,6 +31,12 @@ export async function GET(request: Request) {
       `)
       .order("created_at", { ascending: false })
       .limit(2000)
+
+    if (statusFilter === "cancelled") {
+      query = query.eq("status", "cancelled")
+    } else {
+      query = query.neq("status", "cancelled")
+    }
 
     query = applyBranchFilter(query, {
       ...context,

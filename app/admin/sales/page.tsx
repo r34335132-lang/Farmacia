@@ -164,7 +164,7 @@ export default function SalesReports() {
   const loadDeletedSales = async () => {
     setLoadingDeleted(true)
     try {
-      const response = await fetch("/api/sales")
+      const response = await fetch("/api/sales?status=cancelled")
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
