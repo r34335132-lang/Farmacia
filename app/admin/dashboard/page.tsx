@@ -9,6 +9,7 @@ import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Ca
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface DashboardStats {
   totalProducts: number
@@ -20,8 +21,22 @@ interface DashboardStats {
   activeCashiers: number
 }
 
+interface BranchSummary {
+  id: string
+  name: string
+  todaySales: number
+  todayRevenue: number
+  monthSales: number
+  monthRevenue: number
+  lowStock: number
+  outOfStock: number
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [branchSummaries, setBranchSummaries] = useState<BranchSummary[]>([])
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
+  const [branchFilter, setBranchFilter] = useState("all")
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
   const [expiringItems, setExpiringItems] = useState<any[]>([])
   const [recentSales, setRecentSales] = useState<any[]>([])
@@ -31,8 +46,20 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     checkAuth()
-    loadDashboardData()
+    loadBranches()
   }, [])
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [branchFilter, branches.length])
+
+  const loadBranches = async () => {
+    const res = await fetch("/api/branches")
+    if (res.ok) {
+      const data = await res.json()
+      setBranches(data.branches || [])
+    }
+  }
 
   const checkAuth = async () => {
     const {
@@ -53,17 +80,16 @@ export default function AdminDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // Get products stats
-      const { data: products, count } = await supabase
-        .from("products")
-        .select("*", { count: "exact" })
-        .eq("is_active", true)
+      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
+      const productsRes = await fetch(`/api/products${branchQuery}`)
+      const productsJson = await productsRes.json()
+      const products = productsJson.products || []
 
-      const lowStock = products?.filter((p) => p.stock_quantity <= p.min_stock_level) || []
+      const lowStock = products.filter((p: { stock_quantity: number; min_stock_level: number }) => p.stock_quantity <= p.min_stock_level)
 
       const today = new Date()
       const expiringProducts =
-        products?.filter((p) => {
+        products.filter((p: { expiration_date?: string; days_before_expiry_alert?: number }) => {
           if (!p.expiration_date) return false
           const expirationDate = new Date(p.expiration_date)
           const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
@@ -72,49 +98,89 @@ export default function AdminDashboard() {
         }) || []
 
       const expiredProducts =
-        products?.filter((p) => {
+        products.filter((p: { expiration_date?: string }) => {
           if (!p.expiration_date) return false
           const expirationDate = new Date(p.expiration_date)
           return expirationDate < today
         }) || []
 
-      // Get today's sales with proper timezone handling
       const now = new Date()
       const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       const tomorrow = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000)
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-      const { data: todaySales } = await supabase
-        .from("sales")
-        .select("*, profiles(full_name)")
-        .gte("created_at", todayDate.toISOString())
-        .lt("created_at", tomorrow.toISOString())
-        .order("created_at", { ascending: false })
-        .limit(5)
+      const salesRes = await fetch(`/api/sales${branchQuery}`)
+      const salesJson = await salesRes.json()
+      const allSales = salesJson.sales || []
 
-      const { data: revenue } = await supabase
-        .from("sales")
-        .select("total_amount")
-        .gte("created_at", todayDate.toISOString())
-        .lt("created_at", tomorrow.toISOString())
+      const todaySales = allSales.filter(
+        (sale: { created_at: string }) =>
+          new Date(sale.created_at) >= todayDate && new Date(sale.created_at) < tomorrow,
+      )
+      const totalRevenue = todaySales.reduce(
+        (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
+        0,
+      )
 
-      const totalRevenue = revenue?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0
-
-      // Get active cashiers
       const { data: cashiers } = await supabase.from("profiles").select("*").eq("role", "cajero").eq("is_active", true)
 
       setStats({
-        totalProducts: count || 0,
+        totalProducts: products.length,
         lowStockProducts: lowStock.length,
         expiringProducts: expiringProducts.length,
         expiredProducts: expiredProducts.length,
-        todaySales: todaySales?.length || 0,
+        todaySales: todaySales.length,
         totalRevenue,
         activeCashiers: cashiers?.length || 0,
       })
 
       setLowStockItems(lowStock.slice(0, 5))
       setExpiringItems(expiringProducts.slice(0, 5))
-      setRecentSales(todaySales || [])
+      setRecentSales(todaySales.slice(0, 5))
+
+      if (branchFilter === "all") {
+        const allProductsRes = await fetch("/api/products")
+        const allProductsJson = await allProductsRes.json()
+        const allProducts = allProductsJson.products || []
+        const allSalesRes = await fetch("/api/sales")
+        const allSalesJson = await allSalesRes.json()
+        const globalSales = allSalesJson.sales || []
+
+        const summaries = branches.map((branch) => {
+          const branchProducts = allProducts.filter((p: { branch_id: string }) => p.branch_id === branch.id)
+          const branchSales = globalSales.filter((sale: { branch_id: string }) => sale.branch_id === branch.id)
+          const branchTodaySales = branchSales.filter(
+            (sale: { created_at: string }) =>
+              new Date(sale.created_at) >= todayDate && new Date(sale.created_at) < tomorrow,
+          )
+          const branchMonthSales = branchSales.filter(
+            (sale: { created_at: string }) => new Date(sale.created_at) >= monthStart,
+          )
+
+          return {
+            id: branch.id,
+            name: branch.name,
+            todaySales: branchTodaySales.length,
+            todayRevenue: branchTodaySales.reduce(
+              (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
+              0,
+            ),
+            monthSales: branchMonthSales.length,
+            monthRevenue: branchMonthSales.reduce(
+              (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
+              0,
+            ),
+            lowStock: branchProducts.filter(
+              (p: { stock_quantity: number; min_stock_level: number }) => p.stock_quantity <= p.min_stock_level && p.stock_quantity > 0,
+            ).length,
+            outOfStock: branchProducts.filter((p: { stock_quantity: number }) => p.stock_quantity === 0).length,
+          }
+        })
+
+        setBranchSummaries(summaries)
+      } else {
+        setBranchSummaries([])
+      }
     } catch (error) {
       console.error("Error loading dashboard:", error)
     } finally {
@@ -150,6 +216,28 @@ export default function AdminDashboard() {
       </header>
 
       <div className="p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Panel administrativo</h2>
+            <p className="text-sm text-muted-foreground">
+              {branchFilter === "all" ? "Vista global de todas las farmacias" : "Vista filtrada por sucursal"}
+            </p>
+          </div>
+          <Select value={branchFilter} onValueChange={setBranchFilter}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Filtrar sucursal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las sucursales</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
           <Card>
@@ -222,6 +310,43 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {branchFilter === "all" && branchSummaries.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {branchSummaries.map((branch) => (
+              <Card key={branch.id}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Store className="h-4 w-4" />
+                    {branch.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Ventas hoy</span>
+                    <span className="font-semibold">
+                      {branch.todaySales} · ${branch.todayRevenue.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Ventas del mes</span>
+                    <span className="font-semibold">
+                      {branch.monthSales} · ${branch.monthRevenue.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Stock bajo</span>
+                    <span className="font-semibold text-orange-600">{branch.lowStock}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Agotados</span>
+                    <span className="font-semibold text-destructive">{branch.outOfStock}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -414,6 +539,8 @@ export default function AdminDashboard() {
                         <p className="font-medium">${sale.total_amount}</p>
                         <p className="text-sm text-muted-foreground">
                           {sale.profiles?.full_name} - {new Date(sale.created_at).toLocaleTimeString()}
+                          {sale.branches && !Array.isArray(sale.branches) ? ` · ${sale.branches.name}` : ""}
+                          {Array.isArray(sale.branches) && sale.branches[0] ? ` · ${sale.branches[0].name}` : ""}
                         </p>
                       </div>
                       <Badge variant="outline">{sale.payment_method}</Badge>

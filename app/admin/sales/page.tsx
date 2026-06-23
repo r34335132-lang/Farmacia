@@ -27,9 +27,17 @@ interface Sale {
   payment_method: string
   created_at: string
   status?: string
+  branch_id?: string
   profiles: {
     full_name: string
   }
+  branches?: {
+    id: string
+    name: string
+  } | {
+    id: string
+    name: string
+  }[] | null
   sale_items: {
     quantity: number
     unit_price: number
@@ -63,6 +71,8 @@ export default function SalesReports() {
   const [deletedSales, setDeletedSales] = useState<Sale[]>([])
   const [showDeletedSales, setShowDeletedSales] = useState(false)
   const [loadingDeleted, setLoadingDeleted] = useState(false)
+  const [branchFilter, setBranchFilter] = useState("all")
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
   const router = useRouter()
   const supabase = createClient()
 
@@ -72,9 +82,51 @@ export default function SalesReports() {
 
   useEffect(() => {
     checkAuth()
+    loadBranches()
+  }, [])
+
+  useEffect(() => {
     loadSales()
     loadPaymentStats()
-  }, [])
+  }, [branchFilter])
+
+  const loadBranches = async () => {
+    const res = await fetch("/api/branches")
+    if (res.ok) {
+      const data = await res.json()
+      setBranches(data.branches || [])
+    }
+  }
+
+  const getSaleBranchName = (sale: Sale) => {
+    if (Array.isArray(sale.branches)) return sale.branches[0]?.name
+    if (sale.branches && "name" in sale.branches) return sale.branches.name
+    const branch = branches.find((b) => b.id === sale.branch_id)
+    return branch?.name || "Sin sucursal"
+  }
+
+  const getBranchSummaries = () => {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    return branches.map((branch) => {
+      const branchSales = sales.filter((sale) => sale.branch_id === branch.id)
+      const todaySales = branchSales.filter((sale) => new Date(sale.created_at) >= todayStart)
+      const monthSales = branchSales.filter((sale) => new Date(sale.created_at) >= monthStart)
+      const todayTotal = todaySales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+      const monthTotal = monthSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0)
+
+      return {
+        ...branch,
+        todayCount: todaySales.length,
+        todayTotal,
+        monthCount: monthSales.length,
+        monthTotal,
+        avgTicket: monthSales.length > 0 ? monthTotal / monthSales.length : 0,
+      }
+    })
+  }
 
   const checkAuth = async () => {
     const {
@@ -94,7 +146,8 @@ export default function SalesReports() {
 
   const loadSales = async () => {
     try {
-      const response = await fetch("/api/sales")
+      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
+      const response = await fetch(`/api/sales${branchQuery}`)
       if (!response.ok) throw new Error("Failed to fetch sales")
 
       const data = await response.json()
@@ -134,7 +187,8 @@ export default function SalesReports() {
 
   const loadPaymentStats = async () => {
     try {
-      const response = await fetch("/api/payments")
+      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
+      const response = await fetch(`/api/payments${branchQuery}`)
       if (!response.ok) throw new Error("Failed to fetch payment stats")
 
       const data = await response.json()
@@ -651,6 +705,8 @@ export default function SalesReports() {
           })}
           {" • "}
           {sale.profiles?.full_name || "N/A"}
+          {" • "}
+          {getSaleBranchName(sale)}
         </div>
         <div className="text-xs text-muted-foreground">
           {sale.sale_items?.length || 0} {sale.sale_items?.length === 1 ? "producto" : "productos"}
@@ -797,6 +853,20 @@ export default function SalesReports() {
                 </SelectContent>
               </Select>
 
+              <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las sucursales</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Input
                 placeholder="Buscar por vendedor o ID..."
                 value={searchTerm}
@@ -804,6 +874,37 @@ export default function SalesReports() {
                 className="flex-1"
               />
             </div>
+
+            {branchFilter === "all" && branches.length > 0 && (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mb-8">
+                {getBranchSummaries().map((summary) => (
+                  <Card key={summary.id}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">{summary.name}</CardTitle>
+                      <CardDescription>Resumen por sucursal</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Hoy</span>
+                        <span className="font-semibold">
+                          {summary.todayCount} ventas · ${summary.todayTotal.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Mes</span>
+                        <span className="font-semibold">
+                          {summary.monthCount} ventas · ${summary.monthTotal.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Ticket promedio (mes)</span>
+                        <span className="font-semibold">${summary.avgTicket.toFixed(2)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
               {paymentStats && (

@@ -31,22 +31,32 @@ import {
   Percent,
   Tag,
   Printer,
+  Store,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
 
 const PRODUCTS_PER_PAGE = 30
+
+interface BranchInfo {
+  id: string
+  name: string
+}
 
 interface Product {
   id: string
   name: string
   price: number
   stock_quantity: number
+  min_stock_level?: number
   barcode?: string
   image_url?: string
   is_active: boolean
   section?: string
+  branch_id?: string
+  branches?: BranchInfo | BranchInfo[] | null
 }
 
 interface Promotion {
@@ -95,6 +105,11 @@ export default function POSPage() {
   const [includeStockBajo, setIncludeStockBajo] = useState(true)
   const [includePorVencer, setIncludePorVencer] = useState(true)
   const [includeVencidos, setIncludeVencidos] = useState(true)
+  const [activeBranch, setActiveBranch] = useState<BranchInfo | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [availableBranches, setAvailableBranches] = useState<BranchInfo[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null)
+  const [isCartOpen, setIsCartOpen] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -122,7 +137,6 @@ export default function POSPage() {
 
   useEffect(() => {
     checkAuth()
-    loadProducts()
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName !== "INPUT" && e.key.match(/[0-9a-zA-Z]/)) {
@@ -133,6 +147,21 @@ export default function POSPage() {
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [])
+
+  useEffect(() => {
+    if (activeBranch || selectedBranchId || (!isAdmin && activeBranch)) {
+      loadProducts()
+    }
+  }, [selectedBranchId, activeBranch?.id, isAdmin])
+
+  const getBranchName = (product: Product) => {
+    if (Array.isArray(product.branches)) return product.branches[0]?.name
+    if (product.branches && "name" in product.branches) return product.branches.name
+    return activeBranch?.name || "Sucursal"
+  }
+
+  const isLowStock = (product: Product) =>
+    product.stock_quantity <= (product.min_stock_level ?? 10)
 
   const startCamera = async () => {
     try {
@@ -195,18 +224,38 @@ export default function POSPage() {
     }
 
     setCurrentUser(profile)
+
+    const branchRes = await fetch("/api/branches")
+    if (branchRes.ok) {
+      const branchData = await branchRes.json()
+      setIsAdmin(branchData.isAdmin)
+      setAvailableBranches(branchData.branches || [])
+      setActiveBranch(branchData.activeBranch)
+      if (branchData.isAdmin) {
+        const defaultBranch = branchData.branches?.[0]
+        setSelectedBranchId(branchData.activeBranchId || defaultBranch?.id || null)
+        if (defaultBranch && !branchData.activeBranch) {
+          setActiveBranch(defaultBranch)
+        }
+      } else {
+        setSelectedBranchId(branchData.activeBranchId)
+      }
+    } else {
+      setLoading(false)
+    }
   }
 
   const loadProducts = async () => {
     try {
-      const response = await fetch("/api/products")
-      const { products: data, total } = await response.json()
+      const branchQuery =
+        isAdmin && selectedBranchId ? `?branch_id=${selectedBranchId}` : ""
+      const response = await fetch(`/api/products${branchQuery}`)
+      const { products: data } = await response.json()
 
-      const activeProducts = data.filter((p: any) => p.is_active !== false)
+      const activeProducts = (data || []).filter((p: Product) => p.is_active !== false)
       setProducts(activeProducts)
       setCurrentPage(1)
 
-      // Load active promotions
       await loadPromotions()
     } catch (error) {
       console.error("Error loading products:", error)
@@ -291,7 +340,7 @@ export default function POSPage() {
 
   const addToCart = (product: Product) => {
     if (product.stock_quantity < 1) {
-      alert("No hay suficiente stock")
+      alert("Agotado en esta sucursal")
       return
     }
 
@@ -375,91 +424,63 @@ export default function POSPage() {
       }
     }
 
+    const branchIdForSale = isAdmin ? selectedBranchId : activeBranch?.id
+    if (!branchIdForSale) {
+      alert("No hay sucursal activa para procesar la venta")
+      return
+    }
+
     setProcessingPayment(true)
 
     try {
       const discountValueNum = Number.parseFloat(discountValue || "0")
       const hasDiscount = discountValueNum > 0
 
-      // 1. Creamos la venta
-      const { data: sale, error: saleError } = await supabase
-        .from("sales")
-        .insert([
-          {
-            cashier_id: currentUser.id,
-            subtotal_before_discount: subtotal,
-            discount_type: hasDiscount ? discountType : "none",
-            discount_value: hasDiscount ? discountValueNum : 0,
-            discount_reason: hasDiscount
-              ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
-              : null,
-            total_amount: total,
-            payment_method: paymentMethod,
-            cash_received: paymentMethod === "efectivo" ? Number.parseFloat(cashReceived) : null,
-            change_given: paymentMethod === "efectivo" ? change : null,
-            status: "completed",
-          },
-        ])
-        .select()
-        .single()
-
-      if (saleError) throw saleError
-
-      // 2. Preparamos los items
-      const saleItems = cart.map((item) => ({
-        sale_id: sale.id,
-        product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price: item.product.price,
-        subtotal: item.subtotal,
-      }))
-
-      // 3. Insertamos los items de la venta
-      const { error: itemsError } = await supabase.from("sale_items").insert(saleItems)
-      if (itemsError) throw itemsError
-
-      // 4. DESCONTAR EL STOCK MANUALMENTE Y REGISTRAR MOVIMIENTOS
-      for (const item of cart) {
-        // A. Actualizar la cantidad en la tabla products
-        const { error: stockError } = await supabase
-          .from("products")
-          .update({
-            stock_quantity: item.product.stock_quantity - item.quantity,
-          })
-          .eq("id", item.product.id)
-
-        if (stockError) throw stockError
-
-        // B. Registrar el movimiento de salida
-        const { error: movementError } = await supabase.from("stock_movements").insert([
-          {
+      const response = await fetch("/api/process-sale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cart.map((item) => ({
             product_id: item.product.id,
-            movement_type: "salida",
             quantity: item.quantity,
-            reason: `Venta POS #${sale.id.slice(-8)}`,
-            user_id: currentUser.id,
-          },
-        ])
-        
-        if (movementError) console.error("Error registrando movimiento:", movementError)
+            unit_price: item.product.price,
+            subtotal: item.subtotal,
+          })),
+          payment_method: paymentMethod,
+          cash_received: paymentMethod === "efectivo" ? Number.parseFloat(cashReceived) : null,
+          change_given: paymentMethod === "efectivo" ? change : null,
+          subtotal_before_discount: subtotal,
+          discount_type: hasDiscount ? discountType : "none",
+          discount_value: hasDiscount ? discountValueNum : 0,
+          discount_reason: hasDiscount
+            ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
+            : null,
+          total_amount: total,
+          branch_id: branchIdForSale,
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || "Error al procesar la venta")
       }
 
-      // 5. Generamos el ticket y limpiamos
+      const sale = { id: result.sale_id, total_amount: total, payment_method: paymentMethod }
       const discountReasonText = hasDiscount
         ? `Descuento ${discountType === "percentage" ? `${discountValueNum}%` : `$${discountValueNum}`}`
         : ""
+
       generateReceipt(sale, cart, discountAmount, discountReasonText, subtotal, total, cashReceived, change)
 
       clearCart()
       setIsPaymentDialogOpen(false)
+      setIsCartOpen(false)
       setCashReceived("")
       setPaymentMethod("efectivo")
-
-      // Recargamos los productos para actualizar el stock en pantalla
       loadProducts()
     } catch (error) {
       console.error("Error processing payment:", error)
-      alert("Error al procesar el pago")
+      alert(error instanceof Error ? error.message : "Error al procesar el pago")
     } finally {
       setProcessingPayment(false)
     }
@@ -1050,47 +1071,77 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50">
-      <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm">
-        <div className="flex h-20 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl">
-              <ShoppingCart className="h-8 w-8 text-white" />
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50 overflow-x-hidden">
+      <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-30">
+        <div className="flex min-h-16 lg:h-20 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-4 sm:px-6 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl shrink-0">
+              <ShoppingCart className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+            <div className="min-w-0">
+              <h1 className="text-xl lg:text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent truncate">
                 Farmacia Bienestar
               </h1>
-              <p className="text-sm text-muted-foreground">¡Bienvenido/a {currentUser?.full_name}! Listo para ayudar</p>
+              <p className="text-xs lg:text-sm text-muted-foreground truncate">
+                {currentUser?.full_name}
+                {activeBranch ? ` · ${activeBranch.name}` : ""}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isAdmin && availableBranches.length > 0 && (
+              <Select
+                value={selectedBranchId || undefined}
+                onValueChange={(value) => {
+                  setSelectedBranchId(value)
+                  const branch = availableBranches.find((b) => b.id === value)
+                  if (branch) setActiveBranch(branch)
+                }}
+              >
+                <SelectTrigger className="w-full sm:w-52 border-rose-200 h-11">
+                  <Store className="h-4 w-4 mr-2 shrink-0" />
+                  <SelectValue placeholder="Sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableBranches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {!isAdmin && activeBranch && (
+              <Badge variant="outline" className="border-rose-300 text-rose-800 px-3 py-2 text-sm">
+                <Store className="h-4 w-4 mr-1" />
+                {activeBranch.name}
+              </Badge>
+            )}
             {promotions.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
                 <Tag className="h-4 w-4 text-green-600" />
                 <span className="text-sm font-medium text-green-700">
-                  {promotions.length} {promotions.length === 1 ? 'Promocion' : 'Promociones'} Activas
+                  {promotions.length} Promo{promotions.length === 1 ? "" : "s"}
                 </span>
               </div>
             )}
-            <Button onClick={openExportDialog} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
-              <Printer className="h-4 w-4 mr-2" />
-              Exportar Inventario
+            <Button onClick={openExportDialog} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <Printer className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Exportar</span>
             </Button>
-            <Button onClick={handleCorteTurno} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
-              <Banknote className="h-4 w-4 mr-2" />
-              Corte de Turno
+            <Button onClick={handleCorteTurno} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent hidden md:inline-flex">
+              <Banknote className="h-4 w-4 mr-1" />
+              Corte
             </Button>
-            <Button onClick={handleLogout} variant="outline" className="border-rose-200 hover:bg-rose-50 bg-transparent">
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar Sesión
+            <Button onClick={handleLogout} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-5rem)]">
-        <div className="flex-1 p-6 space-y-6 overflow-auto">
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] pb-24 lg:pb-0">
+        <div className="flex-1 p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6 overflow-auto">
           <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -1141,14 +1192,14 @@ export default function POSPage() {
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleBarcodeSearch()}
-                    className="border-rose-200 focus:border-rose-400"
+                    className="border-rose-200 focus:border-rose-400 h-12 text-base"
                     autoFocus
                   />
                   <Button
                     onClick={handleBarcodeSearch}
-                    className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"
+                    className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 h-12 px-4"
                   >
-                    <Scan className="h-4 w-4" />
+                    <Scan className="h-5 w-5" />
                   </Button>
                 </div>
                 <Button
@@ -1171,13 +1222,13 @@ export default function POSPage() {
             </CardHeader>
             <CardContent className="p-4">
               <Input
-                placeholder="Buscar por nombre del medicamento..."
+                placeholder="Buscar por nombre o código de barras..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value)
                   setCurrentPage(1)
                 }}
-                className="border-rose-200 focus:border-rose-400"
+                className="border-rose-200 focus:border-rose-400 h-12 text-base"
               />
             </CardContent>
           </Card>
@@ -1188,20 +1239,21 @@ export default function POSPage() {
             {searchTerm && ` (filtrados de ${products.length} totales)`}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 lg:gap-6">
             {paginatedProducts.map((product) => {
               const promo = getProductPromotion(product.id)
               const discountedPrice = getDiscountedPrice(product)
               const hasDiscount = promo !== null
+              const outOfStock = product.stock_quantity === 0
               
               return (
                 <Card
                   key={product.id}
-                  className={`cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 border-0 shadow-lg bg-white/80 backdrop-blur-sm ${hasDiscount ? 'ring-2 ring-green-400' : ''}`}
+                  className={`cursor-pointer hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm ${hasDiscount ? "ring-2 ring-green-400" : ""}`}
                 >
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      <div className="w-full h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden relative">
+                  <CardContent className="p-4 lg:p-6">
+                    <div className="space-y-3">
+                      <div className="w-full h-28 lg:h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden relative">
                         {hasDiscount && (
                           <div className="absolute top-2 left-2 z-10">
                             <Badge className="bg-green-500 text-white text-xs font-bold px-2 py-1">
@@ -1229,7 +1281,11 @@ export default function POSPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <h3 className="font-bold text-lg text-gray-800 line-clamp-2">{product.name}</h3>
+                        <h3 className="font-bold text-base lg:text-lg text-gray-800 line-clamp-2">{product.name}</h3>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Store className="h-3 w-3" />
+                          Disponible en: {getBranchName(product)}
+                        </p>
                         {hasDiscount && (
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-300">
@@ -1238,11 +1294,11 @@ export default function POSPage() {
                             </Badge>
                           </div>
                         )}
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex flex-col">
                             {hasDiscount ? (
                               <>
-                                <span className="text-2xl font-bold text-green-600">
+                                <span className="text-xl lg:text-2xl font-bold text-green-600">
                                   ${discountedPrice.toFixed(2)}
                                 </span>
                                 <span className="text-sm text-muted-foreground line-through">
@@ -1250,26 +1306,31 @@ export default function POSPage() {
                                 </span>
                               </>
                             ) : (
-                              <span className="text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+                              <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
                                 ${product.price.toFixed(2)}
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 flex-wrap">
                             {product.section && (
                               <Badge variant="outline" className="text-xs border-rose-300 text-rose-800 bg-rose-50">
                                 {product.section}
                               </Badge>
                             )}
+                            {isLowStock(product) && !outOfStock && (
+                              <Badge variant="destructive" className="text-xs font-semibold">
+                                Stock bajo
+                              </Badge>
+                            )}
                             <Badge
                               variant={
-                                product.stock_quantity > 10
+                                product.stock_quantity > (product.min_stock_level ?? 10)
                                   ? "default"
                                   : product.stock_quantity > 0
                                     ? "secondary"
                                     : "destructive"
                               }
-                              className="font-semibold"
+                              className="font-semibold text-xs"
                             >
                               Stock: {product.stock_quantity}
                             </Badge>
@@ -1277,11 +1338,15 @@ export default function POSPage() {
                         </div>
                         <Button
                           onClick={() => addToCart(product)}
-                          className={`w-full font-semibold py-3 ${hasDiscount ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' : 'bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950'} text-white`}
-                          disabled={product.stock_quantity === 0}
+                          className={`w-full font-semibold py-3 h-12 text-base ${hasDiscount ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800" : "bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"} text-white`}
+                          disabled={outOfStock}
                         >
-                          <Plus className="h-4 w-4 mr-2" />
-                          {product.stock_quantity === 0 ? "Sin Stock" : hasDiscount ? "Agregar con Descuento" : "Agregar al Carrito"}
+                          <Plus className="h-5 w-5 mr-2" />
+                          {outOfStock
+                            ? "Agotado en esta sucursal"
+                            : hasDiscount
+                              ? "Agregar con Descuento"
+                              : "Agregar al Carrito"}
                         </Button>
                       </div>
                     </div>
@@ -1369,7 +1434,7 @@ export default function POSPage() {
           )}
         </div>
 
-        <div className="w-96 border-l bg-white/90 backdrop-blur-sm p-6 space-y-4 shadow-xl">
+        <div className="hidden lg:flex lg:w-96 xl:w-[26rem] border-l bg-white/90 backdrop-blur-sm p-4 lg:p-6 space-y-4 shadow-xl flex-col">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
               Carrito de Compras
@@ -1386,7 +1451,7 @@ export default function POSPage() {
             )}
           </div>
 
-          <div className="space-y-3 flex-1 overflow-auto max-h-96">
+          <div className="space-y-3 flex-1 overflow-auto max-h-[calc(100vh-18rem)]">
             {cart.map((item) => (
               <Card key={item.product.id} className={`shadow-md ${item.hasPromotion ? 'border-green-300 bg-green-50/50' : 'border-rose-100'}`}>
                 <CardContent className="p-4">
@@ -1428,18 +1493,18 @@ export default function POSPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-8 w-8 p-0 border-rose-200"
+                          className="h-10 w-10 p-0 border-rose-200"
                         >
-                          <Minus className="h-3 w-3" />
+                          <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center font-bold">{item.quantity}</span>
+                        <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-8 w-8 p-0 border-rose-200"
+                          className="h-10 w-10 p-0 border-rose-200"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -1516,6 +1581,65 @@ export default function POSPage() {
               </div>
             )
           })()}
+        </div>
+
+        {/* Mobile sticky cart bar */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur-sm p-3 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
+          <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
+            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="flex-1 h-12 border-rose-200 justify-start">
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Carrito ({cart.length})
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="h-[85vh] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Carrito de Compras</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4 space-y-3 pb-24">
+                  {cart.map((item) => (
+                    <Card key={item.product.id} className="border-rose-100">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <h4 className="font-semibold">{item.product.name}</h4>
+                            <p className="text-sm text-muted-foreground">${item.discountedPrice.toFixed(2)} c/u</p>
+                          </div>
+                          <span className="font-bold text-rose-800">${item.subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center justify-between mt-3">
+                          <div className="flex items-center gap-3">
+                            <Button variant="outline" size="sm" className="h-10 w-10 p-0" onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <span className="w-8 text-center font-bold text-lg">{item.quantity}</span>
+                            <Button variant="outline" size="sm" className="h-10 w-10 p-0" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <Button variant="ghost" size="sm" onClick={() => removeFromCart(item.product.id)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {cart.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">El carrito está vacío</p>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button
+              onClick={() => (cart.length > 0 ? setIsPaymentDialogOpen(true) : setIsCartOpen(true))}
+              disabled={cart.length === 0}
+              className="h-12 px-6 bg-gradient-to-r from-rose-800 to-red-900 text-white font-bold shrink-0"
+            >
+              <Receipt className="h-5 w-5 mr-1" />
+              ${total.toFixed(2)}
+            </Button>
+          </div>
         </div>
       </div>
 

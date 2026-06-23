@@ -47,7 +47,7 @@ export default function LoginPage() {
           case "admin":
             router.push("/admin/dashboard")
             break
-          case "cashier":
+          case "cajero":
             router.push("/pos")
             break
           default:

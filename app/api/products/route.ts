@@ -1,217 +1,215 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import { applyBranchFilter, resolveBranchContext, resolveEffectiveBranchId } from "@/lib/branch"
 
-// Evita que Next.js guarde esto en caché. Vital para un sistema de inventario.
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic"
 
-// ==========================================
-// 1. OBTENER PRODUCTOS (GET) - Todo el catálogo
-// ==========================================
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = await createClient()
+    const { searchParams } = new URL(request.url)
+    const requestedBranchId = searchParams.get("branch_id")
 
-    let allProducts: any[] = [];
-    let start = 0;
-    const pageSize = 1000; // Obtener 1000 productos por vez
-    let hasMore = true;
+    const context = await resolveBranchContext(supabase, requestedBranchId)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
 
-    // Obtener TODOS los productos haciendo múltiples llamadas si es necesario
+    let allProducts: Record<string, unknown>[] = []
+    let start = 0
+    const pageSize = 1000
+    let hasMore = true
+
     while (hasMore) {
-      const { data, error } = await supabase
+      let query = supabase
         .from("products")
-        .select("*")
+        .select("*, branches(id, name)")
         .order("name")
-        .range(start, start + pageSize - 1);
+        .range(start, start + pageSize - 1)
+
+      query = applyBranchFilter(query, {
+        ...context,
+        activeBranchId: resolveEffectiveBranchId(context, requestedBranchId),
+      })
+
+      const { data, error } = await query
 
       if (error) {
-        console.error("Error fetching products:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("Error fetching products:", error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
       }
 
       if (data && data.length > 0) {
-        allProducts = [...allProducts, ...data];
-        start += pageSize;
-
-        // Si obtuvimos menos productos que el pageSize, ya no hay más
-        if (data.length < pageSize) {
-          hasMore = false;
-        }
+        allProducts = [...allProducts, ...data]
+        start += pageSize
+        if (data.length < pageSize) hasMore = false
       } else {
-        hasMore = false;
+        hasMore = false
       }
     }
 
     return NextResponse.json({
       products: allProducts,
       total: allProducts.length,
-    });
-  } catch (error: any) {
-    console.error("Error in products API:", error);
-    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
+      branchId: resolveEffectiveBranchId(context, requestedBranchId),
+      isAdmin: context.isAdmin,
+    })
+  } catch (error) {
+    console.error("Error in products API:", error)
+    return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 })
   }
 }
 
-// ==========================================
-// 2. ACTUALIZAR STOCK Y REGISTRAR MOVIMIENTO (PATCH)
-// ==========================================
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createClient();
-    const body = await request.json();
-    
-    // Ojo: asegúrate que desde el frontend envías 'stock'. Si tu BD se llama 'stock_quantity', ajústalo.
-    const { id, stock, reason = 'Actualización manual desde admin' } = body;
+    const supabase = await createClient()
+    const body = await request.json()
+    const { id, stock, reason = "Actualización manual desde admin" } = body
 
     if (!id || stock === undefined) {
-      return NextResponse.json(
-        { error: "Faltan datos requeridos (id, stock)" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Faltan datos requeridos (id, stock)" }, { status: 400 })
     }
 
-    // A. Identificar quién está haciendo el cambio
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const context = await resolveBranchContext(supabase)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
 
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
 
-    // B. Obtener el stock actual antes de sobreescribirlo
     const { data: oldProduct, error: fetchError } = await supabase
       .from("products")
-      .select("stock_quantity") // <-- Ajusta esto a tu columna real (ej. stock o stock_quantity)
+      .select("stock_quantity, branch_id")
       .eq("id", id)
-      .single();
+      .single()
 
     if (fetchError || !oldProduct) {
-      return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 });
+      return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
     }
 
-    const previous_stock = oldProduct.stock_quantity; // <-- Ajusta esto si tu columna se llama diferente
-    const difference = stock - previous_stock;
+    if (!context.isAdmin && oldProduct.branch_id !== context.activeBranchId) {
+      return NextResponse.json({ error: "No autorizado para modificar este producto" }, { status: 403 })
+    }
+
+    const previous_stock = oldProduct.stock_quantity
+    const difference = stock - previous_stock
 
     if (difference === 0) {
-      return NextResponse.json({ success: true, message: "El stock es el mismo, no hubo cambios" });
+      return NextResponse.json({ success: true, message: "El stock es el mismo, no hubo cambios" })
     }
 
-    // Definir si fue entrada o salida para tu restricción (check) en BD
-    const movementType = difference > 0 ? 'entrada' : 'salida';
-    const quantity = Math.abs(difference); // Guardamos el valor absoluto en quantity
+    const movementType = difference > 0 ? "entrada" : "salida"
+    const quantity = Math.abs(difference)
 
-    // C. Actualizar el producto
-    const { error: updateError } = await supabase
-      .from("products")
-      .update({ stock_quantity: stock }) // <-- Ajusta el nombre de la columna si es necesario
-      .eq("id", id);
+    const { error: updateError } = await supabase.from("products").update({ stock_quantity: stock }).eq("id", id)
 
-    if (updateError) {
-      throw updateError;
-    }
+    if (updateError) throw updateError
 
-    // D. Guardar el movimiento en la bitácora
-    const { error: logError } = await supabase
-      .from("stock_movements")
-      .insert({
-        product_id: id,
-        user_id: user.id,
-        movement_type: movementType,
-        quantity: quantity,
-        reason: reason
-      });
+    const { error: logError } = await supabase.from("stock_movements").insert({
+      product_id: id,
+      user_id: user.id,
+      movement_type: movementType,
+      quantity,
+      reason,
+    })
 
-    if (logError) {
-      console.error("Error registrando en bitácora:", logError);
-    }
+    if (logError) console.error("Error registrando en bitácora:", logError)
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Inventario actualizado y registrado correctamente" 
-    });
-
-  } catch (error: any) {
-    console.error("Error in PATCH products API:", error);
-    return NextResponse.json(
-      { error: error.message || "Error interno del servidor" },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      message: "Inventario actualizado y registrado correctamente",
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error interno del servidor"
+    console.error("Error in PATCH products API:", error)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
-// ==========================================
-// 3. CREAR PRODUCTO (POST) - Registra la entrada inicial
-// ==========================================
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const body = await request.json();
+    const supabase = await createClient()
+    const body = await request.json()
+    const { branch_id: requestedBranchId, ...productData } = body
 
-    // Identificar al admin que está creando el producto
-    const { data: { user } } = await supabase.auth.getUser();
+    const context = await resolveBranchContext(supabase, requestedBranchId)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
 
-    // 1. Insertar el nuevo producto en la base de datos
+    const effectiveBranchId = resolveEffectiveBranchId(context, requestedBranchId)
+    if (!effectiveBranchId) {
+      return NextResponse.json({ error: "Debe seleccionar una sucursal" }, { status: 400 })
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
     const { data: newProduct, error: insertError } = await supabase
       .from("products")
-      .insert(body)
-      .select()
-      .single();
+      .insert({ ...productData, branch_id: effectiveBranchId })
+      .select("*, branches(id, name)")
+      .single()
 
-    if (insertError) throw insertError;
+    if (insertError) throw insertError
 
-    // 2. Si el producto se creó con un stock mayor a 0, lo registramos en la bitácora
-    // Asegúrate de usar la propiedad correcta (ej. stock_quantity)
-    const initialStock = newProduct.stock_quantity || newProduct.stock || 0;
-
+    const initialStock = newProduct.stock_quantity || 0
     if (newProduct && initialStock > 0) {
       await supabase.from("stock_movements").insert({
         product_id: newProduct.id,
         user_id: user?.id,
-        movement_type: 'entrada',
+        movement_type: "entrada",
         quantity: initialStock,
-        reason: 'Stock inicial por creación de producto',
-      });
+        reason: "Stock inicial por creación de producto",
+      })
     }
 
-    return NextResponse.json({ success: true, product: newProduct });
-  } catch (error: any) {
-    console.error("Error al crear producto:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, product: newProduct })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error al crear producto"
+    console.error("Error al crear producto:", error)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
-// ==========================================
-// 4. ELIMINAR PRODUCTO (DELETE) - Limpia la base de datos
-// ==========================================
 export async function DELETE(request: Request) {
   try {
-    const supabase = await createClient();
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
+    const supabase = await createClient()
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
 
     if (!id) {
-      return NextResponse.json({ error: "ID de producto requerido" }, { status: 400 });
+      return NextResponse.json({ error: "ID de producto requerido" }, { status: 400 })
     }
 
-    // PRIMERO: Borramos el historial del producto para evitar errores de llave foránea
-    await supabase
-      .from("stock_movements")
-      .delete()
-      .eq("product_id", id);
+    const context = await resolveBranchContext(supabase)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
 
-    // SEGUNDO: Borramos el producto
-    const { error: deleteError } = await supabase
-      .from("products")
-      .delete()
-      .eq("id", id);
+    if (!context.isAdmin) {
+      return NextResponse.json({ error: "Solo administradores pueden eliminar productos" }, { status: 403 })
+    }
 
-    if (deleteError) throw deleteError;
+    await supabase.from("stock_movements").delete().eq("product_id", id)
 
-    return NextResponse.json({ 
-      success: true, 
-      message: "Producto y su historial eliminados correctamente" 
-    });
-  } catch (error: any) {
-    console.error("Error al eliminar producto:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { error: deleteError } = await supabase.from("products").delete().eq("id", id)
+    if (deleteError) throw deleteError
+
+    return NextResponse.json({
+      success: true,
+      message: "Producto y su historial eliminados correctamente",
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Error al eliminar producto"
+    console.error("Error al eliminar producto:", error)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

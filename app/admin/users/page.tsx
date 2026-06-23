@@ -33,6 +33,10 @@ interface Profile {
   created_at: string
 }
 
+interface UserBranchMap {
+  [userId: string]: string
+}
+
 export default function UserManagement() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,15 +47,43 @@ export default function UserManagement() {
     full_name: "",
     role: "cajero",
     password: "",
+    branch_id: "",
   })
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
+  const [userBranches, setUserBranches] = useState<UserBranchMap>({})
   const router = useRouter()
   const supabase = createClient()
   const { toast } = useToast()
 
   useEffect(() => {
     checkAuth()
+    loadBranches()
     loadProfiles()
   }, [])
+
+  const loadBranches = async () => {
+    const res = await fetch("/api/branches")
+    if (res.ok) {
+      const data = await res.json()
+      setBranches(data.branches || [])
+      if (data.branches?.[0]) {
+        setFormData((prev) => ({ ...prev, branch_id: data.branches[0].id }))
+      }
+    }
+  }
+
+  const loadUserBranches = async () => {
+    const { data } = await supabase
+      .from("user_branches")
+      .select("user_id, branch_id, is_active")
+      .eq("is_active", true)
+
+    const map: UserBranchMap = {}
+    data?.forEach((row) => {
+      map[row.user_id] = row.branch_id
+    })
+    setUserBranches(map)
+  }
 
   const checkAuth = async () => {
     const {
@@ -74,6 +106,7 @@ export default function UserManagement() {
       const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false })
 
       setProfiles(data || [])
+      await loadUserBranches()
     } catch (error) {
       console.error("Error loading profiles:", error)
       toast({
@@ -101,6 +134,23 @@ export default function UserManagement() {
           .eq("id", editingUser.id)
 
         if (error) throw error
+
+        if (formData.role === "cajero" && formData.branch_id) {
+          await supabase
+            .from("user_branches")
+            .update({ is_active: false })
+            .eq("user_id", editingUser.id)
+
+          await supabase.from("user_branches").upsert(
+            {
+              user_id: editingUser.id,
+              branch_id: formData.branch_id,
+              role: "cashier",
+              is_active: true,
+            },
+            { onConflict: "user_id,branch_id" },
+          )
+        }
 
         toast({
           title: "Usuario actualizado",
@@ -147,6 +197,15 @@ export default function UserManagement() {
             throw profileError
           }
 
+          if (authData.user && formData.role === "cajero" && formData.branch_id) {
+            await supabase.from("user_branches").insert({
+              user_id: authData.user.id,
+              branch_id: formData.branch_id,
+              role: "cashier",
+              is_active: true,
+            })
+          }
+
           console.log("[v0] Perfil insertado correctamente")
         }
 
@@ -158,7 +217,7 @@ export default function UserManagement() {
 
       setIsDialogOpen(false)
       setEditingUser(null)
-      setFormData({ email: "", full_name: "", role: "cajero", password: "" })
+      setFormData({ email: "", full_name: "", role: "cajero", password: "", branch_id: branches[0]?.id || "" })
       loadProfiles()
     } catch (error) {
       console.error("Error saving user:", error)
@@ -199,13 +258,14 @@ export default function UserManagement() {
       full_name: user.full_name,
       role: user.role,
       password: "",
+      branch_id: userBranches[user.id] || branches[0]?.id || "",
     })
     setIsDialogOpen(true)
   }
 
   const openCreateDialog = () => {
     setEditingUser(null)
-    setFormData({ email: "", full_name: "", role: "cajero", password: "" })
+    setFormData({ email: "", full_name: "", role: "cajero", password: "", branch_id: branches[0]?.id || "" })
     setIsDialogOpen(true)
   }
 
@@ -285,6 +345,26 @@ export default function UserManagement() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {(formData.role === "cajero" || editingUser?.role === "cajero") && (
+                    <div>
+                      <Label htmlFor="branch_id">Sucursal asignada</Label>
+                      <Select
+                        value={formData.branch_id}
+                        onValueChange={(value) => setFormData({ ...formData, branch_id: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar sucursal" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {!editingUser && (
                     <div>
                       <Label htmlFor="password">Contraseña</Label>
@@ -370,6 +450,9 @@ export default function UserManagement() {
                       <p className="text-sm text-muted-foreground">{profile.email}</p>
                       <p className="text-xs text-muted-foreground">
                         Creado: {new Date(profile.created_at).toLocaleDateString()}
+                        {profile.role === "cajero" && userBranches[profile.id] && (
+                          <> · Sucursal: {branches.find((b) => b.id === userBranches[profile.id])?.name}</>
+                        )}
                       </p>
                     </div>
                   </div>

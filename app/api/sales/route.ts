@@ -1,46 +1,42 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase/server"
+import { applyBranchFilter, resolveBranchContext, resolveEffectiveBranchId } from "@/lib/branch"
 
-export async function GET() {
+export const dynamic = "force-dynamic"
+
+export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies()
+    const supabase = await createClient()
+    const { searchParams } = new URL(request.url)
+    const requestedBranchId = searchParams.get("branch_id")
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll()
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-            } catch {
-              // Server Component context
-            }
-          },
-        },
-      },
-    )
+    const context = await resolveBranchContext(supabase, requestedBranchId)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
 
-    // Eliminamos el bucle while. Pedimos solo las últimas 2000 ventas.
-    // Esto evita que el servidor se quede sin memoria o que la base de datos colapse.
-    const { data, error } = await supabase
+    let query = supabase
       .from("sales")
       .select(`
         *,
         profiles(full_name),
+        branches(id, name),
         sale_items(
           quantity,
           unit_price,
           subtotal,
-          products(name, barcode, section)
+          products(name, barcode, section, branch_id)
         )
       `)
       .order("created_at", { ascending: false })
-      .limit(2000) 
+      .limit(2000)
+
+    query = applyBranchFilter(query, {
+      ...context,
+      activeBranchId: resolveEffectiveBranchId(context, requestedBranchId),
+    })
+
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching sales:", error)
@@ -50,6 +46,8 @@ export async function GET() {
     return NextResponse.json({
       sales: data || [],
       total: data?.length || 0,
+      branchId: resolveEffectiveBranchId(context, requestedBranchId),
+      isAdmin: context.isAdmin,
     })
   } catch (error) {
     console.error("Error in sales API:", error)

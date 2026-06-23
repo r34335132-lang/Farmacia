@@ -39,8 +39,14 @@ import { useRouter } from "next/navigation"
 import { ImageUpload } from "@/components/image-upload"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const PRODUCTS_PER_PAGE = 50
+
+interface BranchInfo {
+  id: string
+  name: string
+}
 
 interface Product {
   id: string
@@ -57,6 +63,8 @@ interface Product {
   expiration_date?: string
   days_before_expiry_alert?: number
   section?: string
+  branch_id?: string
+  branches?: BranchInfo | BranchInfo[] | null
 }
 
 export default function ProductsPage() {
@@ -77,6 +85,8 @@ export default function ProductsPage() {
   const [includeStockBajo, setIncludeStockBajo] = useState(true)
   const [includePorVencer, setIncludePorVencer] = useState(true)
   const [includeVencidos, setIncludeVencidos] = useState(true)
+  const [branches, setBranches] = useState<BranchInfo[]>([])
+  const [branchFilter, setBranchFilter] = useState<string>("all")
   const router = useRouter()
   const supabase = createClient()
 
@@ -93,12 +103,37 @@ export default function ProductsPage() {
     expiration_date: "",
     days_before_expiry_alert: "30",
     section: "",
+    branch_id: "",
   })
 
   useEffect(() => {
     checkAuth()
-    loadProducts()
+    loadBranches()
   }, [])
+
+  useEffect(() => {
+    if (branches.length > 0 || branchFilter === "all") {
+      loadProducts()
+    }
+  }, [branchFilter, branches.length])
+
+  const loadBranches = async () => {
+    const res = await fetch("/api/branches")
+    if (res.ok) {
+      const data = await res.json()
+      setBranches(data.branches || [])
+      if (!formData.branch_id && data.branches?.[0]) {
+        setFormData((prev) => ({ ...prev, branch_id: data.branches[0].id }))
+      }
+    }
+  }
+
+  const getBranchName = (product: Product) => {
+    if (Array.isArray(product.branches)) return product.branches[0]?.name
+    if (product.branches && "name" in product.branches) return product.branches.name
+    const branch = branches.find((b) => b.id === product.branch_id)
+    return branch?.name || "Sin sucursal"
+  }
 
   useEffect(() => {
     const filtered = products.filter(
@@ -142,8 +177,9 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch("/api/products")
-      const { products: data, total } = await response.json()
+      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
+      const response = await fetch(`/api/products${branchQuery}`)
+      const { products: data } = await response.json()
 
       const allProducts = data || []
       const activeProds = allProducts.filter((p: any) => p.is_active !== false)
@@ -206,6 +242,11 @@ export default function ProductsPage() {
       return
     }
 
+    if (!formData.branch_id) {
+      alert("Debe seleccionar una sucursal")
+      return
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser()
 
@@ -223,10 +264,10 @@ export default function ProductsPage() {
           ? Number.parseInt(formData.days_before_expiry_alert)
           : 30,
         section: formData.section || null,
+        branch_id: formData.branch_id,
       }
 
       if (editingProduct) {
-        // --- ACTUALIZAR PRODUCTO EXISTENTE ---
         const oldStock = editingProduct.stock_quantity
         const newStock = productData.stock_quantity
         const difference = newStock - oldStock
@@ -262,8 +303,8 @@ export default function ProductsPage() {
 
         if (error) {
           console.error("Error creating product:", error)
-          if (error.message.includes("duplicate")) {
-            alert("Este código de barras ya existe. Puedes usar el mismo código para un producto diferente si lo deseas.")
+          if (error.message.includes("duplicate") || error.code === "23505") {
+            alert("Este código de barras ya existe en esta sucursal. Puede existir en otra sucursal sin problema.")
           } else {
             alert(`Error al guardar: ${error.message}`)
           }
@@ -297,6 +338,7 @@ export default function ProductsPage() {
         expiration_date: "",
         days_before_expiry_alert: "30",
         section: "",
+        branch_id: branches[0]?.id || "",
       })
       setIsAddDialogOpen(false)
       setEditingProduct(null)
@@ -320,6 +362,7 @@ export default function ProductsPage() {
       expiration_date: product.expiration_date || "",
       days_before_expiry_alert: product.days_before_expiry_alert?.toString() || "30",
       section: product.section || "",
+      branch_id: product.branch_id || branches[0]?.id || "",
     })
     setEditingProduct(product)
     setIsAddDialogOpen(true)
@@ -678,6 +721,20 @@ export default function ProductsPage() {
             />
           </div>
 
+          <Select value={branchFilter} onValueChange={setBranchFilter}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Filtrar por sucursal" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las sucursales</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <div className="flex gap-2">
             <Button variant="outline" onClick={openExportDialog}>
               <Printer className="h-4 w-4 mr-2" />
@@ -700,7 +757,8 @@ export default function ProductsPage() {
                       image_url: "",
                       expiration_date: "",
                       days_before_expiry_alert: "30",
-                      section: "", 
+                      section: "",
+                      branch_id: branches[0]?.id || "",
                     })
                   }}
                 >
@@ -721,6 +779,25 @@ export default function ProductsPage() {
                     currentImage={formData.image_url}
                     className="space-y-2"
                   />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="branch_id">Sucursal *</Label>
+                    <Select
+                      value={formData.branch_id}
+                      onValueChange={(value) => setFormData({ ...formData, branch_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar sucursal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map((branch) => (
+                          <SelectItem key={branch.id} value={branch.id}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="name">Nombre del producto *</Label>
@@ -1047,6 +1124,7 @@ export default function ProductsPage() {
                       <TableHead>Código</TableHead>
                       <TableHead>Precio</TableHead>
                       <TableHead>Stock</TableHead>
+                      <TableHead>Sucursal</TableHead>
                       <TableHead>Categoría</TableHead>
                       <TableHead>Sección</TableHead> 
                       <TableHead>Caducidad</TableHead>
@@ -1092,6 +1170,9 @@ export default function ProductsPage() {
                                 </Badge>
                               )}
                             </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{getBranchName(product)}</Badge>
                           </TableCell>
                           <TableCell>{product.category || "Sin categoría"}</TableCell>
                           <TableCell>{product.section || "Sin sección"}</TableCell> 
