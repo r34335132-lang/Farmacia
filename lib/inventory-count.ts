@@ -94,25 +94,43 @@ export async function parseInventoryCountFile(file: File): Promise<ParseInventor
     return { ok: false, errors: ["El archivo está vacío"] }
   }
 
-  const headerRow = (matrix[0] || []).map(normalizeHeader)
-  const barcodeIdx = findColumn(headerRow, BARCODE_HEADERS)
-  const nameIdx = findColumn(headerRow, NAME_HEADERS)
-  const qtyIdx = findColumn(headerRow, QTY_HEADERS)
+  const first = matrix[0] || []
+  const headerRow = first.map(normalizeHeader)
+  let barcodeIdx = findColumn(headerRow, BARCODE_HEADERS)
+  let nameIdx = findColumn(headerRow, NAME_HEADERS)
+  let qtyIdx = findColumn(headerRow, QTY_HEADERS)
+  let dataStart = 1
+
+  // Archivos sin encabezado: columnas en orden Código | Nombre | Cantidad
+  // (como el Excel de conteo físico que empieza directo con datos)
+  const looksLikeDataRow = (() => {
+    const barcode = normalizeBarcode(first[0])
+    const qtyText = String(first[2] ?? "").trim().replace(/,/g, "")
+    return /^\d{6,}$/.test(barcode) && /^\d+$/.test(qtyText)
+  })()
 
   if (barcodeIdx < 0 || nameIdx < 0 || qtyIdx < 0) {
-    return {
-      ok: false,
-      errors: [
-        "El archivo debe incluir las columnas: Código de barras, Nombre y Cantidad",
-        `Encabezados detectados: ${headerRow.filter(Boolean).join(", ") || "(ninguno)"}`,
-      ],
+    if (looksLikeDataRow) {
+      barcodeIdx = 0
+      nameIdx = 1
+      qtyIdx = 2
+      dataStart = 0
+    } else {
+      return {
+        ok: false,
+        errors: [
+          "El archivo debe incluir las columnas: Código de barras, Nombre y Cantidad",
+          "También se acepta sin encabezado si el orden es: código, nombre, cantidad",
+          `Encabezados detectados: ${headerRow.filter(Boolean).join(", ") || "(ninguno)"}`,
+        ],
+      }
     }
   }
 
   const rows: InventoryCountRow[] = []
   const seen = new Map<string, number>()
 
-  for (let r = 1; r < matrix.length; r++) {
+  for (let r = dataStart; r < matrix.length; r++) {
     const line = matrix[r] || []
     const barcode = normalizeBarcode(line[barcodeIdx])
     const productName = String(line[nameIdx] ?? "").trim()

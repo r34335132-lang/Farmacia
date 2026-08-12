@@ -358,7 +358,9 @@ export default function AdminInventarioPage() {
           <Card>
             <CardHeader>
               <CardTitle>2. Archivo de conteo</CardTitle>
-              <CardDescription>Columnas: Código de barras, Nombre, Cantidad (.csv / .xlsx / .xls)</CardDescription>
+              <CardDescription>
+                Con encabezado: Código de barras, Nombre, Cantidad — o sin encabezado en ese mismo orden (.csv / .xlsx / .xls)
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Input
