@@ -35,6 +35,7 @@ import {
   parseInventoryCountFile,
   type InventoryCountRow,
 } from "@/lib/inventory-count"
+import { formatMoney, roundMoney } from "@/lib/money"
 import { cn } from "@/lib/utils"
 
 type CountStatus = "correct" | "missing" | "surplus" | "unregistered"
@@ -49,6 +50,8 @@ type CompareRow = {
   counted: number
   difference: number
   status: CountStatus
+  unit_cost?: number
+  unit_price?: number
 }
 
 type CompareSummary = {
@@ -208,9 +211,9 @@ export default function AdminInventarioPage() {
     [rows],
   )
 
-  /** Totales de unidades por estado + estimado de salida (sistema − físico) */
+  /** Totales de piezas y valor en pesos mexicanos (MXN) */
   const qtyTotals = useMemo(() => {
-    const empty = { products: 0, system: 0, counted: 0, diff: 0 }
+    const empty = { products: 0, system: 0, counted: 0, diff: 0, costValue: 0, saleValue: 0 }
     const byStatus: Record<CountStatus, typeof empty> = {
       correct: { ...empty },
       missing: { ...empty },
@@ -221,21 +224,40 @@ export default function AdminInventarioPage() {
     let systemRegistered = 0
     let countedAll = 0
     let countedRegistered = 0
+    let missingCostMxn = 0
+    let missingSaleMxn = 0
+    let surplusCostMxn = 0
+    let surplusSaleMxn = 0
 
     for (const row of rows) {
       const bucket = byStatus[row.status]
+      const unitCost = Number(row.unit_cost) || 0
+      const unitPrice = Number(row.unit_price) || 0
+      const absDiff = Math.abs(row.difference)
+
       bucket.products += 1
       bucket.system += row.system_stock
       bucket.counted += row.counted
       bucket.diff += row.difference
+      bucket.costValue = roundMoney(bucket.costValue + absDiff * unitCost)
+      bucket.saleValue = roundMoney(bucket.saleValue + absDiff * unitPrice)
+
       countedAll += row.counted
       if (row.status !== "unregistered") {
         systemRegistered += row.system_stock
         countedRegistered += row.counted
       }
+
+      if (row.status === "missing") {
+        missingCostMxn = roundMoney(missingCostMxn + absDiff * unitCost)
+        missingSaleMxn = roundMoney(missingSaleMxn + absDiff * unitPrice)
+      }
+      if (row.status === "surplus") {
+        surplusCostMxn = roundMoney(surplusCostMxn + absDiff * unitCost)
+        surplusSaleMxn = roundMoney(surplusSaleMxn + absDiff * unitPrice)
+      }
     }
 
-    const estimatedSold = systemRegistered - countedRegistered
     const missingUnits = Math.abs(byStatus.missing.diff)
     const surplusUnits = byStatus.surplus.diff
 
@@ -244,9 +266,12 @@ export default function AdminInventarioPage() {
       systemRegistered,
       countedAll,
       countedRegistered,
-      estimatedSold,
       missingUnits,
       surplusUnits,
+      missingCostMxn,
+      missingSaleMxn,
+      surplusCostMxn,
+      surplusSaleMxn,
     }
   }, [rows])
 
@@ -444,72 +469,84 @@ export default function AdminInventarioPage() {
               <SummaryCard
                 label="Revisados"
                 value={summary.reviewed}
-                detail={`${qtyTotals.countedAll} uds. contadas`}
+                detail={`${qtyTotals.countedAll} piezas contadas`}
               />
               <SummaryCard
                 label="Correctos"
                 value={summary.correct}
-                detail={`${qtyTotals.byStatus.correct.counted} uds. (sistema = físico)`}
+                detail={`${qtyTotals.byStatus.correct.counted} piezas`}
               />
               <SummaryCard
                 label="Faltantes"
                 value={summary.missing}
-                detail={`${qtyTotals.missingUnits} uds. de menos`}
+                detail={`${qtyTotals.missingUnits} piezas · ${formatMoney(qtyTotals.missingSaleMxn)} MXN`}
                 tone="danger"
               />
               <SummaryCard
                 label="Sobrantes"
                 value={summary.surplus}
-                detail={`${qtyTotals.surplusUnits} uds. de más`}
+                detail={`${qtyTotals.surplusUnits} piezas · ${formatMoney(qtyTotals.surplusSaleMxn)} MXN`}
                 tone="warn"
               />
               <SummaryCard
                 label="No registrados"
                 value={summary.unregistered}
-                detail={`${qtyTotals.byStatus.unregistered.counted} uds. en conteo`}
+                detail={`${qtyTotals.byStatus.unregistered.counted} piezas en conteo`}
               />
               <SummaryCard
-                label="Salida estimada"
-                value={qtyTotals.estimatedSold}
-                detail={`Sistema ${qtyTotals.systemRegistered} − físico ${qtyTotals.countedRegistered}`}
-                tone={qtyTotals.estimatedSold > 0 ? "danger" : qtyTotals.estimatedSold < 0 ? "warn" : undefined}
+                label="Cantidad faltante"
+                valueLabel={formatMoney(qtyTotals.missingSaleMxn)}
+                detail={`${qtyTotals.missingUnits} piezas · pesos mexicanos (precio venta)`}
+                tone="danger"
                 emphasize
               />
             </div>
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Totales de unidades</CardTitle>
+                <CardTitle className="text-base">Totales del conteo</CardTitle>
                 <CardDescription>
-                  Suma de todas las filas (correctos + faltantes + sobrantes + no registrados). La salida estimada es
-                  stock del sistema menos conteo físico en productos registrados.
+                  Piezas del Excel vs stock del sistema. El dinero se calcula en pesos mexicanos (MXN) con el precio de
+                  venta del producto.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-md border p-3">
                     <p className="text-muted-foreground">Stock sistema (registrados)</p>
-                    <p className="text-xl font-semibold">{qtyTotals.systemRegistered}</p>
+                    <p className="text-xl font-semibold">
+                      {qtyTotals.systemRegistered}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
+                    </p>
                   </div>
                   <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Conteo físico (todos)</p>
-                    <p className="text-xl font-semibold">{qtyTotals.countedAll}</p>
+                    <p className="text-muted-foreground">Conteo físico (Excel)</p>
+                    <p className="text-xl font-semibold">
+                      {qtyTotals.countedAll}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
+                    </p>
                   </div>
                   <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Conteo físico (registrados)</p>
-                    <p className="text-xl font-semibold">{qtyTotals.countedRegistered}</p>
+                    <p className="text-muted-foreground">Cantidad faltante</p>
+                    <p className="text-xl font-semibold text-destructive">
+                      {qtyTotals.missingUnits}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-destructive">
+                      {formatMoney(qtyTotals.missingSaleMxn)} MXN
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Costo: {formatMoney(qtyTotals.missingCostMxn)} MXN
+                    </p>
                   </div>
                   <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Salida estimada (posible venta/merma)</p>
-                    <p
-                      className={cn(
-                        "text-xl font-semibold",
-                        qtyTotals.estimatedSold > 0 && "text-destructive",
-                        qtyTotals.estimatedSold < 0 && "text-amber-600",
-                      )}
-                    >
-                      {qtyTotals.estimatedSold > 0 ? `+${qtyTotals.estimatedSold}` : qtyTotals.estimatedSold}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">uds.</span>
+                    <p className="text-muted-foreground">Sobrantes</p>
+                    <p className="text-xl font-semibold text-amber-600">
+                      {qtyTotals.surplusUnits}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-amber-600">
+                      {formatMoney(qtyTotals.surplusSaleMxn)} MXN
                     </p>
                   </div>
                 </div>
@@ -544,7 +581,7 @@ export default function AdminInventarioPage() {
                       onClick={() => setFilter(key)}
                     >
                       {label}
-                      <span className="ml-1 opacity-70">({units} uds.)</span>
+                      <span className="ml-1 opacity-70">({units} pzas.)</span>
                     </Button>
                   ))}
                 </div>
@@ -654,12 +691,14 @@ export default function AdminInventarioPage() {
 function SummaryCard({
   label,
   value,
+  valueLabel,
   detail,
   tone,
   emphasize,
 }: {
   label: string
-  value: number
+  value?: number
+  valueLabel?: string
   detail?: string
   tone?: "danger" | "warn"
   emphasize?: boolean
@@ -675,7 +714,7 @@ function SummaryCard({
             tone === "warn" && "text-amber-600",
           )}
         >
-          {value}
+          {valueLabel ?? value}
         </p>
         {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
       </CardContent>
