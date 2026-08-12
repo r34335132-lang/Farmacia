@@ -211,9 +211,9 @@ export default function AdminInventarioPage() {
     [rows],
   )
 
-  /** Totales de piezas y valor en pesos mexicanos (MXN) */
+  /** Estimado de lo vendido: faltantes del sistema + no registrados. Correctos no entran. */
   const qtyTotals = useMemo(() => {
-    const empty = { products: 0, system: 0, counted: 0, diff: 0, costValue: 0, saleValue: 0 }
+    const empty = { products: 0, system: 0, counted: 0, diff: 0 }
     const byStatus: Record<CountStatus, typeof empty> = {
       correct: { ...empty },
       missing: { ...empty },
@@ -221,57 +221,57 @@ export default function AdminInventarioPage() {
       unregistered: { ...empty },
     }
 
-    let systemRegistered = 0
     let countedAll = 0
-    let countedRegistered = 0
-    let missingCostMxn = 0
-    let missingSaleMxn = 0
-    let surplusCostMxn = 0
-    let surplusSaleMxn = 0
+    let missingUnits = 0
+    let surplusUnits = 0
+    let unregisteredUnits = 0
+    let missingEarningsMxn = 0
+    let unregisteredEarningsMxn = 0
+    let estimatedProfitMxn = 0
 
     for (const row of rows) {
       const bucket = byStatus[row.status]
-      const unitCost = Number(row.unit_cost) || 0
-      const unitPrice = Number(row.unit_price) || 0
-      const absDiff = Math.abs(row.difference)
-
       bucket.products += 1
       bucket.system += row.system_stock
       bucket.counted += row.counted
       bucket.diff += row.difference
-      bucket.costValue = roundMoney(bucket.costValue + absDiff * unitCost)
-      bucket.saleValue = roundMoney(bucket.saleValue + absDiff * unitPrice)
-
       countedAll += row.counted
-      if (row.status !== "unregistered") {
-        systemRegistered += row.system_stock
-        countedRegistered += row.counted
-      }
+
+      const unitPrice = Number(row.unit_price) || 0
+      const unitCost = Number(row.unit_cost) || 0
 
       if (row.status === "missing") {
-        missingCostMxn = roundMoney(missingCostMxn + absDiff * unitCost)
-        missingSaleMxn = roundMoney(missingSaleMxn + absDiff * unitPrice)
+        // Se “vendió” lo que ya no está: stock sistema − conteo físico
+        const soldUnits = row.system_stock - row.counted
+        missingUnits += soldUnits
+        missingEarningsMxn = roundMoney(missingEarningsMxn + soldUnits * unitPrice)
+        estimatedProfitMxn = roundMoney(estimatedProfitMxn + soldUnits * (unitPrice - unitCost))
       }
-      if (row.status === "surplus") {
-        surplusCostMxn = roundMoney(surplusCostMxn + absDiff * unitCost)
-        surplusSaleMxn = roundMoney(surplusSaleMxn + absDiff * unitPrice)
-      }
-    }
 
-    const missingUnits = Math.abs(byStatus.missing.diff)
-    const surplusUnits = byStatus.surplus.diff
+      if (row.status === "unregistered") {
+        // También se vendió / salió, pero no estaba en el sistema (sin precio → $0 MXN)
+        unregisteredUnits += row.counted
+        unregisteredEarningsMxn = roundMoney(unregisteredEarningsMxn + row.counted * unitPrice)
+      }
+
+      if (row.status === "surplus") {
+        surplusUnits += row.counted - row.system_stock
+      }
+
+      // correct: no suma — el físico cuadra con el sistema, no hay venta por diferencia
+    }
 
     return {
       byStatus,
-      systemRegistered,
       countedAll,
-      countedRegistered,
       missingUnits,
       surplusUnits,
-      missingCostMxn,
-      missingSaleMxn,
-      surplusCostMxn,
-      surplusSaleMxn,
+      unregisteredUnits,
+      missingEarningsMxn,
+      unregisteredEarningsMxn,
+      estimatedEarningsMxn: roundMoney(missingEarningsMxn + unregisteredEarningsMxn),
+      estimatedProfitMxn,
+      soldUnitsTotal: missingUnits + unregisteredUnits,
     }
   }, [rows])
 
@@ -465,90 +465,73 @@ export default function AdminInventarioPage() {
 
         {summary ? (
           <>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
               <SummaryCard
                 label="Revisados"
                 value={summary.reviewed}
-                detail={`${qtyTotals.countedAll} piezas contadas`}
+                detail={`${qtyTotals.countedAll} piezas en el Excel`}
               />
               <SummaryCard
                 label="Correctos"
                 value={summary.correct}
-                detail={`${qtyTotals.byStatus.correct.counted} piezas`}
+                detail="Stock sistema = conteo"
               />
               <SummaryCard
                 label="Faltantes"
                 value={summary.missing}
-                detail={`${qtyTotals.missingUnits} piezas · ${formatMoney(qtyTotals.missingSaleMxn)} MXN`}
+                detail={`${qtyTotals.missingUnits} piezas menos en físico`}
                 tone="danger"
               />
               <SummaryCard
                 label="Sobrantes"
                 value={summary.surplus}
-                detail={`${qtyTotals.surplusUnits} piezas · ${formatMoney(qtyTotals.surplusSaleMxn)} MXN`}
+                detail={`${qtyTotals.surplusUnits} piezas de más`}
                 tone="warn"
               />
               <SummaryCard
                 label="No registrados"
                 value={summary.unregistered}
-                detail={`${qtyTotals.byStatus.unregistered.counted} piezas en conteo`}
-              />
-              <SummaryCard
-                label="Cantidad faltante"
-                valueLabel={formatMoney(qtyTotals.missingSaleMxn)}
-                detail={`${qtyTotals.missingUnits} piezas · pesos mexicanos (precio venta)`}
-                tone="danger"
-                emphasize
+                detail={`${qtyTotals.unregisteredUnits} pzas. (sí entran al estimado)`}
               />
             </div>
 
-            <Card>
+            <Card className="border-primary/30 bg-primary/5">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Totales del conteo</CardTitle>
+                <CardTitle className="text-base">Estimado de ganancias</CardTitle>
                 <CardDescription>
-                  Piezas del Excel vs stock del sistema. El dinero se calcula en pesos mexicanos (MXN) con el precio de
-                  venta del producto.
+                  Aproximado de lo vendido en teoría: suma faltantes + no registrados. Los correctos no entran (el
+                  stock cuadra, no hubo venta por diferencia). Los sobrantes tampoco.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Stock sistema (registrados)</p>
-                    <p className="text-xl font-semibold">
-                      {qtyTotals.systemRegistered}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
-                    </p>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-md border bg-background p-4">
+                    <p className="text-sm text-muted-foreground">Faltantes (sistema − conteo)</p>
+                    <p className="mt-1 text-2xl font-bold text-destructive">{qtyTotals.missingUnits} pzas.</p>
+                    <p className="text-sm font-medium">{formatMoney(qtyTotals.missingEarningsMxn)} MXN</p>
                   </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Conteo físico (Excel)</p>
-                    <p className="text-xl font-semibold">
-                      {qtyTotals.countedAll}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
-                    </p>
+                  <div className="rounded-md border bg-background p-4">
+                    <p className="text-sm text-muted-foreground">No registrados (también vendidos)</p>
+                    <p className="mt-1 text-2xl font-bold">{qtyTotals.unregisteredUnits} pzas.</p>
+                    <p className="text-sm font-medium">{formatMoney(qtyTotals.unregisteredEarningsMxn)} MXN</p>
+                    <p className="text-xs text-muted-foreground">Sin precio en sistema = $0.00 hasta registrarlos</p>
                   </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Cantidad faltante</p>
-                    <p className="text-xl font-semibold text-destructive">
-                      {qtyTotals.missingUnits}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-destructive">
-                      {formatMoney(qtyTotals.missingSaleMxn)} MXN
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Costo: {formatMoney(qtyTotals.missingCostMxn)} MXN
-                    </p>
+                  <div className="rounded-md border bg-background p-4">
+                    <p className="text-sm text-muted-foreground">Total piezas (faltantes + no reg.)</p>
+                    <p className="mt-1 text-2xl font-bold">{qtyTotals.soldUnitsTotal}</p>
+                    <p className="text-xs text-muted-foreground">Correctos excluidos</p>
                   </div>
-                  <div className="rounded-md border p-3">
-                    <p className="text-muted-foreground">Sobrantes</p>
-                    <p className="text-xl font-semibold text-amber-600">
-                      {qtyTotals.surplusUnits}
-                      <span className="ml-1 text-sm font-normal text-muted-foreground">piezas</span>
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-amber-600">
-                      {formatMoney(qtyTotals.surplusSaleMxn)} MXN
-                    </p>
-                  </div>
+                </div>
+                <div className="rounded-md border bg-background p-4">
+                  <p className="text-sm text-muted-foreground">Estimado de ganancias (MXN)</p>
+                  <p className="mt-1 text-3xl font-bold text-primary">
+                    {formatMoney(qtyTotals.estimatedEarningsMxn)}
+                    <span className="ml-2 text-base font-medium text-muted-foreground">MXN</span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Fórmula: (piezas faltantes × precio) + (piezas no registradas × precio si existe). Utilidad aprox.
+                    de faltantes (precio − costo): {formatMoney(qtyTotals.estimatedProfitMxn)} MXN
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -571,7 +554,7 @@ export default function AdminInventarioPage() {
                       ["correct", "Correctos", qtyTotals.byStatus.correct.counted],
                       ["missing", "Faltantes", qtyTotals.missingUnits],
                       ["surplus", "Sobrantes", qtyTotals.surplusUnits],
-                      ["unregistered", "No registrados", qtyTotals.byStatus.unregistered.counted],
+                      ["unregistered", "No registrados", qtyTotals.unregisteredUnits],
                     ] as const
                   ).map(([key, label, units]) => (
                     <Button
