@@ -95,12 +95,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Acción inválida" }, { status: 400 })
     }
 
-    const validated = validateItems(body?.items)
-    if (!validated.ok) {
-      return NextResponse.json({ error: validated.error }, { status: 400 })
-    }
-
     if (action === "compare") {
+      const validated = validateItems(body?.items)
+      if (!validated.ok) {
+        return NextResponse.json({ error: validated.error }, { status: 400 })
+      }
+
       const startDate = typeof body?.start_date === "string" ? body.start_date : null
       const endDate = typeof body?.end_date === "string" ? body.end_date : null
 
@@ -118,30 +118,56 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, result: data })
     }
 
-    // Solo productos existentes con diferencia (faltante/sobrante)
-    const toApply = validated.items.filter((item) => {
-      const status = (body?.statuses as Record<string, string> | undefined)?.[item.barcode]
-      if (status === "unregistered" || status === "correct") return false
-      return true
-    })
-
-    // Si el cliente manda solo los que hay que ajustar, usar esos
+    // action === apply
     const applyItems =
       Array.isArray(body?.apply_items) && body.apply_items.length > 0
         ? validateItems(body.apply_items)
-        : { ok: true as const, items: toApply }
+        : Array.isArray(body?.items) && body.items.length > 0
+          ? validateItems(body.items)
+          : { ok: true as const, items: [] as CountItem[] }
 
     if (!applyItems.ok) {
       return NextResponse.json({ error: applyItems.error }, { status: 400 })
     }
 
-    if (applyItems.items.length === 0) {
-      return NextResponse.json({ error: "No hay productos con diferencia para ajustar" }, { status: 400 })
+    const rawSaleItems = Array.isArray(body?.sale_items) ? body.sale_items : []
+    const saleItems: Array<{
+      barcode: string
+      product_id?: string | null
+      quantity: number
+      unit_price: number
+      unit_cost: number
+      source: string
+    }> = []
+
+    for (const line of rawSaleItems) {
+      const barcode = normalizeBarcode(line?.barcode)
+      const quantity = Number(line?.quantity)
+      const unitPrice = Number(line?.unit_price)
+      const unitCost = Number(line?.unit_cost)
+      if (!barcode || !Number.isInteger(quantity) || quantity <= 0) continue
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) continue
+      saleItems.push({
+        barcode,
+        product_id: line?.product_id ? String(line.product_id) : null,
+        quantity,
+        unit_price: unitPrice,
+        unit_cost: Number.isFinite(unitCost) && unitCost >= 0 ? unitCost : 0,
+        source: String(line?.source || "estimado"),
+      })
+    }
+
+    if (applyItems.items.length === 0 && saleItems.length === 0) {
+      return NextResponse.json(
+        { error: "No hay ajustes de stock ni líneas de venta para aplicar" },
+        { status: 400 },
+      )
     }
 
     const { data, error } = await supabase.rpc("apply_inventory_count", {
       p_branch_id: branchId,
       p_items: applyItems.items.map(({ barcode, quantity }) => ({ barcode, quantity })),
+      p_sale_items: saleItems,
     })
 
     if (error) {

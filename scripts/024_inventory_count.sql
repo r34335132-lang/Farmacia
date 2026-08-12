@@ -71,6 +71,12 @@ ALTER TABLE public.stock_movements
 ALTER TABLE public.products
   ADD COLUMN IF NOT EXISTS cost_price DECIMAL(12,2) NOT NULL DEFAULT 0;
 
+ALTER TABLE public.sale_items
+  ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE public.sale_items
+  ADD COLUMN IF NOT EXISTS cost_subtotal DECIMAL(12,2) NOT NULL DEFAULT 0;
+
 -- =============================================================================
 -- Comparar conteo físico vs stock del sistema (NO modifica stock)
 -- Incluye altas (entradas) del periodo para estimar ventas en productos correctos
@@ -275,12 +281,18 @@ $$;
 GRANT EXECUTE ON FUNCTION public.compare_inventory_count(UUID, JSONB, DATE, DATE) TO authenticated;
 
 -- =============================================================================
--- Aplicar ajuste: actualiza stock de productos existentes de la sucursal
+-- Aplicar ajuste de stock + venta = estimado de ganancias completo
+-- p_items: faltantes/sobrantes (ajuste de stock)
+-- p_sale_items: líneas de venta del estimado (faltantes + correctos/altas + no reg.)
 -- =============================================================================
+
+DROP FUNCTION IF EXISTS public.apply_inventory_count(UUID, JSONB);
+DROP FUNCTION IF EXISTS public.apply_inventory_count(UUID, JSONB, JSONB);
 
 CREATE OR REPLACE FUNCTION public.apply_inventory_count(
   p_branch_id UUID,
-  p_items JSONB
+  p_items JSONB DEFAULT '[]'::JSONB,
+  p_sale_items JSONB DEFAULT '[]'::JSONB
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -297,6 +309,20 @@ DECLARE
   v_updated INT := 0;
   v_skipped INT := 0;
   v_movement_type TEXT;
+  v_reason TEXT;
+  v_sale_line JSONB;
+  v_sale_items JSONB := '[]'::JSONB;
+  v_sale_total NUMERIC(12,2) := 0;
+  v_sale_id UUID := NULL;
+  v_unit_price NUMERIC(12,2);
+  v_unit_cost NUMERIC(12,2);
+  v_line_subtotal NUMERIC(12,2);
+  v_line_cost NUMERIC(12,2);
+  v_sale_qty INT := 0;
+  v_product_id UUID;
+  v_source TEXT;
+  v_items_count INT := 0;
+  v_sale_count INT := 0;
 BEGIN
   IF NOT public.is_admin() THEN
     RAISE EXCEPTION 'Solo administradores pueden aplicar ajustes de inventario';
@@ -310,96 +336,268 @@ BEGIN
     RAISE EXCEPTION 'Sucursal no válida o inactiva';
   END IF;
 
-  IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) = 0 THEN
-    RAISE EXCEPTION 'No hay productos para ajustar';
+  v_items_count := CASE
+    WHEN p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN 0
+    ELSE jsonb_array_length(p_items)
+  END;
+  v_sale_count := CASE
+    WHEN p_sale_items IS NULL OR jsonb_typeof(p_sale_items) <> 'array' THEN 0
+    ELSE jsonb_array_length(p_sale_items)
+  END;
+
+  IF v_items_count = 0 AND v_sale_count = 0 THEN
+    RAISE EXCEPTION 'No hay productos para ajustar ni líneas de venta';
   END IF;
 
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-  LOOP
-    v_barcode := NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'barcode', '')), '');
-    v_qty := NULLIF(v_item->>'quantity', '')::INT;
+  -- 1) Ajuste de stock (faltantes / sobrantes)
+  IF v_items_count > 0 THEN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+      v_barcode := NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'barcode', '')), '');
+      v_qty := NULLIF(v_item->>'quantity', '')::INT;
 
-    IF v_barcode IS NULL OR v_qty IS NULL OR v_qty < 0 THEN
-      RAISE EXCEPTION 'Fila inválida en el ajuste de inventario';
-    END IF;
+      IF v_barcode IS NULL OR v_qty IS NULL OR v_qty < 0 THEN
+        RAISE EXCEPTION 'Fila inválida en el ajuste de inventario';
+      END IF;
 
-    SELECT p.id, p.stock_quantity, p.name, p.cost_price
-    INTO v_product
-    FROM public.products p
-    WHERE p.barcode = v_barcode
-      AND p.branch_id = p_branch_id
-      AND COALESCE(p.is_active, true) = true
-    FOR UPDATE;
+      SELECT
+        p.id,
+        p.stock_quantity,
+        p.name,
+        COALESCE(p.cost_price, 0) AS cost_price,
+        COALESCE(p.price, 0) AS price
+      INTO v_product
+      FROM public.products p
+      WHERE p.barcode = v_barcode
+        AND p.branch_id = p_branch_id
+        AND COALESCE(p.is_active, true) = true
+      FOR UPDATE;
 
-    IF NOT FOUND THEN
-      -- No registrados / eliminados: no insertar ni modificar
-      v_skipped := v_skipped + 1;
-      CONTINUE;
-    END IF;
+      IF NOT FOUND THEN
+        v_skipped := v_skipped + 1;
+        CONTINUE;
+      END IF;
 
-    v_old := COALESCE(v_product.stock_quantity, 0);
-    v_diff := v_qty - v_old;
+      v_old := COALESCE(v_product.stock_quantity, 0);
+      v_diff := v_qty - v_old;
 
-    IF v_diff = 0 THEN
-      v_skipped := v_skipped + 1;
-      CONTINUE;
-    END IF;
+      IF v_diff = 0 THEN
+        v_skipped := v_skipped + 1;
+        CONTINUE;
+      END IF;
 
-    UPDATE public.products
-    SET
-      stock_quantity = v_qty,
-      updated_at = NOW()
-    WHERE id = v_product.id
-      AND branch_id = p_branch_id
-      AND COALESCE(is_active, true) = true;
+      UPDATE public.products
+      SET
+        stock_quantity = v_qty,
+        updated_at = NOW()
+      WHERE id = v_product.id
+        AND branch_id = p_branch_id
+        AND COALESCE(is_active, true) = true;
 
-    v_movement_type := 'ajuste';
+      v_unit_cost := COALESCE(v_product.cost_price, 0);
 
-    INSERT INTO public.stock_movements (
-      product_id,
-      movement_type,
-      quantity,
-      reason,
-      user_id,
-      unit_cost,
-      branch_id
-    ) VALUES (
-      v_product.id,
-      v_movement_type,
-      ABS(v_diff),
-      'Conteo de inventario',
-      auth.uid(),
-      COALESCE(v_product.cost_price, 0),
-      p_branch_id
-    );
+      IF v_diff < 0 THEN
+        v_movement_type := 'salida';
+        v_reason := 'Venta por conteo de inventario';
+      ELSE
+        v_movement_type := 'entrada';
+        v_reason := 'Conteo de inventario (sobrante)';
+      END IF;
 
-    PERFORM public.log_audit(
-      'inventory_count_adjusted',
-      'product',
-      v_product.id,
-      p_branch_id,
-      jsonb_build_object(
+      INSERT INTO public.stock_movements (
+        product_id,
+        movement_type,
+        quantity,
+        reason,
+        user_id,
+        unit_cost,
+        branch_id
+      ) VALUES (
+        v_product.id,
+        v_movement_type,
+        ABS(v_diff),
+        v_reason,
+        auth.uid(),
+        v_unit_cost,
+        p_branch_id
+      );
+
+      PERFORM public.log_audit(
+        'inventory_count_adjusted',
+        'product',
+        v_product.id,
+        p_branch_id,
+        jsonb_build_object(
+          'barcode', v_barcode,
+          'product_name', v_product.name,
+          'old_stock', v_old,
+          'new_stock', v_qty,
+          'difference', v_diff,
+          'motivo', 'Conteo de inventario'
+        )
+      );
+
+      v_updated := v_updated + 1;
+    END LOOP;
+  END IF;
+
+  -- 2) Venta = estimado de ganancias completo (faltantes + correctos/altas + no registrados)
+  IF v_sale_count > 0 THEN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_sale_items)
+    LOOP
+      v_barcode := NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'barcode', '')), '');
+      v_qty := NULLIF(v_item->>'quantity', '')::INT;
+      v_source := COALESCE(NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'source', '')), ''), 'estimado');
+      v_product_id := NULLIF(v_item->>'product_id', '')::UUID;
+      v_unit_price := COALESCE(NULLIF(v_item->>'unit_price', '')::NUMERIC, 0);
+      v_unit_cost := COALESCE(NULLIF(v_item->>'unit_cost', '')::NUMERIC, 0);
+
+      IF v_qty IS NULL OR v_qty <= 0 THEN
+        CONTINUE;
+      END IF;
+
+      -- Resolver producto: id directo, sucursal actual, u otra sucursal (no registrados)
+      v_product := NULL;
+
+      IF v_product_id IS NOT NULL THEN
+        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
+        INTO v_product
+        FROM public.products p
+        WHERE p.id = v_product_id
+          AND COALESCE(p.is_active, true) = true
+        LIMIT 1;
+      END IF;
+
+      IF v_product.id IS NULL AND v_barcode IS NOT NULL THEN
+        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
+        INTO v_product
+        FROM public.products p
+        WHERE p.barcode = v_barcode
+          AND p.branch_id = p_branch_id
+          AND COALESCE(p.is_active, true) = true
+        LIMIT 1;
+      END IF;
+
+      IF v_product.id IS NULL AND v_barcode IS NOT NULL THEN
+        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
+        INTO v_product
+        FROM public.products p
+        WHERE p.barcode = v_barcode
+          AND p.branch_id IS DISTINCT FROM p_branch_id
+          AND COALESCE(p.is_active, true) = true
+        ORDER BY CASE WHEN COALESCE(p.price, 0) > 0 THEN 0 ELSE 1 END, p.updated_at DESC NULLS LAST
+        LIMIT 1;
+      END IF;
+
+      IF v_product.id IS NULL THEN
+        CONTINUE;
+      END IF;
+
+      IF v_unit_price <= 0 THEN
+        v_unit_price := COALESCE(v_product.price, 0);
+      END IF;
+      IF v_unit_cost < 0 THEN
+        v_unit_cost := 0;
+      END IF;
+      IF v_unit_cost = 0 THEN
+        v_unit_cost := COALESCE(v_product.cost_price, 0);
+      END IF;
+
+      v_line_subtotal := ROUND((v_qty * v_unit_price)::NUMERIC, 2);
+      v_line_cost := ROUND((v_qty * v_unit_cost)::NUMERIC, 2);
+      v_sale_total := v_sale_total + v_line_subtotal;
+      v_sale_qty := v_sale_qty + v_qty;
+
+      v_sale_items := v_sale_items || jsonb_build_array(jsonb_build_object(
+        'product_id', v_product.id,
         'barcode', v_barcode,
         'product_name', v_product.name,
-        'old_stock', v_old,
-        'new_stock', v_qty,
-        'difference', v_diff,
-        'motivo', 'Conteo de inventario'
+        'quantity', v_qty,
+        'unit_price', v_unit_price,
+        'subtotal', v_line_subtotal,
+        'unit_cost', v_unit_cost,
+        'cost_subtotal', v_line_cost,
+        'source', v_source
+      ));
+    END LOOP;
+  END IF;
+
+  IF jsonb_array_length(v_sale_items) > 0 THEN
+    INSERT INTO public.sales (
+      cashier_id,
+      branch_id,
+      subtotal_before_discount,
+      discount_type,
+      discount_value,
+      discount_reason,
+      total_amount,
+      payment_method,
+      cash_received,
+      change_given,
+      status
+    ) VALUES (
+      auth.uid(),
+      p_branch_id,
+      v_sale_total,
+      'none',
+      0,
+      'Venta por estimado de ganancias (conteo de inventario)',
+      v_sale_total,
+      'efectivo',
+      v_sale_total,
+      0,
+      'completed'
+    )
+    RETURNING id INTO v_sale_id;
+
+    FOR v_sale_line IN SELECT * FROM jsonb_array_elements(v_sale_items)
+    LOOP
+      INSERT INTO public.sale_items (
+        sale_id,
+        product_id,
+        quantity,
+        unit_price,
+        subtotal,
+        unit_cost,
+        cost_subtotal
+      ) VALUES (
+        v_sale_id,
+        (v_sale_line->>'product_id')::UUID,
+        (v_sale_line->>'quantity')::INT,
+        (v_sale_line->>'unit_price')::NUMERIC,
+        (v_sale_line->>'subtotal')::NUMERIC,
+        COALESCE((v_sale_line->>'unit_cost')::NUMERIC, 0),
+        COALESCE((v_sale_line->>'cost_subtotal')::NUMERIC, 0)
+      );
+    END LOOP;
+
+    PERFORM public.log_audit(
+      'inventory_count_sale_created',
+      'sale',
+      v_sale_id,
+      p_branch_id,
+      jsonb_build_object(
+        'sale_total', v_sale_total,
+        'sale_items', jsonb_array_length(v_sale_items),
+        'sale_qty', v_sale_qty,
+        'motivo', 'Estimado de ganancias por conteo'
       )
     );
-
-    v_updated := v_updated + 1;
-  END LOOP;
+  END IF;
 
   PERFORM public.log_audit(
     'inventory_count_applied',
     'inventory_count',
-    NULL,
+    v_sale_id,
     p_branch_id,
     jsonb_build_object(
       'updated', v_updated,
       'skipped', v_skipped,
-      'items', jsonb_array_length(p_items),
+      'stock_items', v_items_count,
+      'sale_lines_sent', v_sale_count,
+      'sale_id', v_sale_id,
+      'sale_total', v_sale_total,
+      'sale_qty', v_sale_qty,
       'motivo', 'Conteo de inventario'
     )
   );
@@ -407,9 +605,13 @@ BEGIN
   RETURN jsonb_build_object(
     'updated', v_updated,
     'skipped', v_skipped,
-    'branch_id', p_branch_id
+    'branch_id', p_branch_id,
+    'sale_id', v_sale_id,
+    'sale_total', v_sale_total,
+    'sale_qty', v_sale_qty,
+    'sale_items', jsonb_array_length(v_sale_items)
   );
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.apply_inventory_count(UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.apply_inventory_count(UUID, JSONB, JSONB) TO authenticated;

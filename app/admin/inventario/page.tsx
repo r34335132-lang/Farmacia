@@ -308,14 +308,76 @@ export default function AdminInventarioPage() {
         .filter((r) => r.status === "missing" || r.status === "surplus")
         .map((r) => ({ barcode: r.barcode, name: r.product_name, quantity: r.counted }))
 
+      // Venta = mismo estimado de ganancias (faltantes + correctos/altas + no registrados)
+      const saleItems: Array<{
+        barcode: string
+        product_id?: string | null
+        quantity: number
+        unit_price: number
+        unit_cost: number
+        source: string
+      }> = []
+
+      for (const row of rows) {
+        const unitPrice = Number(row.unit_price) || 0
+        const unitCost = Number(row.unit_cost) || 0
+
+        if (row.status === "missing") {
+          const qty = row.system_stock - row.counted
+          if (qty > 0) {
+            saleItems.push({
+              barcode: row.barcode,
+              product_id: row.product_id,
+              quantity: qty,
+              unit_price: unitPrice,
+              unit_cost: unitCost,
+              source: "missing",
+            })
+          }
+        }
+
+        if (row.status === "correct") {
+          const qty = Math.max(0, Number(row.entries_qty) || 0)
+          if (qty > 0) {
+            saleItems.push({
+              barcode: row.barcode,
+              product_id: row.product_id,
+              quantity: qty,
+              unit_price: unitPrice,
+              unit_cost: unitCost,
+              source: "correct_entries",
+            })
+          }
+        }
+
+        if (row.status === "unregistered") {
+          const qty = row.counted
+          if (qty > 0 && unitPrice > 0) {
+            saleItems.push({
+              barcode: row.barcode,
+              product_id: row.product_id,
+              quantity: qty,
+              unit_price: unitPrice,
+              unit_cost: unitCost,
+              source: "unregistered",
+            })
+          }
+        }
+      }
+
+      if (applyItems.length === 0 && saleItems.length === 0) {
+        setError("No hay nada para aplicar: sin diferencias de stock ni estimado de venta")
+        return
+      }
+
       const res = await fetch("/api/inventory/count", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "apply",
           branch_id: branchId,
-          items: applyItems,
           apply_items: applyItems,
+          sale_items: saleItems,
         }),
       })
       const json = await res.json()
@@ -325,11 +387,17 @@ export default function AdminInventarioPage() {
       }
 
       const updated = json.result?.updated ?? 0
-      setSuccess(`Ajuste aplicado correctamente. Se modificaron ${updated} productos.`)
+      const saleTotal = Number(json.result?.sale_total) || 0
+      const saleQty = Number(json.result?.sale_qty) || 0
+      const saleId = json.result?.sale_id
+      setSuccess(
+        saleId
+          ? `Listo. Stock ajustado (${updated} productos) y venta registrada por el estimado: ${formatMoney(saleTotal)} MXN (${saleQty} pzas.).`
+          : `Ajuste aplicado (${updated} productos). No se generó venta (estimado en $0.00).`,
+      )
       setStep(4)
       setConfirmOpen(false)
 
-      // Recomparar para reflejar stock actualizado
       await runCompareAfterApply()
     } catch {
       setError("Error de red al aplicar el ajuste")
@@ -716,10 +784,10 @@ export default function AdminInventarioPage() {
                   </label>
 
                   <Button
-                    disabled={!reviewed || toUpdateCount === 0 || applying}
+                    disabled={!reviewed || (toUpdateCount === 0 && qtyTotals.estimatedEarningsMxn <= 0) || applying}
                     onClick={() => setConfirmOpen(true)}
                   >
-                    Aplicar ajuste de inventario
+                    Aplicar ajuste y registrar venta
                   </Button>
                 </div>
 
@@ -739,12 +807,20 @@ export default function AdminInventarioPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar ajuste de inventario</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Deseas aplicar los ajustes de inventario? Esta acción modificará el stock de los productos
-              seleccionados.
+              ¿Deseas aplicar los ajustes? Se actualizará el stock (faltantes/sobrantes) y se registrará una venta
+              por el estimado de ganancias completo.
               <br />
               <br />
-              Se modificarán <strong>{toUpdateCount}</strong> productos (faltantes y sobrantes). Los productos no
-              registrados no se crearán. Los eliminados/inactivos no se modifican.
+              Stock a modificar: <strong>{toUpdateCount}</strong> productos.
+              <br />
+              Venta (estimado): <strong>{formatMoney(qtyTotals.estimatedEarningsMxn)} MXN</strong> ·{" "}
+              <strong>{qtyTotals.soldUnitsTotal} pzas.</strong>
+              <br />
+              <span className="text-muted-foreground">
+                Incluye faltantes ({formatMoney(qtyTotals.missingEarningsMxn)}) + correctos/altas (
+                {formatMoney(qtyTotals.correctEarningsMxn)}) + no registrados (
+                {formatMoney(qtyTotals.unregisteredEarningsMxn)}).
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
