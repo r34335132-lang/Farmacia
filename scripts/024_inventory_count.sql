@@ -73,11 +73,17 @@ ALTER TABLE public.products
 
 -- =============================================================================
 -- Comparar conteo físico vs stock del sistema (NO modifica stock)
+-- Incluye altas (entradas) del periodo para estimar ventas en productos correctos
 -- =============================================================================
+
+DROP FUNCTION IF EXISTS public.compare_inventory_count(UUID, JSONB);
+DROP FUNCTION IF EXISTS public.compare_inventory_count(UUID, JSONB, DATE, DATE);
 
 CREATE OR REPLACE FUNCTION public.compare_inventory_count(
   p_branch_id UUID,
-  p_items JSONB
+  p_items JSONB,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -100,6 +106,9 @@ DECLARE
   v_unit_cost NUMERIC := 0;
   v_unit_price NUMERIC := 0;
   v_price_from_branch TEXT := NULL;
+  v_entries_qty INT := 0;
+  v_start DATE;
+  v_end DATE;
   v_correct INT := 0;
   v_missing INT := 0;
   v_surplus INT := 0;
@@ -122,11 +131,20 @@ BEGIN
     RAISE EXCEPTION 'El conteo debe incluir al menos un producto';
   END IF;
 
+  -- Periodo de altas (por defecto últimos 7 días, zona CDMX)
+  v_end := COALESCE(p_end_date, (NOW() AT TIME ZONE 'America/Mexico_City')::DATE);
+  v_start := COALESCE(p_start_date, v_end - 6);
+
+  IF v_end < v_start THEN
+    RAISE EXCEPTION 'El periodo final no puede ser anterior al inicial';
+  END IF;
+
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
     v_barcode := NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'barcode', '')), '');
     v_name := NULLIF(TRIM(BOTH FROM COALESCE(v_item->>'name', '')), '');
     v_qty := NULLIF(v_item->>'quantity', '')::INT;
+    v_entries_qty := 0;
 
     IF v_barcode IS NULL THEN
       RAISE EXCEPTION 'Hay filas sin código de barras';
@@ -152,8 +170,7 @@ BEGIN
     LIMIT 1;
 
     IF NOT FOUND THEN
-      -- No existe en esta sucursal: sigue como no registrado,
-      -- pero toma precio/costo (y nombre) de otra sucursal con el mismo barcode.
+      -- No existe en esta sucursal: no registrado + precio de otra sucursal si existe
       v_unit_cost := 0;
       v_unit_price := 0;
       v_price_from_branch := NULL;
@@ -188,20 +205,6 @@ BEGIN
       v_system_stock := 0;
       v_diff := v_qty;
       v_unregistered := v_unregistered + 1;
-
-      v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-        'barcode', v_barcode,
-        'product_id', v_product_id,
-        'product_name', v_product_name,
-        'file_name', v_name,
-        'system_stock', v_system_stock,
-        'counted', v_qty,
-        'difference', v_diff,
-        'status', v_status,
-        'unit_cost', v_unit_cost,
-        'unit_price', v_unit_price,
-        'price_from_branch', v_price_from_branch
-      ));
     ELSE
       v_product_id := v_product.id;
       v_product_name := v_product.name;
@@ -210,6 +213,16 @@ BEGIN
       v_unit_cost := COALESCE(v_product.cost_price, 0);
       v_unit_price := COALESCE(v_product.price, 0);
       v_price_from_branch := NULL;
+
+      -- Altas (entradas) del periodo: sirven para estimar ventas cuando el stock cuadra
+      SELECT COALESCE(SUM(sm.quantity), 0)::INT
+      INTO v_entries_qty
+      FROM public.stock_movements sm
+      WHERE sm.product_id = v_product.id
+        AND sm.movement_type = 'entrada'
+        AND COALESCE(sm.quantity, 0) > 0
+        AND (sm.created_at AT TIME ZONE 'America/Mexico_City')::DATE BETWEEN v_start AND v_end
+        AND (sm.branch_id IS NULL OR sm.branch_id = p_branch_id);
 
       IF v_diff = 0 THEN
         v_status := 'correct';
@@ -221,27 +234,31 @@ BEGIN
         v_status := 'surplus';
         v_surplus := v_surplus + 1;
       END IF;
-
-      v_rows := v_rows || jsonb_build_array(jsonb_build_object(
-        'barcode', v_barcode,
-        'product_id', v_product_id,
-        'product_name', v_product_name,
-        'file_name', v_name,
-        'system_stock', v_system_stock,
-        'counted', v_qty,
-        'difference', v_diff,
-        'status', v_status,
-        'unit_cost', v_unit_cost,
-        'unit_price', v_unit_price,
-        'price_from_branch', v_price_from_branch
-      ));
     END IF;
 
     v_reviewed := v_reviewed + 1;
+    v_rows := v_rows || jsonb_build_array(jsonb_build_object(
+      'barcode', v_barcode,
+      'product_id', v_product_id,
+      'product_name', v_product_name,
+      'file_name', v_name,
+      'system_stock', v_system_stock,
+      'counted', v_qty,
+      'difference', v_diff,
+      'status', v_status,
+      'unit_cost', v_unit_cost,
+      'unit_price', v_unit_price,
+      'price_from_branch', v_price_from_branch,
+      'entries_qty', COALESCE(v_entries_qty, 0)
+    ));
   END LOOP;
 
   RETURN jsonb_build_object(
     'branch_id', p_branch_id,
+    'period', jsonb_build_object(
+      'start', v_start,
+      'end', v_end
+    ),
     'summary', jsonb_build_object(
       'reviewed', v_reviewed,
       'correct', v_correct,
@@ -255,7 +272,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.compare_inventory_count(UUID, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.compare_inventory_count(UUID, JSONB, DATE, DATE) TO authenticated;
 
 -- =============================================================================
 -- Aplicar ajuste: actualiza stock de productos existentes de la sucursal

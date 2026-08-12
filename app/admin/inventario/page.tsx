@@ -36,6 +36,7 @@ import {
   type InventoryCountRow,
 } from "@/lib/inventory-count"
 import { formatMoney, roundMoney } from "@/lib/money"
+import { getPeriodRange, todayLocalISODate, type PeriodPreset } from "@/lib/periods"
 import { cn } from "@/lib/utils"
 
 type CountStatus = "correct" | "missing" | "surplus" | "unregistered"
@@ -53,6 +54,7 @@ type CompareRow = {
   unit_cost?: number
   unit_price?: number
   price_from_branch?: string | null
+  entries_qty?: number
 }
 
 type CompareSummary = {
@@ -97,6 +99,9 @@ export default function AdminInventarioPage() {
   const [success, setSuccess] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [reviewed, setReviewed] = useState(false)
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("week")
+  const [periodStart, setPeriodStart] = useState(() => getPeriodRange("week").start)
+  const [periodEnd, setPeriodEnd] = useState(() => getPeriodRange("week").end)
 
   useEffect(() => {
     checkAuth()
@@ -182,6 +187,8 @@ export default function AdminInventarioPage() {
           action: "compare",
           branch_id: branchId,
           items: parsedRows,
+          start_date: periodStart,
+          end_date: periodEnd,
         }),
       })
       const json = await res.json()
@@ -212,7 +219,7 @@ export default function AdminInventarioPage() {
     [rows],
   )
 
-  /** Estimado de lo vendido: faltantes del sistema + no registrados. Correctos no entran. */
+  /** Estimado: faltantes + no registrados + correctos vía altas del periodo */
   const qtyTotals = useMemo(() => {
     const empty = { products: 0, system: 0, counted: 0, diff: 0 }
     const byStatus: Record<CountStatus, typeof empty> = {
@@ -226,8 +233,10 @@ export default function AdminInventarioPage() {
     let missingUnits = 0
     let surplusUnits = 0
     let unregisteredUnits = 0
+    let correctEntryUnits = 0
     let missingEarningsMxn = 0
     let unregisteredEarningsMxn = 0
+    let correctEarningsMxn = 0
     let estimatedProfitMxn = 0
 
     for (const row of rows) {
@@ -240,9 +249,9 @@ export default function AdminInventarioPage() {
 
       const unitPrice = Number(row.unit_price) || 0
       const unitCost = Number(row.unit_cost) || 0
+      const entriesQty = Math.max(0, Number(row.entries_qty) || 0)
 
       if (row.status === "missing") {
-        // Se “vendió” lo que ya no está: stock sistema − conteo físico
         const soldUnits = row.system_stock - row.counted
         missingUnits += soldUnits
         missingEarningsMxn = roundMoney(missingEarningsMxn + soldUnits * unitPrice)
@@ -250,16 +259,20 @@ export default function AdminInventarioPage() {
       }
 
       if (row.status === "unregistered") {
-        // También se vendió / salió, pero no estaba en el sistema (sin precio → $0 MXN)
         unregisteredUnits += row.counted
         unregisteredEarningsMxn = roundMoney(unregisteredEarningsMxn + row.counted * unitPrice)
+      }
+
+      if (row.status === "correct") {
+        // Ventas no están en plataforma (solo altas): si cuadra, altas del periodo ≈ vendido
+        correctEntryUnits += entriesQty
+        correctEarningsMxn = roundMoney(correctEarningsMxn + entriesQty * unitPrice)
+        estimatedProfitMxn = roundMoney(estimatedProfitMxn + entriesQty * (unitPrice - unitCost))
       }
 
       if (row.status === "surplus") {
         surplusUnits += row.counted - row.system_stock
       }
-
-      // correct: no suma — el físico cuadra con el sistema, no hay venta por diferencia
     }
 
     return {
@@ -268,14 +281,24 @@ export default function AdminInventarioPage() {
       missingUnits,
       surplusUnits,
       unregisteredUnits,
+      correctEntryUnits,
       missingEarningsMxn,
       unregisteredEarningsMxn,
-      estimatedEarningsMxn: roundMoney(missingEarningsMxn + unregisteredEarningsMxn),
+      correctEarningsMxn,
+      estimatedEarningsMxn: roundMoney(missingEarningsMxn + unregisteredEarningsMxn + correctEarningsMxn),
       estimatedProfitMxn,
-      soldUnitsTotal: missingUnits + unregisteredUnits,
+      soldUnitsTotal: missingUnits + unregisteredUnits + correctEntryUnits,
     }
   }, [rows])
 
+  const onPeriodPresetChange = (preset: PeriodPreset) => {
+    setPeriodPreset(preset)
+    if (preset !== "custom") {
+      const range = getPeriodRange(preset)
+      setPeriodStart(range.start)
+      setPeriodEnd(range.end)
+    }
+  }
   const applyAdjustments = async () => {
     setApplying(true)
     setError("")
@@ -323,6 +346,8 @@ export default function AdminInventarioPage() {
         action: "compare",
         branch_id: branchId,
         items: parsedRows,
+        start_date: periodStart,
+        end_date: periodEnd,
       }),
     })
     const json = await res.json()
@@ -403,23 +428,72 @@ export default function AdminInventarioPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>1. Sucursal</CardTitle>
-              <CardDescription>El conteo solo afecta productos de esta sucursal (barcode + branch_id).</CardDescription>
+              <CardTitle>1. Sucursal y periodo</CardTitle>
+              <CardDescription>
+                El conteo solo afecta esta sucursal. El periodo define qué altas se usan para estimar ventas en
+                productos correctos.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <Label className="mb-2 block">Sucursal</Label>
-              <Select value={branchId} onValueChange={onBranchChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  {branches.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="mb-2 block">Sucursal</Label>
+                <Select value={branchId} onValueChange={onBranchChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="mb-2 block">Periodo de altas (para correctos)</Label>
+                <Select value={periodPreset} onValueChange={(v) => onPeriodPresetChange(v as PeriodPreset)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Hoy</SelectItem>
+                    <SelectItem value="week">Últimos 7 días</SelectItem>
+                    <SelectItem value="month">Este mes</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Desde</Label>
+                    <Input
+                      type="date"
+                      value={periodStart}
+                      max={todayLocalISODate()}
+                      onChange={(e) => {
+                        setPeriodPreset("custom")
+                        setPeriodStart(e.target.value)
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">Hasta</Label>
+                    <Input
+                      type="date"
+                      value={periodEnd}
+                      max={todayLocalISODate()}
+                      onChange={(e) => {
+                        setPeriodPreset("custom")
+                        setPeriodEnd(e.target.value)
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Como las ventas no se registran aquí (solo altas), en productos correctos se estima con las entradas
+                  del periodo.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -475,7 +549,7 @@ export default function AdminInventarioPage() {
               <SummaryCard
                 label="Correctos"
                 value={summary.correct}
-                detail="Stock sistema = conteo"
+                detail={`${qtyTotals.correctEntryUnits} pzas. altas → estimado`}
               />
               <SummaryCard
                 label="Faltantes"
@@ -500,29 +574,31 @@ export default function AdminInventarioPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Estimado de ganancias</CardTitle>
                 <CardDescription>
-                  Aproximado de lo vendido en teoría: suma faltantes + no registrados. Los correctos no entran (el
-                  stock cuadra, no hubo venta por diferencia). Los sobrantes tampoco.
+                  Faltantes + no registrados + correctos (altas del {periodStart} al {periodEnd}). Sobrantes no
+                  entran. Aproximado porque las ventas no se capturan en la plataforma.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-md border bg-background p-4">
                     <p className="text-sm text-muted-foreground">Faltantes (sistema − conteo)</p>
                     <p className="mt-1 text-2xl font-bold text-destructive">{qtyTotals.missingUnits} pzas.</p>
                     <p className="text-sm font-medium">{formatMoney(qtyTotals.missingEarningsMxn)} MXN</p>
                   </div>
                   <div className="rounded-md border bg-background p-4">
-                    <p className="text-sm text-muted-foreground">No registrados (también vendidos)</p>
-                    <p className="mt-1 text-2xl font-bold">{qtyTotals.unregisteredUnits} pzas.</p>
-                    <p className="text-sm font-medium">{formatMoney(qtyTotals.unregisteredEarningsMxn)} MXN</p>
-                    <p className="text-xs text-muted-foreground">
-                      Precio tomado de otra sucursal si existe el mismo código
-                    </p>
+                    <p className="text-sm text-muted-foreground">Correctos (altas del periodo)</p>
+                    <p className="mt-1 text-2xl font-bold">{qtyTotals.correctEntryUnits} pzas.</p>
+                    <p className="text-sm font-medium">{formatMoney(qtyTotals.correctEarningsMxn)} MXN</p>
                   </div>
                   <div className="rounded-md border bg-background p-4">
-                    <p className="text-sm text-muted-foreground">Total piezas (faltantes + no reg.)</p>
+                    <p className="text-sm text-muted-foreground">No registrados</p>
+                    <p className="mt-1 text-2xl font-bold">{qtyTotals.unregisteredUnits} pzas.</p>
+                    <p className="text-sm font-medium">{formatMoney(qtyTotals.unregisteredEarningsMxn)} MXN</p>
+                  </div>
+                  <div className="rounded-md border bg-background p-4">
+                    <p className="text-sm text-muted-foreground">Total piezas estimadas</p>
                     <p className="mt-1 text-2xl font-bold">{qtyTotals.soldUnitsTotal}</p>
-                    <p className="text-xs text-muted-foreground">Correctos excluidos</p>
+                    <p className="text-xs text-muted-foreground">Sobrantes excluidos</p>
                   </div>
                 </div>
                 <div className="rounded-md border bg-background p-4">
@@ -532,8 +608,7 @@ export default function AdminInventarioPage() {
                     <span className="ml-2 text-base font-medium text-muted-foreground">MXN</span>
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Fórmula: (piezas faltantes × precio) + (piezas no registradas × precio si existe). Utilidad aprox.
-                    de faltantes (precio − costo): {formatMoney(qtyTotals.estimatedProfitMxn)} MXN
+                    Utilidad aprox. (precio − costo): {formatMoney(qtyTotals.estimatedProfitMxn)} MXN
                   </p>
                 </div>
               </CardContent>
@@ -554,7 +629,7 @@ export default function AdminInventarioPage() {
                   {(
                     [
                       ["all", "Todos", qtyTotals.countedAll],
-                      ["correct", "Correctos", qtyTotals.byStatus.correct.counted],
+                      ["correct", "Correctos", qtyTotals.correctEntryUnits],
                       ["missing", "Faltantes", qtyTotals.missingUnits],
                       ["surplus", "Sobrantes", qtyTotals.surplusUnits],
                       ["unregistered", "No registrados", qtyTotals.unregisteredUnits],
@@ -604,6 +679,12 @@ export default function AdminInventarioPage() {
                               {row.status === "unregistered" && row.price_from_branch ? (
                                 <p className="text-xs text-muted-foreground">
                                   Precio ref. {formatMoney(Number(row.unit_price) || 0)} MXN · {row.price_from_branch}
+                                </p>
+                              ) : null}
+                              {row.status === "correct" && (Number(row.entries_qty) || 0) > 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Altas periodo: {row.entries_qty} pzas. ·{" "}
+                                  {formatMoney((Number(row.entries_qty) || 0) * (Number(row.unit_price) || 0))} MXN
                                 </p>
                               ) : null}
                             </TableCell>

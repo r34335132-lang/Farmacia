@@ -101,9 +101,14 @@ export async function POST(request: Request) {
     }
 
     if (action === "compare") {
+      const startDate = typeof body?.start_date === "string" ? body.start_date : null
+      const endDate = typeof body?.end_date === "string" ? body.end_date : null
+
       const { data, error } = await supabase.rpc("compare_inventory_count", {
         p_branch_id: branchId,
         p_items: validated.items,
+        p_start_date: startDate,
+        p_end_date: endDate,
       })
 
       if (error) {
