@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,12 +18,19 @@ import {
   ClipboardList,
   Wallet,
   Trophy,
+  Truck,
+  ClipboardCheck,
+  ScrollText,
+  Percent,
+  History,
+  type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatMoney } from "@/lib/money"
+import { cn } from "@/lib/utils"
 
 interface DashboardStats {
   totalProducts: number
@@ -55,6 +62,92 @@ interface TopProduct {
   qty_sold: number
   revenue: number
   rank: number
+}
+
+function KpiCard({
+  title,
+  value,
+  icon: Icon,
+  valueClassName,
+}: {
+  title: string
+  value: ReactNode
+  icon: LucideIcon
+  valueClassName?: string
+}) {
+  return (
+    <Card className="h-full">
+      <CardContent className="flex h-full items-start justify-between gap-3 p-4">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
+          <p className={cn("text-xl font-bold tracking-tight sm:text-2xl", valueClassName)}>{value}</p>
+        </div>
+        <div className="rounded-lg bg-muted/60 p-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function NavCard({
+  href,
+  title,
+  description,
+  icon: Icon,
+  tone = "default",
+}: {
+  href: string
+  title: string
+  description: string
+  icon: LucideIcon
+  tone?: "default" | "pos" | "store"
+}) {
+  return (
+    <Link href={href} className="block h-full">
+      <Card
+        className={cn(
+          "h-full transition-shadow hover:shadow-md",
+          tone === "pos" && "border-rose-200 bg-rose-50/50",
+          tone === "store" && "border-primary/20 bg-primary/5",
+        )}
+      >
+        <CardHeader className="space-y-3 p-4">
+          <div
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-lg",
+              tone === "pos" && "bg-rose-100 text-rose-800",
+              tone === "store" && "bg-primary/10 text-primary",
+              tone === "default" && "bg-muted text-foreground",
+            )}
+          >
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <CardTitle
+              className={cn(
+                "text-base leading-tight",
+                tone === "pos" && "text-rose-900",
+                tone === "store" && "text-primary",
+              )}
+            >
+              {title}
+            </CardTitle>
+            <CardDescription className="text-xs leading-snug">{description}</CardDescription>
+          </div>
+        </CardHeader>
+      </Card>
+    </Link>
+  )
+}
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="space-y-0.5">
+      <h3 className="text-sm font-semibold tracking-wide text-foreground">{title}</h3>
+      {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+    </div>
+  )
 }
 
 export default function AdminDashboard() {
@@ -157,43 +250,43 @@ export default function AdminDashboard() {
 
   if (loading && !stats) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Cargando dashboard...</div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg text-muted-foreground">Cargando dashboard...</div>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-10 w-auto rounded-full" />
-            <div className="hidden sm:block">
-              <h1 className="font-semibold text-lg leading-tight text-primary">Farmacia Bienestar</h1>
-              <p className="text-xs text-muted-foreground">Panel administrativo</p>
+      <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-9 w-9 rounded-full object-cover" />
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-primary sm:text-lg">Farmacia Bienestar</h1>
+              <p className="hidden text-xs text-muted-foreground sm:block">Panel administrativo</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Link href="/pos">
-              <Button variant="outline" className="border-rose-200 text-rose-800">
-                <ShoppingCart className="h-4 w-4 mr-2" />
+              <Button variant="outline" size="sm" className="border-rose-200 text-rose-800">
+                <ShoppingCart className="mr-1.5 h-4 w-4" />
                 POS
               </Button>
             </Link>
-            <Button onClick={handleLogout} variant="outline">
-              Cerrar Sesión
+            <Button onClick={handleLogout} variant="outline" size="sm">
+              Salir
             </Button>
           </div>
         </div>
       </header>
 
-      <div className="p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <main className="mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Panel administrativo</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Resumen</h2>
             <p className="text-sm text-muted-foreground">
-              {branchFilter === "all" ? "Vista global de todas las farmacias" : "Vista filtrada por sucursal"}
+              {branchFilter === "all" ? "Todas las sucursales" : "Filtrado por sucursal"}
             </p>
           </div>
           <Select value={branchFilter} onValueChange={setBranchFilter}>
@@ -217,372 +310,247 @@ export default function AdminDashboard() {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Productos</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalProducts}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{stats?.lowStockProducts}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
-              <Calendar className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">{stats?.expiringProducts}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{stats?.expiredProducts}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ventas Hoy</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.todaySales}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ingresos Hoy</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatMoney(stats?.totalRevenue || 0)}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cajeros Activos</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.activeCashiers}</div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* KPIs: 2 / 4 / 4 — evita el grid de 7 que se rompía */}
+        <section className="space-y-3">
+          <SectionTitle title="Indicadores de hoy" />
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KpiCard title="Productos" value={stats?.totalProducts ?? 0} icon={Package} />
+            <KpiCard title="Ventas hoy" value={stats?.todaySales ?? 0} icon={ShoppingCart} />
+            <KpiCard title="Ingresos hoy" value={formatMoney(stats?.totalRevenue || 0)} icon={DollarSign} />
+            <KpiCard title="Cajeros activos" value={stats?.activeCashiers ?? 0} icon={Users} />
+            <KpiCard
+              title="Stock bajo"
+              value={stats?.lowStockProducts ?? 0}
+              icon={AlertTriangle}
+              valueClassName="text-destructive"
+            />
+            <KpiCard
+              title="Por vencer"
+              value={stats?.expiringProducts ?? 0}
+              icon={Calendar}
+              valueClassName="text-orange-500"
+            />
+            <KpiCard
+              title="Vencidos"
+              value={stats?.expiredProducts ?? 0}
+              icon={AlertTriangle}
+              valueClassName="text-destructive"
+            />
+            <KpiCard title="Sucursales" value={branches.length} icon={Store} />
+          </div>
+        </section>
 
         {branchFilter === "all" && branchSummaries.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {branchSummaries.map((branch) => (
-              <Card key={branch.id}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Store className="h-4 w-4" />
-                    {branch.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Ventas hoy</span>
-                    <span className="font-semibold">
-                      {branch.todaySales} · {formatMoney(branch.todayRevenue)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Ventas del mes</span>
-                    <span className="font-semibold">
-                      {branch.monthSales} · {formatMoney(branch.monthRevenue)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Stock bajo</span>
-                    <span className="font-semibold text-orange-600">{branch.lowStock}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Agotados</span>
-                    <span className="font-semibold text-destructive">{branch.outOfStock}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <section className="space-y-3">
+            <SectionTitle title="Por sucursal" subtitle="Ventas e inventario del día y del mes" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {branchSummaries.map((branch) => (
+                <Card key={branch.id} className="h-full">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Store className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{branch.name}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 px-4 pb-4 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Ventas hoy</span>
+                      <span className="font-semibold text-right">
+                        {branch.todaySales} · {formatMoney(branch.todayRevenue)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Ventas del mes</span>
+                      <span className="font-semibold text-right">
+                        {branch.monthSales} · {formatMoney(branch.monthRevenue)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Stock bajo</span>
+                      <span className="font-semibold text-orange-600">{branch.lowStock}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Agotados</span>
+                      <span className="font-semibold text-destructive">{branch.outOfStock}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {topByBranch.length === 0 ? (
-            <Card className="md:col-span-2 xl:col-span-3">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+        <section className="space-y-3">
+          <SectionTitle title="Más vendidos del mes" subtitle="Top por piezas en cada sucursal" />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {topByBranch.length === 0 ? (
+              <Card className="md:col-span-2 xl:col-span-3">
+                <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
                   <Trophy className="h-5 w-5 text-amber-500" />
-                  Más vendidos del mes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Aún no hay ventas suficientes este mes.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            topByBranch.map(([branchId, group]) => (
-              <Card key={branchId}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Trophy className="h-4 w-4 text-amber-500" />
-                    Más vendidos · {group.name}
-                  </CardTitle>
-                  <CardDescription>Top del mes por piezas</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {group.items.map((item) => (
-                    <div key={`${item.branch_id}-${item.product_id}`} className="flex items-center justify-between rounded border p-2 text-sm">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate">
-                          #{item.rank} {item.product_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{item.barcode || "Sin código"}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-semibold">{item.qty_sold} pzas</p>
-                        <p className="text-xs text-muted-foreground">{formatMoney(item.revenue)}</p>
-                      </div>
-                    </div>
-                  ))}
+                  Aún no hay ventas suficientes este mes.
                 </CardContent>
               </Card>
-            ))
-          )}
-        </div>
+            ) : (
+              topByBranch.map(([branchId, group]) => (
+                <Card key={branchId} className="h-full">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Trophy className="h-4 w-4 shrink-0 text-amber-500" />
+                      <span className="truncate">{group.name}</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 px-4 pb-4">
+                    {group.items.map((item) => (
+                      <div
+                        key={`${item.branch_id}-${item.product_id}`}
+                        className="flex items-center justify-between gap-3 rounded-md border px-2.5 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            #{item.rank} {item.product_name}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">{item.barcode || "Sin código"}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="font-semibold">{item.qty_sold}</p>
+                          <p className="text-xs text-muted-foreground">{formatMoney(item.revenue)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Link href="/admin/products">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Gestionar Productos
-                </CardTitle>
-                <CardDescription>Agregar, editar y ver inventario</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/sales">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Reportes de Ventas
-                </CardTitle>
-                <CardDescription>Ver historial y estadísticas</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/finanzas">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Finanzas
-                </CardTitle>
-                <CardDescription>Utilidad, costos y gastos</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/gastos">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Gastos
-                </CardTitle>
-                <CardDescription>Registrar nómina y operativos</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/users">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Gestionar Usuarios
-                </CardTitle>
-                <CardDescription>Administrar cajeros y permisos</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/branches">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Store className="h-5 w-5" />
-                  Gestionar Sucursales
-                </CardTitle>
-                <CardDescription>Crear y administrar farmacias</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/pos">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-rose-200 bg-rose-50/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-rose-900">
-                  <ShoppingCart className="h-5 w-5" />
-                  Punto de Venta
-                </CardTitle>
-                <CardDescription>Ir al POS (elige sucursal al entrar)</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
+        <section className="space-y-3">
+          <SectionTitle title="Operación" subtitle="Inventario, ventas y administración" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <NavCard href="/admin/products" title="Productos" description="Inventario y precios" icon={Package} />
+            <NavCard href="/admin/sales" title="Ventas" description="Reportes e historial" icon={TrendingUp} />
+            <NavCard href="/admin/finanzas" title="Finanzas" description="Utilidad y márgenes" icon={DollarSign} />
+            <NavCard href="/admin/gastos" title="Gastos" description="Nómina y operativos" icon={Wallet} />
+            <NavCard href="/admin/movimientos" title="Movimientos" description="Entradas y salidas" icon={History} />
+            <NavCard href="/admin/pedidos-globales" title="Pedidos sucursales" description="Pedido consolidado" icon={ClipboardList} />
+            <NavCard href="/admin/distribuidora" title="Distribuidora" description="Entradas y alertas" icon={Truck} />
+            <NavCard href="/admin/faltantes" title="Faltantes" description="Revisión y aprobación" icon={ClipboardCheck} />
+            <NavCard href="/admin/markup" title="Markup" description="Aumento sobre costo" icon={Percent} />
+            <NavCard href="/admin/auditoria" title="Auditoría" description="Historial de cambios" icon={ScrollText} />
+            <NavCard href="/admin/users" title="Usuarios" description="Cajeros y permisos" icon={Users} />
+            <NavCard href="/admin/branches" title="Sucursales" description="Administrar farmacias" icon={Store} />
+            <NavCard href="/pos" title="Punto de Venta" description="Cobrar en mostrador" icon={ShoppingCart} tone="pos" />
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Link href="/tienda">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <Store className="h-5 w-5" />
-                  Tienda Online
-                </CardTitle>
-                <CardDescription>Ver la tienda publica</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/orders">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <ClipboardList className="h-5 w-5" />
-                  Pedidos Online
-                </CardTitle>
-                <CardDescription>Gestionar pedidos de clientes</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/admin/promotions">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <Sparkles className="h-5 w-5" />
-                  Promociones
-                </CardTitle>
-                <CardDescription>Crear y gestionar ofertas</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/cajero">
-            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <ClipboardList className="h-5 w-5" />
-                  Panel Cajero
-                </CardTitle>
-                <CardDescription>Dashboard para atender pedidos</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
+        <section className="space-y-3">
+          <SectionTitle title="Tienda online" subtitle="Pedidos y promociones públicas" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <NavCard href="/tienda" title="Tienda" description="Vista pública" icon={Store} tone="store" />
+            <NavCard href="/admin/orders" title="Pedidos online" description="Atender clientes" icon={ClipboardList} tone="store" />
+            <NavCard href="/admin/promotions" title="Promociones" description="Ofertas activas" icon={Sparkles} tone="store" />
+            <NavCard href="/cajero" title="Panel cajero" description="Pedidos e inventario" icon={ClipboardList} tone="store" />
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <NotificationManager userRole="admin" />
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-                Productos con Stock Bajo
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lowStockItems.length === 0 ? (
-                <p className="text-muted-foreground">No hay productos con stock bajo</p>
-              ) : (
-                <div className="space-y-2">
-                  {lowStockItems.map((product) => (
-                    <div key={product.id} className="flex items-center justify-between p-2 border rounded">
-                      <div>
-                        <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">
+        <section className="space-y-3">
+          <SectionTitle title="Alertas y actividad" />
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="min-h-[220px]">
+              <NotificationManager userRole="admin" />
+            </div>
+
+            <Card className="h-full">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  Stock bajo
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 px-4 pb-4">
+                {lowStockItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin alertas</p>
+                ) : (
+                  lowStockItems.map((product) => (
+                    <div key={product.id} className="flex items-start justify-between gap-2 rounded-md border p-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{product.name}</p>
+                        <p className="text-xs text-muted-foreground">
                           Stock: {product.stock_quantity}
                           {product.branch_name ? ` · ${product.branch_name}` : ""}
                         </p>
                       </div>
-                      <Badge variant="destructive">Bajo Stock</Badge>
+                      <Badge variant="destructive" className="shrink-0">
+                        Bajo
+                      </Badge>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-orange-500" />
-                Productos por Vencer
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {expiringItems.length === 0 ? (
-                <p className="text-muted-foreground">No hay productos por vencer</p>
-              ) : (
-                <div className="space-y-2">
-                  {expiringItems.map((product) => {
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Calendar className="h-4 w-4 text-orange-500" />
+                  Por vencer
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 px-4 pb-4">
+                {expiringItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin alertas</p>
+                ) : (
+                  expiringItems.map((product) => {
                     const expirationDate = new Date(product.expiration_date)
                     const daysUntilExpiry = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                     return (
-                      <div key={product.id} className="flex items-center justify-between p-2 border rounded">
-                        <div>
-                          <p className="font-medium">{product.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Vence: {expirationDate.toLocaleDateString("es-ES")}
+                      <div key={product.id} className="flex items-start justify-between gap-2 rounded-md border p-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{product.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {expirationDate.toLocaleDateString("es-ES")}
                             {product.branch_name ? ` · ${product.branch_name}` : ""}
                           </p>
                         </div>
-                        <Badge className="bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
+                        <Badge className="shrink-0 bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
                       </div>
                     )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Ventas Recientes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {recentSales.length === 0 ? (
-                <p className="text-muted-foreground">No hay ventas hoy</p>
-              ) : (
-                <div className="space-y-2">
-                  {recentSales.map((sale) => (
-                    <div key={sale.id} className="flex items-center justify-between p-2 border rounded">
-                      <div>
+                  })
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full">
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingCart className="h-4 w-4" />
+                  Ventas recientes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 px-4 pb-4">
+                {recentSales.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No hay ventas hoy</p>
+                ) : (
+                  recentSales.map((sale) => (
+                    <div key={sale.id} className="flex items-start justify-between gap-2 rounded-md border p-2 text-sm">
+                      <div className="min-w-0">
                         <p className="font-medium">{formatMoney(sale.total_amount)}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {sale.cashier_name || "Cajero"} - {new Date(sale.created_at).toLocaleTimeString()}
+                        <p className="truncate text-xs text-muted-foreground">
+                          {sale.cashier_name || "Cajero"} · {new Date(sale.created_at).toLocaleTimeString()}
                           {sale.branch_name ? ` · ${sale.branch_name}` : ""}
                         </p>
                       </div>
-                      <Badge variant="outline">{sale.payment_method}</Badge>
+                      <Badge variant="outline" className="shrink-0">
+                        {sale.payment_method}
+                      </Badge>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      </main>
     </div>
   )
 }
