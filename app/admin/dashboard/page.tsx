@@ -1,15 +1,29 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar, Sparkles, Store, ClipboardList } from "lucide-react"
+import {
+  Package,
+  ShoppingCart,
+  Users,
+  AlertTriangle,
+  TrendingUp,
+  DollarSign,
+  Calendar,
+  Sparkles,
+  Store,
+  ClipboardList,
+  Wallet,
+  Trophy,
+} from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { formatMoney } from "@/lib/money"
 
 interface DashboardStats {
   totalProducts: number
@@ -32,6 +46,17 @@ interface BranchSummary {
   outOfStock: number
 }
 
+interface TopProduct {
+  branch_id: string
+  branch_name: string
+  product_id: string
+  product_name: string
+  barcode?: string
+  qty_sold: number
+  revenue: number
+  rank: number
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [branchSummaries, setBranchSummaries] = useState<BranchSummary[]>([])
@@ -40,7 +65,9 @@ export default function AdminDashboard() {
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
   const [expiringItems, setExpiringItems] = useState<any[]>([])
   const [recentSales, setRecentSales] = useState<any[]>([])
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -51,7 +78,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadDashboardData()
-  }, [branchFilter, branches.length])
+  }, [branchFilter])
 
   const loadBranches = async () => {
     const res = await fetch("/api/branches")
@@ -71,129 +98,64 @@ export default function AdminDashboard() {
     }
 
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-
     if (profile?.role !== "admin") {
       router.push("/pos")
-      return
     }
   }
 
   const loadDashboardData = async () => {
+    setLoading(true)
+    setError(null)
     try {
-      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
-      const productsRes = await fetch(`/api/products${branchQuery}`)
-      const productsJson = await productsRes.json()
-      const products = productsJson.products || []
+      const params = new URLSearchParams({ top_limit: "5" })
+      if (branchFilter !== "all") params.set("branch_id", branchFilter)
 
-      const lowStock = products.filter((p: { stock_quantity: number; min_stock_level: number }) => p.stock_quantity <= p.min_stock_level)
+      const res = await fetch(`/api/dashboard/summary?${params}`)
+      const data = await res.json()
 
-      const today = new Date()
-      const expiringProducts =
-        products.filter((p: { expiration_date?: string; days_before_expiry_alert?: number }) => {
-          if (!p.expiration_date) return false
-          const expirationDate = new Date(p.expiration_date)
-          const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          const alertThreshold = p.days_before_expiry_alert || 30
-          return daysUntilExpiry > 0 && daysUntilExpiry <= alertThreshold
-        }) || []
-
-      const expiredProducts =
-        products.filter((p: { expiration_date?: string }) => {
-          if (!p.expiration_date) return false
-          const expirationDate = new Date(p.expiration_date)
-          return expirationDate < today
-        }) || []
-
-      const now = new Date()
-      const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      const tomorrow = new Date(todayDate.getTime() + 24 * 60 * 60 * 1000)
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-
-      const salesRes = await fetch(`/api/sales${branchQuery}`)
-      const salesJson = await salesRes.json()
-      const allSales = salesJson.sales || []
-
-      const todaySales = allSales.filter(
-        (sale: { created_at: string }) =>
-          new Date(sale.created_at) >= todayDate && new Date(sale.created_at) < tomorrow,
-      )
-      const totalRevenue = todaySales.reduce(
-        (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
-        0,
-      )
-
-      const { data: cashiers } = await supabase.from("profiles").select("*").eq("role", "cajero").eq("is_active", true)
+      if (!res.ok) {
+        throw new Error(data.hint ? `${data.error}. ${data.hint}` : data.error || "Error al cargar dashboard")
+      }
 
       setStats({
-        totalProducts: products.length,
-        lowStockProducts: lowStock.length,
-        expiringProducts: expiringProducts.length,
-        expiredProducts: expiredProducts.length,
-        todaySales: todaySales.length,
-        totalRevenue,
-        activeCashiers: cashiers?.length || 0,
+        totalProducts: Number(data.stats?.totalProducts || 0),
+        lowStockProducts: Number(data.stats?.lowStockProducts || 0),
+        expiringProducts: Number(data.stats?.expiringProducts || 0),
+        expiredProducts: Number(data.stats?.expiredProducts || 0),
+        todaySales: Number(data.stats?.todaySales || 0),
+        totalRevenue: Number(data.stats?.totalRevenue || 0),
+        activeCashiers: Number(data.stats?.activeCashiers || 0),
       })
-
-      setLowStockItems(lowStock.slice(0, 5))
-      setExpiringItems(expiringProducts.slice(0, 5))
-      setRecentSales(todaySales.slice(0, 5))
-
-      if (branchFilter === "all") {
-        const allProductsRes = await fetch("/api/products")
-        const allProductsJson = await allProductsRes.json()
-        const allProducts = allProductsJson.products || []
-        const allSalesRes = await fetch("/api/sales")
-        const allSalesJson = await allSalesRes.json()
-        const globalSales = allSalesJson.sales || []
-
-        const summaries = branches.map((branch) => {
-          const branchProducts = allProducts.filter((p: { branch_id: string }) => p.branch_id === branch.id)
-          const branchSales = globalSales.filter((sale: { branch_id: string }) => sale.branch_id === branch.id)
-          const branchTodaySales = branchSales.filter(
-            (sale: { created_at: string }) =>
-              new Date(sale.created_at) >= todayDate && new Date(sale.created_at) < tomorrow,
-          )
-          const branchMonthSales = branchSales.filter(
-            (sale: { created_at: string }) => new Date(sale.created_at) >= monthStart,
-          )
-
-          return {
-            id: branch.id,
-            name: branch.name,
-            todaySales: branchTodaySales.length,
-            todayRevenue: branchTodaySales.reduce(
-              (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
-              0,
-            ),
-            monthSales: branchMonthSales.length,
-            monthRevenue: branchMonthSales.reduce(
-              (sum: number, sale: { total_amount: number }) => sum + Number(sale.total_amount),
-              0,
-            ),
-            lowStock: branchProducts.filter(
-              (p: { stock_quantity: number; min_stock_level: number }) => p.stock_quantity <= p.min_stock_level && p.stock_quantity > 0,
-            ).length,
-            outOfStock: branchProducts.filter((p: { stock_quantity: number }) => p.stock_quantity === 0).length,
-          }
-        })
-
-        setBranchSummaries(summaries)
-      } else {
-        setBranchSummaries([])
-      }
-    } catch (error) {
-      console.error("Error loading dashboard:", error)
+      setBranchSummaries(data.branchSummaries || [])
+      setLowStockItems(data.lowStockItems || [])
+      setExpiringItems(data.expiringItems || [])
+      setRecentSales(data.recentSales || [])
+      setTopProducts(data.topProductsByBranch || [])
+    } catch (err) {
+      console.error("Error loading dashboard:", err)
+      setError(err instanceof Error ? err.message : "Error al cargar dashboard")
     } finally {
       setLoading(false)
     }
   }
+
+  const topByBranch = useMemo(() => {
+    const map = new Map<string, { name: string; items: TopProduct[] }>()
+    for (const item of topProducts) {
+      if (!map.has(item.branch_id)) {
+        map.set(item.branch_id, { name: item.branch_name, items: [] })
+      }
+      map.get(item.branch_id)!.items.push(item)
+    }
+    return Array.from(map.entries())
+  }, [topProducts])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/auth/login")
   }
 
-  if (loading) {
+  if (loading && !stats) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-lg">Cargando dashboard...</div>
@@ -203,7 +165,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header con logo */}
       <header className="border-b bg-white">
         <div className="flex h-16 items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -250,7 +211,12 @@ export default function AdminDashboard() {
           </Select>
         </div>
 
-        {/* Stats Cards */}
+        {error && (
+          <Card className="border-destructive/40 bg-destructive/5">
+            <CardContent className="py-4 text-sm text-destructive">{error}</CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -261,7 +227,6 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold">{stats?.totalProducts}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Stock Bajo</CardTitle>
@@ -271,7 +236,6 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold text-destructive">{stats?.lowStockProducts}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Por Vencer</CardTitle>
@@ -281,7 +245,6 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold text-orange-500">{stats?.expiringProducts}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Vencidos</CardTitle>
@@ -291,7 +254,6 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold text-destructive">{stats?.expiredProducts}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ventas Hoy</CardTitle>
@@ -301,17 +263,15 @@ export default function AdminDashboard() {
               <div className="text-2xl font-bold">{stats?.todaySales}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Ingresos Hoy</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats?.totalRevenue.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatMoney(stats?.totalRevenue || 0)}</div>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Cajeros Activos</CardTitle>
@@ -337,13 +297,13 @@ export default function AdminDashboard() {
                   <div className="flex justify-between">
                     <span>Ventas hoy</span>
                     <span className="font-semibold">
-                      {branch.todaySales} · ${branch.todayRevenue.toFixed(2)}
+                      {branch.todaySales} · {formatMoney(branch.todayRevenue)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Ventas del mes</span>
                     <span className="font-semibold">
-                      {branch.monthSales} · ${branch.monthRevenue.toFixed(2)}
+                      {branch.monthSales} · {formatMoney(branch.monthRevenue)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -360,7 +320,50 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {topByBranch.length === 0 ? (
+            <Card className="md:col-span-2 xl:col-span-3">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-amber-500" />
+                  Más vendidos del mes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Aún no hay ventas suficientes este mes.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            topByBranch.map(([branchId, group]) => (
+              <Card key={branchId}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Trophy className="h-4 w-4 text-amber-500" />
+                    Más vendidos · {group.name}
+                  </CardTitle>
+                  <CardDescription>Top del mes por piezas</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {group.items.map((item) => (
+                    <div key={`${item.branch_id}-${item.product_id}`} className="flex items-center justify-between rounded border p-2 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">
+                          #{item.rank} {item.product_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{item.barcode || "Sin código"}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-semibold">{item.qty_sold} pzas</p>
+                        <p className="text-xs text-muted-foreground">{formatMoney(item.revenue)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Link href="/admin/products">
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
@@ -373,7 +376,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/admin/sales">
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardHeader>
@@ -385,7 +387,28 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
+          <Link href="/admin/finanzas">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Finanzas
+                </CardTitle>
+                <CardDescription>Utilidad, costos y gastos</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/gastos">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  Gastos
+                </CardTitle>
+                <CardDescription>Registrar nómina y operativos</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
           <Link href="/admin/users">
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardHeader>
@@ -397,7 +420,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/admin/branches">
             <Card className="hover:shadow-md transition-shadow cursor-pointer">
               <CardHeader>
@@ -409,7 +431,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/pos">
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-rose-200 bg-rose-50/50">
               <CardHeader>
@@ -423,7 +444,6 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
-        {/* Online Store Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Link href="/tienda">
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
@@ -436,7 +456,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/admin/orders">
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
               <CardHeader>
@@ -448,7 +467,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/admin/promotions">
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
               <CardHeader>
@@ -460,7 +478,6 @@ export default function AdminDashboard() {
               </CardHeader>
             </Card>
           </Link>
-
           <Link href="/cajero">
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/20 bg-primary/5">
               <CardHeader>
@@ -475,10 +492,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Notification Manager */}
           <NotificationManager userRole="admin" />
-
-          {/* Low Stock Alert */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -495,7 +509,10 @@ export default function AdminDashboard() {
                     <div key={product.id} className="flex items-center justify-between p-2 border rounded">
                       <div>
                         <p className="font-medium">{product.name}</p>
-                        <p className="text-sm text-muted-foreground">Stock: {product.stock_quantity}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Stock: {product.stock_quantity}
+                          {product.branch_name ? ` · ${product.branch_name}` : ""}
+                        </p>
                       </div>
                       <Badge variant="destructive">Bajo Stock</Badge>
                     </div>
@@ -504,8 +521,6 @@ export default function AdminDashboard() {
               )}
             </CardContent>
           </Card>
-
-          {/* Expiring Products Alert */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -519,23 +534,18 @@ export default function AdminDashboard() {
               ) : (
                 <div className="space-y-2">
                   {expiringItems.map((product) => {
-                    const today = new Date()
                     const expirationDate = new Date(product.expiration_date)
-                    const daysUntilExpiry = Math.ceil(
-                      (expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-                    )
-
+                    const daysUntilExpiry = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                     return (
                       <div key={product.id} className="flex items-center justify-between p-2 border rounded">
                         <div>
                           <p className="font-medium">{product.name}</p>
                           <p className="text-sm text-muted-foreground">
                             Vence: {expirationDate.toLocaleDateString("es-ES")}
+                            {product.branch_name ? ` · ${product.branch_name}` : ""}
                           </p>
                         </div>
-                        <Badge variant="warning" className="bg-orange-500 text-white">
-                          {daysUntilExpiry}d
-                        </Badge>
+                        <Badge className="bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
                       </div>
                     )
                   })}
@@ -543,8 +553,6 @@ export default function AdminDashboard() {
               )}
             </CardContent>
           </Card>
-
-          {/* Recent Sales */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -560,11 +568,10 @@ export default function AdminDashboard() {
                   {recentSales.map((sale) => (
                     <div key={sale.id} className="flex items-center justify-between p-2 border rounded">
                       <div>
-                        <p className="font-medium">${sale.total_amount}</p>
+                        <p className="font-medium">{formatMoney(sale.total_amount)}</p>
                         <p className="text-sm text-muted-foreground">
-                          {sale.profiles?.full_name} - {new Date(sale.created_at).toLocaleTimeString()}
-                          {sale.branches && !Array.isArray(sale.branches) ? ` · ${sale.branches.name}` : ""}
-                          {Array.isArray(sale.branches) && sale.branches[0] ? ` · ${sale.branches[0].name}` : ""}
+                          {sale.cashier_name || "Cajero"} - {new Date(sale.created_at).toLocaleTimeString()}
+                          {sale.branch_name ? ` · ${sale.branch_name}` : ""}
                         </p>
                       </div>
                       <Badge variant="outline">{sale.payment_method}</Badge>
