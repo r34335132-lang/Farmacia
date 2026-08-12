@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext } from "@/lib/branch"
-import { getPeriodRange, type PeriodPreset } from "@/lib/periods"
 
 export const dynamic = "force-dynamic"
 
@@ -18,21 +17,15 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const branchId = searchParams.get("branch_id")
-    const preset = (searchParams.get("period") || "month") as PeriodPreset
-    const range = getPeriodRange(
-      preset,
-      searchParams.get("start_date") || undefined,
-      searchParams.get("end_date") || undefined,
-    )
+    const topLimit = Math.min(10, Math.max(3, Number(searchParams.get("top_limit") || 5)))
 
-    const { data, error } = await supabase.rpc("get_financial_summary", {
+    const { data, error } = await supabase.rpc("get_admin_dashboard", {
       p_branch_id: branchId && branchId !== "all" ? branchId : null,
-      p_start_date: range.start,
-      p_end_date: range.end,
+      p_top_limit: topLimit,
     })
 
     if (error) {
-      console.error("get_financial_summary error:", error)
+      console.error("get_admin_dashboard error:", error)
       return NextResponse.json(
         {
           error: error.message,
@@ -44,7 +37,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(data)
   } catch (error) {
-    console.error("finance summary error:", error)
-    return NextResponse.json({ error: "Error al obtener finanzas" }, { status: 500 })
+    console.error("dashboard summary error:", error)
+    return NextResponse.json({ error: "Error al cargar dashboard" }, { status: 500 })
   }
 }

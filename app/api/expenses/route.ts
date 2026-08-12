@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext } from "@/lib/branch"
-import { logAudit } from "@/lib/audit"
-import { EXPENSE_CATEGORIES } from "@/lib/permissions"
+import { EXPENSE_CATEGORIES } from "@/lib/money"
+import { todayLocalISODate } from "@/lib/periods"
 
 export const dynamic = "force-dynamic"
 
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: context.error }, { status: context.status })
     }
     if (!context.isAdmin) {
-      return NextResponse.json({ error: "Solo administradores pueden consultar gastos" }, { status: 403 })
+      return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -46,12 +46,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      expenses: data || [],
-      total: count || 0,
-      page,
-      pageSize,
-    })
+    return NextResponse.json({ expenses: data || [], total: count || 0, page, pageSize })
   } catch (error) {
     console.error("GET expenses error:", error)
     return NextResponse.json({ error: "Error al consultar gastos" }, { status: 500 })
@@ -66,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: context.error }, { status: context.status })
     }
     if (!context.isAdmin) {
-      return NextResponse.json({ error: "Solo administradores pueden registrar gastos" }, { status: 403 })
+      return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
     }
 
     const body = await request.json()
@@ -92,7 +87,7 @@ export async function POST(request: Request) {
         concept: concept.trim(),
         category,
         amount: parsedAmount,
-        expense_date: expense_date || new Date().toISOString().slice(0, 10),
+        expense_date: expense_date || todayLocalISODate(),
         branch_id,
         description: description?.trim() || null,
         created_by: context.userId,
@@ -103,12 +98,6 @@ export async function POST(request: Request) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
-
-    await logAudit(supabase, "expense_created", "expense", data.id, branch_id, {
-      concept: data.concept,
-      category,
-      amount: parsedAmount,
-    })
 
     return NextResponse.json({ success: true, expense: data })
   } catch (error) {
@@ -125,26 +114,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: context.error }, { status: context.status })
     }
     if (!context.isAdmin) {
-      return NextResponse.json({ error: "Solo administradores pueden eliminar gastos" }, { status: 403 })
+      return NextResponse.json({ error: "Solo administradores" }, { status: 403 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get("id")
-    if (!id) {
-      return NextResponse.json({ error: "ID requerido" }, { status: 400 })
-    }
+    const id = new URL(request.url).searchParams.get("id")
+    if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 })
 
-    const { data: existing } = await supabase.from("expenses").select("*").eq("id", id).single()
     const { error } = await supabase.from("expenses").delete().eq("id", id)
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
-    await logAudit(supabase, "expense_deleted", "expense", id, existing?.branch_id, {
-      concept: existing?.concept,
-      amount: existing?.amount,
-    })
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("DELETE expenses error:", error)

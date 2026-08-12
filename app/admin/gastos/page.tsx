@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { AdminPageHeader } from "@/components/admin-page-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/permissions"
-import { formatMoney } from "@/lib/money"
+import { EXPENSE_CATEGORIES, expenseCategoryLabel, formatMoney } from "@/lib/money"
+import { todayLocalISODate } from "@/lib/periods"
 import { Plus, Trash2 } from "lucide-react"
 
 interface Expense {
@@ -42,9 +43,9 @@ export default function GastosPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     concept: "",
-    category: "otros",
+    category: "salarios",
     amount: "",
-    expense_date: new Date().toISOString().slice(0, 10),
+    expense_date: todayLocalISODate(),
     branch_id: "",
     description: "",
   })
@@ -112,8 +113,16 @@ export default function GastosPage() {
       return
     }
     setDialogOpen(false)
-    setForm((prev) => ({ ...prev, concept: "", amount: "", description: "" }))
+    setForm((prev) => ({
+      ...prev,
+      concept: "",
+      amount: "",
+      description: "",
+      expense_date: todayLocalISODate(),
+    }))
+    setPage(0)
     loadExpenses()
+    alert(`Gasto guardado (${json.expense?.expense_date}). Ábrelo en Finanzas con filtro Semana o Mes.`)
   }
 
   const handleDelete = async (id: string) => {
@@ -127,76 +136,81 @@ export default function GastosPage() {
     loadExpenses()
   }
 
-  const pageCount = Math.max(1, Math.ceil(total / 25))
-
   return (
     <div className="min-h-screen bg-background">
       <AdminPageHeader
         title="Gastos"
-        subtitle="Registro de gastos operativos"
+        subtitle="Pago semanal, renta, servicios y más"
         actions={
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Nuevo gasto
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Registrar gasto</DialogTitle>
-                <DialogDescription>Los gastos afectan la utilidad neta del periodo.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Concepto</Label>
-                  <Input value={form.concept} onChange={(e) => setForm({ ...form, concept: e.target.value })} required />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+          <div className="flex gap-2">
+            <Link href="/admin/finanzas"><Button variant="outline">Ver en Finanzas</Button></Link>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button><Plus className="mr-2 h-4 w-4" />Nuevo gasto</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Registrar gasto</DialogTitle>
+                  <DialogDescription>
+                    Usa la fecha real del pago. En Finanzas elige Semana/Mes para verlo en utilidad neta.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Categoría</Label>
-                    <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {EXPENSE_CATEGORIES.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Concepto</Label>
+                    <Input
+                      value={form.concept}
+                      onChange={(e) => setForm({ ...form, concept: e.target.value })}
+                      placeholder="Ej. Pago semanal nómina"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Categoría</Label>
+                      <Select value={form.category} onValueChange={(value) => setForm({ ...form, category: value })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {EXPENSE_CATEGORIES.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Monto</Label>
+                      <Input type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Fecha</Label>
+                      <Input type="date" value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Sucursal</Label>
+                      <Select value={form.branch_id} onValueChange={(value) => setForm({ ...form, branch_id: value })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Monto</Label>
-                    <Input type="number" step="0.01" min="0" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+                    <Label>Descripción</Label>
+                    <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                   </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Fecha</Label>
-                    <Input type="date" value={form.expense_date} onChange={(e) => setForm({ ...form, expense_date: e.target.value })} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Sucursal</Label>
-                    <Select value={form.branch_id} onValueChange={(value) => setForm({ ...form, branch_id: value })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Descripción</Label>
-                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-                  <Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                    <Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         }
       />
 
@@ -268,8 +282,8 @@ export default function GastosPage() {
             {total > 25 && (
               <div className="mt-4 flex items-center justify-center gap-2">
                 <Button variant="outline" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Anterior</Button>
-                <span className="text-sm text-muted-foreground">{page + 1} / {pageCount}</span>
-                <Button variant="outline" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>Siguiente</Button>
+                <span className="text-sm text-muted-foreground">{page + 1}</span>
+                <Button variant="outline" disabled={(page + 1) * 25 >= total} onClick={() => setPage((p) => p + 1)}>Siguiente</Button>
               </div>
             )}
           </CardContent>

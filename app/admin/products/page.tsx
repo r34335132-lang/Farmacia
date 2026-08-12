@@ -189,10 +189,16 @@ export default function ProductsPage() {
     }))
   }
 
-  const loadBranchVariants = async (barcode?: string | null, groupId?: string | null) => {
+  const loadBranchVariants = async (
+    barcode?: string | null,
+    groupId?: string | null,
+    options?: { preserveLocalEdits?: boolean },
+  ) => {
     if (!barcode && !groupId) {
-      setBranchPricing(buildDefaultBranchPricing())
-      setSkuGroupId(null)
+      if (!options?.preserveLocalEdits) {
+        setBranchPricing(buildDefaultBranchPricing())
+        setSkuGroupId(null)
+      }
       return
     }
 
@@ -206,37 +212,79 @@ export default function ProductsPage() {
       setSkuGroupId(data.sku_group_id || null)
 
       if (variants.length === 0) {
-        setBranchPricing(buildDefaultBranchPricing())
+        if (!options?.preserveLocalEdits) {
+          setBranchPricing(buildDefaultBranchPricing())
+        }
         return
       }
 
-      setBranchPricing(
+      setBranchPricing((currentRows) =>
         branches.map((branch) => {
           const variant = variants.find((v) => v.branch_id === branch.id)
+          const current = currentRows.find((row) => row.branch_id === branch.id)
+
+          if (
+            options?.preserveLocalEdits &&
+            current &&
+            (current.enabled || current.price || current.stock_quantity !== "0")
+          ) {
+            return {
+              ...current,
+              product_id: variant?.id || current.product_id,
+              branch_name: branch.name,
+            }
+          }
+
           return {
             branch_id: branch.id,
             branch_name: branch.name,
-            enabled: Boolean(variant),
+            enabled: Boolean(variant) || Boolean(current?.enabled),
             product_id: variant?.id,
-            price: variant ? variant.price.toString() : "",
-            cost_price: variant?.cost_price ? variant.cost_price.toString() : "",
-            stock_quantity: variant ? variant.stock_quantity.toString() : "0",
-            min_stock_level: variant ? variant.min_stock_level.toString() : "10",
-            promotion_price: variant?.promotion_price ? variant.promotion_price.toString() : "",
-            expiration_date: variant?.expiration_date || "",
-            markup_percent: variant?.markup_percent != null ? String(variant.markup_percent) : "",
+            price: variant ? variant.price.toString() : current?.price || "",
+            cost_price: variant?.cost_price
+              ? variant.cost_price.toString()
+              : current?.cost_price || "",
+            stock_quantity: variant ? variant.stock_quantity.toString() : current?.stock_quantity || "0",
+            min_stock_level: variant ? variant.min_stock_level.toString() : current?.min_stock_level || "10",
+            promotion_price: variant?.promotion_price
+              ? variant.promotion_price.toString()
+              : current?.promotion_price || "",
+            expiration_date: variant?.expiration_date || current?.expiration_date || "",
+            markup_percent:
+              variant?.markup_percent != null
+                ? String(variant.markup_percent)
+                : current?.markup_percent || "",
           }
         }),
       )
     } catch (error) {
       console.error("Error loading branch variants:", error)
-      setBranchPricing(buildDefaultBranchPricing())
+      if (!options?.preserveLocalEdits) {
+        setBranchPricing(buildDefaultBranchPricing())
+      }
     }
   }
 
   const updateBranchPricingRow = (branchId: string, updates: Partial<BranchPricingRow>) => {
     setBranchPricing((rows) =>
       rows.map((row) => (row.branch_id === branchId ? { ...row, ...updates } : row)),
+    )
+  }
+
+  const toggleBranchEnabled = (branchId: string) => {
+    setBranchPricing((rows) =>
+      rows.map((row) =>
+        row.branch_id === branchId
+          ? {
+              ...row,
+              enabled: !row.enabled,
+              price:
+                !row.enabled && !row.price
+                  ? rows.find((r) => r.enabled && r.price)?.price || row.price
+                  : row.price,
+            }
+          : row,
+      ),
     )
   }
 
@@ -907,19 +955,25 @@ export default function ProductsPage() {
                         id="barcode"
                         value={formData.barcode}
                         onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
-                        onBlur={() => {
-                          if (formData.barcode.trim()) {
-                            loadBranchVariants(formData.barcode.trim(), skuGroupId)
-                          }
-                        }}
                         placeholder="Escanea o ingresa manualmente"
-                        autoFocus={scannerMode === "manual"}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && formData.barcode) {
                             e.preventDefault()
+                            loadBranchVariants(formData.barcode.trim(), skuGroupId, { preserveLocalEdits: true })
                           }
                         }}
                       />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          if (formData.barcode.trim()) {
+                            loadBranchVariants(formData.barcode.trim(), skuGroupId, { preserveLocalEdits: true })
+                          }
+                        }}
+                      >
+                        Buscar
+                      </Button>
                       <Button type="button" variant="outline" onClick={() => setIsQrScannerOpen(true)}>
                         <QrCode className="h-4 w-4" />
                       </Button>
@@ -990,14 +1044,27 @@ export default function ProductsPage() {
                           {branchPricing.map((row) => (
                             <TableRow key={row.branch_id}>
                               <TableCell>
-                                <Checkbox
-                                  checked={row.enabled}
-                                  onCheckedChange={(checked) =>
-                                    updateBranchPricingRow(row.branch_id, { enabled: checked === true })
-                                  }
-                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={row.enabled ? "default" : "outline"}
+                                  className="h-8 px-2"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => toggleBranchEnabled(row.branch_id)}
+                                >
+                                  {row.enabled ? "Sí" : "No"}
+                                </Button>
                               </TableCell>
-                              <TableCell className="font-medium whitespace-nowrap">{row.branch_name}</TableCell>
+                              <TableCell className="font-medium whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  className="text-left hover:underline"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => toggleBranchEnabled(row.branch_id)}
+                                >
+                                  {row.branch_name}
+                                </button>
+                              </TableCell>
                               <TableCell>
                                 <Input
                                   type="number"

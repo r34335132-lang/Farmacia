@@ -13,8 +13,7 @@ export function formatMoney(value: number | string | null | undefined): string {
 }
 
 export function formatPercent(value: number | string | null | undefined, digits = 1): string {
-  const amount = Number(value) || 0
-  return `${amount.toFixed(digits)}%`
+  return `${(Number(value) || 0).toFixed(digits)}%`
 }
 
 export function suggestedSalePrice(cost: number, markupPercent: number): number {
@@ -43,5 +42,19 @@ export function percentChange(current: number, previous: number): number | null 
     if (current === 0) return 0
     return null
   }
-  return roundMoney(((current - previous) / Math.abs(previous)) * 100)
+  return Math.round((((current - previous) / Math.abs(previous)) * 100) * 10) / 10
+}
+
+export const EXPENSE_CATEGORIES = [
+  { value: "renta", label: "Renta" },
+  { value: "inventario", label: "Inventario" },
+  { value: "salarios", label: "Salarios" },
+  { value: "servicios", label: "Servicios" },
+  { value: "mantenimiento", label: "Mantenimiento" },
+  { value: "transporte", label: "Transporte" },
+  { value: "otros", label: "Otros" },
+] as const
+
+export function expenseCategoryLabel(category: string) {
+  return EXPENSE_CATEGORIES.find((c) => c.value === category)?.label || category
 }
