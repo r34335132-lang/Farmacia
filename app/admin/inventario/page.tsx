@@ -208,6 +208,48 @@ export default function AdminInventarioPage() {
     [rows],
   )
 
+  /** Totales de unidades por estado + estimado de salida (sistema − físico) */
+  const qtyTotals = useMemo(() => {
+    const empty = { products: 0, system: 0, counted: 0, diff: 0 }
+    const byStatus: Record<CountStatus, typeof empty> = {
+      correct: { ...empty },
+      missing: { ...empty },
+      surplus: { ...empty },
+      unregistered: { ...empty },
+    }
+
+    let systemRegistered = 0
+    let countedAll = 0
+    let countedRegistered = 0
+
+    for (const row of rows) {
+      const bucket = byStatus[row.status]
+      bucket.products += 1
+      bucket.system += row.system_stock
+      bucket.counted += row.counted
+      bucket.diff += row.difference
+      countedAll += row.counted
+      if (row.status !== "unregistered") {
+        systemRegistered += row.system_stock
+        countedRegistered += row.counted
+      }
+    }
+
+    const estimatedSold = systemRegistered - countedRegistered
+    const missingUnits = Math.abs(byStatus.missing.diff)
+    const surplusUnits = byStatus.surplus.diff
+
+    return {
+      byStatus,
+      systemRegistered,
+      countedAll,
+      countedRegistered,
+      estimatedSold,
+      missingUnits,
+      surplusUnits,
+    }
+  }, [rows])
+
   const applyAdjustments = async () => {
     setApplying(true)
     setError("")
@@ -398,13 +440,81 @@ export default function AdminInventarioPage() {
 
         {summary ? (
           <>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <SummaryCard label="Productos revisados" value={summary.reviewed} />
-              <SummaryCard label="Correctos" value={summary.correct} />
-              <SummaryCard label="Faltantes" value={summary.missing} tone="danger" />
-              <SummaryCard label="Sobrantes" value={summary.surplus} tone="warn" />
-              <SummaryCard label="No registrados" value={summary.unregistered} />
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
+              <SummaryCard
+                label="Revisados"
+                value={summary.reviewed}
+                detail={`${qtyTotals.countedAll} uds. contadas`}
+              />
+              <SummaryCard
+                label="Correctos"
+                value={summary.correct}
+                detail={`${qtyTotals.byStatus.correct.counted} uds. (sistema = físico)`}
+              />
+              <SummaryCard
+                label="Faltantes"
+                value={summary.missing}
+                detail={`${qtyTotals.missingUnits} uds. de menos`}
+                tone="danger"
+              />
+              <SummaryCard
+                label="Sobrantes"
+                value={summary.surplus}
+                detail={`${qtyTotals.surplusUnits} uds. de más`}
+                tone="warn"
+              />
+              <SummaryCard
+                label="No registrados"
+                value={summary.unregistered}
+                detail={`${qtyTotals.byStatus.unregistered.counted} uds. en conteo`}
+              />
+              <SummaryCard
+                label="Salida estimada"
+                value={qtyTotals.estimatedSold}
+                detail={`Sistema ${qtyTotals.systemRegistered} − físico ${qtyTotals.countedRegistered}`}
+                tone={qtyTotals.estimatedSold > 0 ? "danger" : qtyTotals.estimatedSold < 0 ? "warn" : undefined}
+                emphasize
+              />
             </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Totales de unidades</CardTitle>
+                <CardDescription>
+                  Suma de todas las filas (correctos + faltantes + sobrantes + no registrados). La salida estimada es
+                  stock del sistema menos conteo físico en productos registrados.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-md border p-3">
+                    <p className="text-muted-foreground">Stock sistema (registrados)</p>
+                    <p className="text-xl font-semibold">{qtyTotals.systemRegistered}</p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-muted-foreground">Conteo físico (todos)</p>
+                    <p className="text-xl font-semibold">{qtyTotals.countedAll}</p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-muted-foreground">Conteo físico (registrados)</p>
+                    <p className="text-xl font-semibold">{qtyTotals.countedRegistered}</p>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <p className="text-muted-foreground">Salida estimada (posible venta/merma)</p>
+                    <p
+                      className={cn(
+                        "text-xl font-semibold",
+                        qtyTotals.estimatedSold > 0 && "text-destructive",
+                        qtyTotals.estimatedSold < 0 && "text-amber-600",
+                      )}
+                    >
+                      {qtyTotals.estimatedSold > 0 ? `+${qtyTotals.estimatedSold}` : qtyTotals.estimatedSold}
+                      <span className="ml-1 text-sm font-normal text-muted-foreground">uds.</span>
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -420,13 +530,13 @@ export default function AdminInventarioPage() {
                 <div className="flex flex-wrap gap-2">
                   {(
                     [
-                      ["all", "Todos"],
-                      ["correct", "Correctos"],
-                      ["missing", "Faltantes"],
-                      ["surplus", "Sobrantes"],
-                      ["unregistered", "No registrados"],
+                      ["all", "Todos", qtyTotals.countedAll],
+                      ["correct", "Correctos", qtyTotals.byStatus.correct.counted],
+                      ["missing", "Faltantes", qtyTotals.missingUnits],
+                      ["surplus", "Sobrantes", qtyTotals.surplusUnits],
+                      ["unregistered", "No registrados", qtyTotals.byStatus.unregistered.counted],
                     ] as const
-                  ).map(([key, label]) => (
+                  ).map(([key, label, units]) => (
                     <Button
                       key={key}
                       size="sm"
@@ -434,6 +544,7 @@ export default function AdminInventarioPage() {
                       onClick={() => setFilter(key)}
                     >
                       {label}
+                      <span className="ml-1 opacity-70">({units} uds.)</span>
                     </Button>
                   ))}
                 </div>
@@ -543,14 +654,18 @@ export default function AdminInventarioPage() {
 function SummaryCard({
   label,
   value,
+  detail,
   tone,
+  emphasize,
 }: {
   label: string
   value: number
+  detail?: string
   tone?: "danger" | "warn"
+  emphasize?: boolean
 }) {
   return (
-    <Card>
+    <Card className={cn(emphasize && "border-primary/40 bg-primary/5")}>
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p
@@ -562,6 +677,7 @@ function SummaryCard({
         >
           {value}
         </p>
+        {detail ? <p className="mt-1 text-xs text-muted-foreground">{detail}</p> : null}
       </CardContent>
     </Card>
   )
