@@ -1,0 +1,151 @@
+import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import { resolveBranchContext } from "@/lib/branch"
+
+export const dynamic = "force-dynamic"
+
+type CountItem = {
+  barcode: string
+  name?: string
+  quantity: number
+}
+
+function normalizeBarcode(value: unknown): string {
+  if (value == null) return ""
+  let raw = String(value).trim()
+  if (!raw) return ""
+
+  // Notación científica típica de Excel
+  if (/^\d+(\.\d+)?e[+-]?\d+$/i.test(raw)) {
+    const n = Number(raw)
+    if (Number.isFinite(n) && Number.isInteger(n)) {
+      raw = String(n)
+    }
+  }
+
+  // "12345.0" → "12345"
+  if (/^\d+\.0+$/.test(raw)) {
+    raw = raw.replace(/\.0+$/, "")
+  }
+
+  return raw
+}
+
+function validateItems(items: unknown): { ok: true; items: CountItem[] } | { ok: false; error: string } {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: false, error: "Debes enviar al menos un producto del conteo" }
+  }
+
+  if (items.length > 20000) {
+    return { ok: false, error: "El archivo supera el límite de 20,000 filas" }
+  }
+
+  const seen = new Map<string, number>()
+  const normalized: CountItem[] = []
+
+  for (let i = 0; i < items.length; i++) {
+    const row = items[i] as Record<string, unknown>
+    const barcode = normalizeBarcode(row?.barcode)
+    const name = row?.name != null ? String(row.name).trim() : ""
+    const quantityRaw = row?.quantity
+    const quantity = typeof quantityRaw === "number" ? quantityRaw : Number(quantityRaw)
+
+    if (!barcode) {
+      return { ok: false, error: `Fila ${i + 1}: falta código de barras` }
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      return { ok: false, error: `Fila ${i + 1} (${barcode}): la cantidad debe ser un entero >= 0` }
+    }
+
+    if (seen.has(barcode)) {
+      return {
+        ok: false,
+        error: `Código de barras duplicado en el archivo: ${barcode} (filas ${(seen.get(barcode) || 0) + 1} y ${i + 1})`,
+      }
+    }
+
+    seen.set(barcode, i)
+    normalized.push({ barcode, name, quantity })
+  }
+
+  return { ok: true, items: normalized }
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient()
+    const context = await resolveBranchContext(supabase)
+    if ("error" in context) {
+      return NextResponse.json({ error: context.error }, { status: context.status })
+    }
+    if (!context.isAdmin) {
+      return NextResponse.json({ error: "Solo administradores pueden usar el conteo de inventario" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const action = body?.action as string
+    const branchId = body?.branch_id as string | undefined
+
+    if (!branchId) {
+      return NextResponse.json({ error: "Sucursal requerida" }, { status: 400 })
+    }
+
+    if (!["compare", "apply"].includes(action)) {
+      return NextResponse.json({ error: "Acción inválida" }, { status: 400 })
+    }
+
+    const validated = validateItems(body?.items)
+    if (!validated.ok) {
+      return NextResponse.json({ error: validated.error }, { status: 400 })
+    }
+
+    if (action === "compare") {
+      const { data, error } = await supabase.rpc("compare_inventory_count", {
+        p_branch_id: branchId,
+        p_items: validated.items,
+      })
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 })
+      }
+
+      return NextResponse.json({ success: true, result: data })
+    }
+
+    // Solo productos existentes con diferencia (faltante/sobrante)
+    const toApply = validated.items.filter((item) => {
+      const status = (body?.statuses as Record<string, string> | undefined)?.[item.barcode]
+      if (status === "unregistered" || status === "correct") return false
+      return true
+    })
+
+    // Si el cliente manda solo los que hay que ajustar, usar esos
+    const applyItems =
+      Array.isArray(body?.apply_items) && body.apply_items.length > 0
+        ? validateItems(body.apply_items)
+        : { ok: true as const, items: toApply }
+
+    if (!applyItems.ok) {
+      return NextResponse.json({ error: applyItems.error }, { status: 400 })
+    }
+
+    if (applyItems.items.length === 0) {
+      return NextResponse.json({ error: "No hay productos con diferencia para ajustar" }, { status: 400 })
+    }
+
+    const { data, error } = await supabase.rpc("apply_inventory_count", {
+      p_branch_id: branchId,
+      p_items: applyItems.items.map(({ barcode, quantity }) => ({ barcode, quantity })),
+    })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true, result: data })
+  } catch (error) {
+    console.error("POST inventory count error:", error)
+    return NextResponse.json({ error: "Error en el conteo de inventario" }, { status: 500 })
+  }
+}
