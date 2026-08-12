@@ -26,6 +26,8 @@ export async function GET(request: Request) {
           quantity,
           unit_price,
           subtotal,
+          unit_cost,
+          cost_subtotal,
           products(name, barcode, section, branch_id)
         )
       `)

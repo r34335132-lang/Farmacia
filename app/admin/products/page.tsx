@@ -67,6 +67,8 @@ interface Product {
   branches?: BranchInfo | BranchInfo[] | null
   sku_group_id?: string
   promotion_price?: number | null
+  cost_price?: number
+  markup_percent?: number | null
 }
 
 interface BranchPricingRow {
@@ -75,10 +77,12 @@ interface BranchPricingRow {
   enabled: boolean
   product_id?: string
   price: string
+  cost_price: string
   stock_quantity: string
   min_stock_level: string
   promotion_price: string
   expiration_date: string
+  markup_percent: string
 }
 
 export default function ProductsPage() {
@@ -104,6 +108,7 @@ export default function ProductsPage() {
   const [branchPricing, setBranchPricing] = useState<BranchPricingRow[]>([])
   const [skuGroupId, setSkuGroupId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list")
+  const [applyMarkup, setApplyMarkup] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -149,10 +154,12 @@ export default function ProductsPage() {
             branch_name: branch.name,
             enabled: branch.id === data.branches[0]?.id,
             price: "",
+            cost_price: "",
             stock_quantity: "0",
             min_stock_level: "10",
             promotion_price: "",
             expiration_date: "",
+            markup_percent: "",
           })),
         )
       }
@@ -173,10 +180,12 @@ export default function ProductsPage() {
       enabled: branchFilter !== "all" ? branch.id === branchFilter : branch.id === branches[0]?.id,
       product_id: undefined,
       price: preset?.price || "",
+      cost_price: preset?.cost_price || "",
       stock_quantity: preset?.stock_quantity || "0",
       min_stock_level: preset?.min_stock_level || "10",
       promotion_price: preset?.promotion_price || "",
       expiration_date: preset?.expiration_date || "",
+      markup_percent: preset?.markup_percent || "",
     }))
   }
 
@@ -210,10 +219,12 @@ export default function ProductsPage() {
             enabled: Boolean(variant),
             product_id: variant?.id,
             price: variant ? variant.price.toString() : "",
+            cost_price: variant?.cost_price ? variant.cost_price.toString() : "",
             stock_quantity: variant ? variant.stock_quantity.toString() : "0",
             min_stock_level: variant ? variant.min_stock_level.toString() : "10",
             promotion_price: variant?.promotion_price ? variant.promotion_price.toString() : "",
             expiration_date: variant?.expiration_date || "",
+            markup_percent: variant?.markup_percent != null ? String(variant.markup_percent) : "",
           }
         }),
       )
@@ -367,16 +378,19 @@ export default function ProductsPage() {
           days_before_expiry_alert: formData.days_before_expiry_alert
             ? Number.parseInt(formData.days_before_expiry_alert)
             : 30,
+          apply_markup: applyMarkup,
         },
         branches: branchPricing.map((row) => ({
           branch_id: row.branch_id,
           product_id: row.product_id || null,
           enabled: row.enabled,
           price: row.enabled ? Number.parseFloat(row.price) : 0,
+          cost_price: row.enabled ? Number.parseFloat(row.cost_price || "0") : 0,
           stock_quantity: row.enabled ? Number.parseInt(row.stock_quantity) : 0,
           min_stock_level: row.enabled ? Number.parseInt(row.min_stock_level || "10") : 10,
           promotion_price: row.promotion_price ? Number.parseFloat(row.promotion_price) : null,
           expiration_date: row.expiration_date || null,
+          markup_percent: row.markup_percent === "" ? null : Number.parseFloat(row.markup_percent),
         })),
       }
 
@@ -410,6 +424,7 @@ export default function ProductsPage() {
       })
       setBranchPricing(buildDefaultBranchPricing())
       setSkuGroupId(null)
+      setApplyMarkup(false)
       setIsAddDialogOpen(false)
       setEditingProduct(null)
       loadProducts()
@@ -830,6 +845,7 @@ export default function ProductsPage() {
                   onClick={() => {
                     setEditingProduct(null)
                     setSkuGroupId(null)
+                    setApplyMarkup(false)
                     setFormData({
                       name: "",
                       description: "",
@@ -851,11 +867,11 @@ export default function ProductsPage() {
                   Agregar Producto
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{editingProduct ? "Editar Producto" : "Agregar Nuevo Producto"}</DialogTitle>
                   <DialogDescription>
-                    Datos compartidos del producto y precio/stock independiente por sucursal
+                    Datos compartidos del producto y costo/precio/stock independiente por sucursal
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -946,18 +962,24 @@ export default function ProductsPage() {
 
                   <Card className="border-primary/20">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base">Precio y stock por sucursal</CardTitle>
+                      <CardTitle className="text-base">Costo, precio y stock por sucursal</CardTitle>
                       <CardDescription>
-                        Cada sucursal puede tener precio, promoción y stock diferentes.
+                        El costo actual no altera ventas pasadas. El markup por sucursal es opcional (vacío = markup global).
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="overflow-x-auto">
+                    <CardContent className="overflow-x-auto space-y-3">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={applyMarkup} onCheckedChange={(checked) => setApplyMarkup(checked === true)} />
+                        Calcular precio de venta con markup (costo + % de aumento)
+                      </label>
                       <Table>
                         <TableHeader>
                           <TableRow>
                             <TableHead className="w-10">Activa</TableHead>
                             <TableHead>Sucursal</TableHead>
+                            <TableHead>Costo</TableHead>
                             <TableHead>Precio *</TableHead>
+                            <TableHead>Markup %</TableHead>
                             <TableHead>Promo</TableHead>
                             <TableHead>Stock *</TableHead>
                             <TableHead>Mín.</TableHead>
@@ -983,10 +1005,38 @@ export default function ProductsPage() {
                                   min="0"
                                   className="w-24"
                                   disabled={!row.enabled}
+                                  value={row.cost_price}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { cost_price: e.target.value })
+                                  }
+                                  placeholder="0.00"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-24"
+                                  disabled={!row.enabled}
                                   value={row.price}
                                   onChange={(e) =>
                                     updateBranchPricingRow(row.branch_id, { price: e.target.value })
                                   }
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-20"
+                                  disabled={!row.enabled}
+                                  value={row.markup_percent}
+                                  onChange={(e) =>
+                                    updateBranchPricingRow(row.branch_id, { markup_percent: e.target.value })
+                                  }
+                                  placeholder="Global"
                                 />
                               </TableCell>
                               <TableCell>
@@ -1286,7 +1336,10 @@ export default function ProductsPage() {
                       <TableHead>Imagen</TableHead>
                       <TableHead>Producto</TableHead>
                       <TableHead>Código</TableHead>
+                      <TableHead>Costo</TableHead>
                       <TableHead>Precio</TableHead>
+                      <TableHead>Ganancia</TableHead>
+                      <TableHead>Aumento</TableHead>
                       <TableHead>Stock</TableHead>
                       <TableHead>Sucursal</TableHead>
                       <TableHead>Categoría</TableHead>
@@ -1324,7 +1377,16 @@ export default function ProductsPage() {
                             </div>
                           </TableCell>
                           <TableCell className="font-mono text-sm">{product.barcode || "Sin código"}</TableCell>
-                          <TableCell>${product.price.toFixed(2)}</TableCell>
+                          <TableCell>${Number(product.cost_price || 0).toFixed(2)}</TableCell>
+                          <TableCell>${Number(product.price).toFixed(2)}</TableCell>
+                          <TableCell className={Number(product.price) - Number(product.cost_price || 0) >= 0 ? "text-emerald-700" : "text-destructive"}>
+                            ${(Number(product.price) - Number(product.cost_price || 0)).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            {Number(product.cost_price) > 0
+                              ? `${(((Number(product.price) - Number(product.cost_price)) / Number(product.cost_price)) * 100).toFixed(1)}%`
+                              : "—"}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <span>{product.stock_quantity}</span>

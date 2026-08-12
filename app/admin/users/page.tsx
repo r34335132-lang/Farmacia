@@ -135,7 +135,7 @@ export default function UserManagement() {
 
         if (error) throw error
 
-        if (formData.role === "cajero" && formData.branch_id) {
+        if ((formData.role === "cajero" || formData.role === "encargado") && formData.branch_id) {
           await supabase
             .from("user_branches")
             .update({ is_active: false })
@@ -145,7 +145,7 @@ export default function UserManagement() {
             {
               user_id: editingUser.id,
               branch_id: formData.branch_id,
-              role: "cashier",
+              role: formData.role === "encargado" ? "manager" : "cashier",
               is_active: true,
             },
             { onConflict: "user_id,branch_id" },
@@ -197,11 +197,11 @@ export default function UserManagement() {
             throw profileError
           }
 
-          if (authData.user && formData.role === "cajero" && formData.branch_id) {
+          if (authData.user && (formData.role === "cajero" || formData.role === "encargado") && formData.branch_id) {
             await supabase.from("user_branches").insert({
               user_id: authData.user.id,
               branch_id: formData.branch_id,
-              role: "cashier",
+              role: formData.role === "encargado" ? "manager" : "cashier",
               is_active: true,
             })
           }
@@ -279,7 +279,7 @@ export default function UserManagement() {
 
   const activeUsers = profiles.filter((p) => p.is_active).length
   const adminUsers = profiles.filter((p) => p.role === "admin").length
-  const cashierUsers = profiles.filter((p) => p.role === "cajero").length
+  const cashierUsers = profiles.filter((p) => p.role === "cajero" || p.role === "encargado").length
 
   return (
     <div className="min-h-screen bg-background">
@@ -341,11 +341,12 @@ export default function UserManagement() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cajero">Cajero</SelectItem>
+                        <SelectItem value="encargado">Encargado</SelectItem>
                         <SelectItem value="admin">Administrador</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  {(formData.role === "cajero" || editingUser?.role === "cajero") && (
+                  {(formData.role === "cajero" || formData.role === "encargado" || editingUser?.role === "cajero" || editingUser?.role === "encargado") && (
                     <div>
                       <Label htmlFor="branch_id">Sucursal asignada</Label>
                       <Select
@@ -425,7 +426,7 @@ export default function UserManagement() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Cajeros</CardTitle>
+              <CardTitle className="text-sm font-medium">Cajeros / Encargados</CardTitle>
               <UserX className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -450,7 +451,7 @@ export default function UserManagement() {
                       <p className="text-sm text-muted-foreground">{profile.email}</p>
                       <p className="text-xs text-muted-foreground">
                         Creado: {new Date(profile.created_at).toLocaleDateString()}
-                        {profile.role === "cajero" && userBranches[profile.id] && (
+                        {(profile.role === "cajero" || profile.role === "encargado") && userBranches[profile.id] && (
                           <> · Sucursal: {branches.find((b) => b.id === userBranches[profile.id])?.name}</>
                         )}
                       </p>

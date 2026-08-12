@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { AppRole } from "@/lib/permissions"
+import { isAdminRole, isBranchRole } from "@/lib/permissions"
 
 export interface Branch {
   id: string
@@ -11,8 +13,9 @@ export interface Branch {
 
 export interface BranchContext {
   userId: string
-  role: "admin" | "cajero"
+  role: AppRole
   isAdmin: boolean
+  isBranchStaff: boolean
   activeBranchId: string | null
   activeBranch: Branch | null
   assignedBranches: Branch[]
@@ -33,7 +36,7 @@ export async function getUserProfile(supabase: SupabaseClient, userId: string) {
 
   return data as {
     id: string
-    role: "admin" | "cajero"
+    role: AppRole
     is_active: boolean
     full_name: string
     email: string
@@ -103,7 +106,7 @@ export async function resolveBranchContext(
     return { error: "Usuario inactivo o sin perfil", status: 403 }
   }
 
-  const isAdmin = profile.role === "admin"
+  const isAdmin = isAdminRole(profile.role)
 
   if (isAdmin) {
     const branches = await getAllBranches(supabase)
@@ -115,6 +118,7 @@ export async function resolveBranchContext(
       userId: user.id,
       role: profile.role,
       isAdmin: true,
+      isBranchStaff: true,
       activeBranchId: activeBranch?.id || null,
       activeBranch,
       assignedBranches: branches,
@@ -123,7 +127,7 @@ export async function resolveBranchContext(
 
   const assignedBranches = await getUserAssignedBranches(supabase, user.id)
   if (assignedBranches.length === 0) {
-    return { error: "Cajero sin sucursal asignada", status: 403 }
+    return { error: "Usuario sin sucursal asignada", status: 403 }
   }
 
   const activeBranch = assignedBranches[0]
@@ -132,6 +136,7 @@ export async function resolveBranchContext(
     userId: user.id,
     role: profile.role,
     isAdmin: false,
+    isBranchStaff: isBranchRole(profile.role),
     activeBranchId: activeBranch.id,
     activeBranch,
     assignedBranches,

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar, Sparkles, Store, ClipboardList } from "lucide-react"
+import { Package, ShoppingCart, Users, AlertTriangle, TrendingUp, DollarSign, Calendar, Sparkles, Store, ClipboardList, Wallet, Percent, Truck, ClipboardCheck, ScrollText } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
@@ -469,6 +469,97 @@ export default function AdminDashboard() {
                   Panel Cajero
                 </CardTitle>
                 <CardDescription>Dashboard para atender pedidos</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Link href="/admin/finanzas">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Finanzas
+                </CardTitle>
+                <CardDescription>Ventas, costo, utilidad y márgenes</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/gastos">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  Gastos
+                </CardTitle>
+                <CardDescription>Registrar gastos operativos</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/markup">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Percent className="h-5 w-5" />
+                  Markup
+                </CardTitle>
+                <CardDescription>Porcentaje de aumento sobre costo</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/distribuidora">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="h-5 w-5" />
+                  Distribuidora
+                </CardTitle>
+                <CardDescription>Entradas, stock y caducidad</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/pedidos-globales">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Pedidos globales
+                </CardTitle>
+                <CardDescription>Necesidades consolidadas</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/faltantes">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5" />
+                  Faltantes
+                </CardTitle>
+                <CardDescription>Revisar y aprobar reportes</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/auditoria">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ScrollText className="h-5 w-5" />
+                  Auditoría
+                </CardTitle>
+                <CardDescription>Historial de acciones importantes</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+          <Link href="/admin/movimientos">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Movimientos
+                </CardTitle>
+                <CardDescription>Bitácora de inventario</CardDescription>
               </CardHeader>
             </Card>
           </Link>
