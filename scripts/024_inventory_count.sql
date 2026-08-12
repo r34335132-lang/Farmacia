@@ -91,11 +91,15 @@ DECLARE
   v_name TEXT;
   v_qty INT;
   v_product RECORD;
+  v_ref RECORD;
   v_diff INT;
   v_status TEXT;
   v_product_name TEXT;
   v_system_stock INT;
   v_product_id UUID;
+  v_unit_cost NUMERIC := 0;
+  v_unit_price NUMERIC := 0;
+  v_price_from_branch TEXT := NULL;
   v_correct INT := 0;
   v_missing INT := 0;
   v_surplus INT := 0;
@@ -148,13 +152,43 @@ BEGIN
     LIMIT 1;
 
     IF NOT FOUND THEN
-      -- Producto inexistente o inactivo/eliminado en esta sucursal
+      -- No existe en esta sucursal: sigue como no registrado,
+      -- pero toma precio/costo (y nombre) de otra sucursal con el mismo barcode.
+      v_unit_cost := 0;
+      v_unit_price := 0;
+      v_price_from_branch := NULL;
+      v_product_name := COALESCE(v_name, 'Producto no registrado');
+
+      SELECT
+        p.name,
+        COALESCE(p.cost_price, 0) AS cost_price,
+        COALESCE(p.price, 0) AS price,
+        b.name AS branch_name
+      INTO v_ref
+      FROM public.products p
+      LEFT JOIN public.branches b ON b.id = p.branch_id
+      WHERE p.barcode = v_barcode
+        AND p.branch_id IS DISTINCT FROM p_branch_id
+        AND COALESCE(p.is_active, true) = true
+      ORDER BY
+        CASE WHEN COALESCE(p.price, 0) > 0 THEN 0 ELSE 1 END,
+        p.updated_at DESC NULLS LAST,
+        p.created_at DESC NULLS LAST
+      LIMIT 1;
+
+      IF FOUND THEN
+        v_product_name := COALESCE(v_ref.name, v_name, 'Producto no registrado');
+        v_unit_cost := COALESCE(v_ref.cost_price, 0);
+        v_unit_price := COALESCE(v_ref.price, 0);
+        v_price_from_branch := v_ref.branch_name;
+      END IF;
+
       v_status := 'unregistered';
       v_product_id := NULL;
-      v_product_name := COALESCE(v_name, 'Producto no registrado');
       v_system_stock := 0;
       v_diff := v_qty;
       v_unregistered := v_unregistered + 1;
+
       v_rows := v_rows || jsonb_build_array(jsonb_build_object(
         'barcode', v_barcode,
         'product_id', v_product_id,
@@ -164,14 +198,18 @@ BEGIN
         'counted', v_qty,
         'difference', v_diff,
         'status', v_status,
-        'unit_cost', 0,
-        'unit_price', 0
+        'unit_cost', v_unit_cost,
+        'unit_price', v_unit_price,
+        'price_from_branch', v_price_from_branch
       ));
     ELSE
       v_product_id := v_product.id;
       v_product_name := v_product.name;
       v_system_stock := COALESCE(v_product.stock_quantity, 0);
       v_diff := v_qty - v_system_stock;
+      v_unit_cost := COALESCE(v_product.cost_price, 0);
+      v_unit_price := COALESCE(v_product.price, 0);
+      v_price_from_branch := NULL;
 
       IF v_diff = 0 THEN
         v_status := 'correct';
@@ -193,8 +231,9 @@ BEGIN
         'counted', v_qty,
         'difference', v_diff,
         'status', v_status,
-        'unit_cost', COALESCE(v_product.cost_price, 0),
-        'unit_price', COALESCE(v_product.price, 0)
+        'unit_cost', v_unit_cost,
+        'unit_price', v_unit_price,
+        'price_from_branch', v_price_from_branch
       ));
     END IF;
 

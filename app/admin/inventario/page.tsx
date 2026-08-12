@@ -52,6 +52,7 @@ type CompareRow = {
   status: CountStatus
   unit_cost?: number
   unit_price?: number
+  price_from_branch?: string | null
 }
 
 type CompareSummary = {
@@ -514,7 +515,9 @@ export default function AdminInventarioPage() {
                     <p className="text-sm text-muted-foreground">No registrados (también vendidos)</p>
                     <p className="mt-1 text-2xl font-bold">{qtyTotals.unregisteredUnits} pzas.</p>
                     <p className="text-sm font-medium">{formatMoney(qtyTotals.unregisteredEarningsMxn)} MXN</p>
-                    <p className="text-xs text-muted-foreground">Sin precio en sistema = $0.00 hasta registrarlos</p>
+                    <p className="text-xs text-muted-foreground">
+                      Precio tomado de otra sucursal si existe el mismo código
+                    </p>
                   </div>
                   <div className="rounded-md border bg-background p-4">
                     <p className="text-sm text-muted-foreground">Total piezas (faltantes + no reg.)</p>
@@ -597,6 +600,11 @@ export default function AdminInventarioPage() {
                               <p className="font-medium">{row.product_name}</p>
                               {row.file_name && row.file_name !== row.product_name ? (
                                 <p className="text-xs text-muted-foreground">Archivo: {row.file_name}</p>
+                              ) : null}
+                              {row.status === "unregistered" && row.price_from_branch ? (
+                                <p className="text-xs text-muted-foreground">
+                                  Precio ref. {formatMoney(Number(row.unit_price) || 0)} MXN · {row.price_from_branch}
+                                </p>
                               ) : null}
                             </TableCell>
                             <TableCell className="text-right">{row.system_stock}</TableCell>
