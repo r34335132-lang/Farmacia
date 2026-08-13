@@ -320,6 +320,10 @@ DECLARE
   v_line_cost NUMERIC(12,2);
   v_sale_qty INT := 0;
   v_product_id UUID;
+  v_sale_product_id UUID;
+  v_sale_product_name TEXT;
+  v_sale_product_price NUMERIC(12,2);
+  v_sale_product_cost NUMERIC(12,2);
   v_source TEXT;
   v_items_count INT := 0;
   v_sale_count INT := 0;
@@ -456,21 +460,24 @@ BEGIN
         CONTINUE;
       END IF;
 
-      -- Resolver producto: id directo, sucursal actual, u otra sucursal (no registrados)
-      v_product := NULL;
+      -- Resolver producto con variables escalares (evita "record is not assigned yet")
+      v_sale_product_id := NULL;
+      v_sale_product_name := NULL;
+      v_sale_product_price := 0;
+      v_sale_product_cost := 0;
 
       IF v_product_id IS NOT NULL THEN
-        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
-        INTO v_product
+        SELECT p.id, p.name, COALESCE(p.price, 0), COALESCE(p.cost_price, 0)
+        INTO v_sale_product_id, v_sale_product_name, v_sale_product_price, v_sale_product_cost
         FROM public.products p
         WHERE p.id = v_product_id
           AND COALESCE(p.is_active, true) = true
         LIMIT 1;
       END IF;
 
-      IF v_product.id IS NULL AND v_barcode IS NOT NULL THEN
-        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
-        INTO v_product
+      IF v_sale_product_id IS NULL AND v_barcode IS NOT NULL THEN
+        SELECT p.id, p.name, COALESCE(p.price, 0), COALESCE(p.cost_price, 0)
+        INTO v_sale_product_id, v_sale_product_name, v_sale_product_price, v_sale_product_cost
         FROM public.products p
         WHERE p.barcode = v_barcode
           AND p.branch_id = p_branch_id
@@ -478,9 +485,9 @@ BEGIN
         LIMIT 1;
       END IF;
 
-      IF v_product.id IS NULL AND v_barcode IS NOT NULL THEN
-        SELECT p.id, p.name, COALESCE(p.cost_price, 0) AS cost_price, COALESCE(p.price, 0) AS price
-        INTO v_product
+      IF v_sale_product_id IS NULL AND v_barcode IS NOT NULL THEN
+        SELECT p.id, p.name, COALESCE(p.price, 0), COALESCE(p.cost_price, 0)
+        INTO v_sale_product_id, v_sale_product_name, v_sale_product_price, v_sale_product_cost
         FROM public.products p
         WHERE p.barcode = v_barcode
           AND p.branch_id IS DISTINCT FROM p_branch_id
@@ -489,18 +496,18 @@ BEGIN
         LIMIT 1;
       END IF;
 
-      IF v_product.id IS NULL THEN
+      IF v_sale_product_id IS NULL THEN
         CONTINUE;
       END IF;
 
       IF v_unit_price <= 0 THEN
-        v_unit_price := COALESCE(v_product.price, 0);
+        v_unit_price := COALESCE(v_sale_product_price, 0);
       END IF;
       IF v_unit_cost < 0 THEN
         v_unit_cost := 0;
       END IF;
       IF v_unit_cost = 0 THEN
-        v_unit_cost := COALESCE(v_product.cost_price, 0);
+        v_unit_cost := COALESCE(v_sale_product_cost, 0);
       END IF;
 
       v_line_subtotal := ROUND((v_qty * v_unit_price)::NUMERIC, 2);
@@ -509,9 +516,9 @@ BEGIN
       v_sale_qty := v_sale_qty + v_qty;
 
       v_sale_items := v_sale_items || jsonb_build_array(jsonb_build_object(
-        'product_id', v_product.id,
+        'product_id', v_sale_product_id,
         'barcode', v_barcode,
-        'product_name', v_product.name,
+        'product_name', v_sale_product_name,
         'quantity', v_qty,
         'unit_price', v_unit_price,
         'subtotal', v_line_subtotal,
