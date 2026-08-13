@@ -373,13 +373,18 @@ BEGIN
           'barcode', v_barcode,
           'from_branch_id', p_from_branch_id,
           'quantity', v_qty,
-          'from_product_id', v_from.id
+          'from_product_id', v_from.id,
+          'price', COALESCE(v_from.price, 0),
+          'cost_price', COALESCE(v_from.cost_price, 0)
         )
       );
     ELSE
       UPDATE public.products
       SET
         stock_quantity = COALESCE(stock_quantity, 0) + v_qty,
+        price = COALESCE(v_from.price, 0),
+        cost_price = COALESCE(v_from.cost_price, 0),
+        markup_percent = v_from.markup_percent,
         updated_at = NOW()
       WHERE id = v_to.id;
 

@@ -278,7 +278,7 @@ export default function AdminTraspasosPage() {
           <Card>
             <CardHeader>
               <CardTitle>1. Sucursales</CardTitle>
-              <CardDescription>Se resta del origen y se suma al destino (crea el producto si no existe).</CardDescription>
+              <CardDescription>Se resta del origen y se suma al destino (crea el producto si no existe, con el mismo precio del origen).</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -497,8 +497,8 @@ export default function AdminTraspasosPage() {
               <strong>{totals.units}</strong> pzas.) de <strong>{fromName}</strong> a <strong>{toName}</strong>.
               <br />
               <br />
-              Se restará stock en origen y se sumará en destino. Si el producto no existe en destino, se creará.
-              Esta acción no se puede deshacer automáticamente.
+              Se restará stock en origen y se sumará en destino con el mismo precio/costo del origen. Si el producto no
+              existe en destino, se creará. Esta acción no se puede deshacer automáticamente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
