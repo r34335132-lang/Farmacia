@@ -21,6 +21,7 @@ type ProductHit = {
   stock_quantity: number
   cost_price: number
   price?: number
+  section?: string | null
 }
 
 type CheckRow = {
@@ -42,11 +43,16 @@ export function InventoryRevision({
   assignedBranches: Branch[]
 }) {
   const [branchId, setBranchId] = useState(assignedBranches[0]?.id || "")
-  const [barcode, setBarcode] = useState("")
+  const [search, setSearch] = useState("")
   const [product, setProduct] = useState<ProductHit | null>(null)
+  const [matches, setMatches] = useState<ProductHit[]>([])
   const [counted, setCounted] = useState("")
+  const [editStock, setEditStock] = useState("")
+  const [editPrice, setEditPrice] = useState("")
+  const [editSection, setEditSection] = useState("")
   const [lookupError, setLookupError] = useState("")
   const [looking, setLooking] = useState(false)
+  const [savingProduct, setSavingProduct] = useState(false)
   const [rows, setRows] = useState<CheckRow[]>([])
   const [saving, setSaving] = useState(false)
   const [payrollSaving, setPayrollSaving] = useState(false)
@@ -59,6 +65,7 @@ export function InventoryRevision({
 
   useEffect(() => {
     setProduct(null)
+    setMatches([])
     setRows([])
     setMessage("")
     if (branchId) loadBranchTotals()
@@ -80,22 +87,43 @@ export function InventoryRevision({
     })
   }
 
-  const lookup = async (code: string) => {
-    const value = code.trim()
+  const selectProduct = (hit: ProductHit) => {
+    setProduct(hit)
+    setMatches([])
+    setCounted("")
+    setEditStock(String(hit.stock_quantity ?? 0))
+    setEditPrice(String(hit.price ?? 0))
+    setEditSection(hit.section || "")
+    setSearch(hit.barcode || hit.name)
+    setLookupError("")
+  }
+
+  const lookup = async (term: string) => {
+    const value = term.trim()
     if (!value || !branchId) return
     setLooking(true)
     setLookupError("")
     setProduct(null)
+    setMatches([])
     try {
-      const res = await fetch(`/api/products/lookup?barcode=${encodeURIComponent(value)}&branch_id=${branchId}`)
+      const looksLikeBarcode = /^\d{6,}$/.test(value)
+      const params = new URLSearchParams({ branch_id: branchId })
+      if (looksLikeBarcode) params.set("barcode", value)
+      else params.set("q", value)
+
+      const res = await fetch(`/api/products/lookup?${params}`)
       const json = await res.json()
       if (!res.ok) {
         setLookupError(json.error || "No se encontró el producto")
         return
       }
-      setProduct(json.product)
-      setCounted("")
-      setBarcode(json.product.barcode || value)
+
+      const list = (json.products || (json.product ? [json.product] : [])) as ProductHit[]
+      if (list.length === 1) {
+        selectProduct(list[0])
+        return
+      }
+      setMatches(list)
     } finally {
       setLooking(false)
     }
@@ -112,6 +140,52 @@ export function InventoryRevision({
     () => roundMoney(missingQty * (Number(product?.cost_price) || 0)),
     [missingQty, product],
   )
+
+  const saveProduct = async () => {
+    if (!product) return
+    const stock = Number(editStock)
+    const price = Number(editPrice)
+    if (!Number.isInteger(stock) || stock < 0) {
+      setLookupError("El stock debe ser un entero ≥ 0")
+      return
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setLookupError("El precio no es válido")
+      return
+    }
+
+    setSavingProduct(true)
+    setLookupError("")
+    setMessage("")
+    try {
+      const res = await fetch("/api/products", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: product.id,
+          stock,
+          price,
+          section: editSection,
+          reason: "Ajuste desde revisión de inventario",
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setLookupError(json.error || "No se pudo guardar el producto")
+        return
+      }
+      const updated = {
+        ...product,
+        stock_quantity: stock,
+        price,
+        section: editSection.trim().toUpperCase() || null,
+      }
+      setProduct(updated)
+      setMessage("Stock, precio y sección guardados")
+    } finally {
+      setSavingProduct(false)
+    }
+  }
 
   const addRow = () => {
     if (!product) return
@@ -143,7 +217,7 @@ export function InventoryRevision({
     })
     setProduct(null)
     setCounted("")
-    setBarcode("")
+    setSearch("")
     setLookupError("")
     setMessage(`${row.name}: faltan ${missing} pzas.`)
   }
@@ -194,12 +268,12 @@ export function InventoryRevision({
     setPayrollSaving(true)
     setMessage("")
     try {
-      const branchName = assignedBranches.find((b) => b.id === branchId)?.name || "sucursal"
+      const currentBranchName = assignedBranches.find((b) => b.id === branchId)?.name || "sucursal"
       const res = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          concept: `Descuento nómina por faltantes · ${branchName}`,
+          concept: `Descuento nómina por faltantes · ${currentBranchName}`,
           category: "salarios",
           amount,
           expense_date: todayLocalISODate(),
@@ -213,7 +287,7 @@ export function InventoryRevision({
         setMessage(json.error || "No se pudo registrar el descuento en salarios")
         return
       }
-      setMessage(`Descuento de ${formatMoney(amount)} MXN registrado en salarios de ${branchName}. Ellos lo dividen.`)
+      setMessage(`Descuento de ${formatMoney(amount)} MXN registrado en salarios de ${currentBranchName}. Ellos lo dividen.`)
     } finally {
       setPayrollSaving(false)
     }
@@ -244,7 +318,7 @@ export function InventoryRevision({
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">Pendiente de revisar</p>
@@ -261,8 +335,8 @@ export function InventoryRevision({
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Escanear producto</CardTitle>
-          <CardDescription>Cámara del teléfono o escribe el código a mano.</CardDescription>
+          <CardTitle className="text-base">Buscar producto</CardTitle>
+          <CardDescription>Cámara, código o nombre.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <BarcodeScanner disabled={!branchId || looking} onScan={(code) => lookup(code)} />
@@ -270,21 +344,37 @@ export function InventoryRevision({
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault()
-              lookup(barcode)
+              lookup(search)
             }}
           >
             <Input
               className="h-12 text-base"
-              inputMode="numeric"
-              placeholder="Código de barras"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
+              placeholder="Nombre o código de barras"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-            <Button type="submit" className="h-12" disabled={!branchId || looking || !barcode.trim()}>
+            <Button type="submit" className="h-12" disabled={!branchId || looking || search.trim().length < 2}>
               {looking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
             </Button>
           </form>
           {lookupError ? <p className="text-sm text-destructive">{lookupError}</p> : null}
+          {matches.length > 1 ? (
+            <div className="max-h-56 space-y-2 overflow-auto">
+              {matches.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="w-full rounded-lg border p-3 text-left"
+                  onClick={() => selectProduct(item)}
+                >
+                  <p className="font-medium leading-tight">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.barcode || "Sin código"} · stock {item.stock_quantity} · {item.section || "sin sección"}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -292,33 +382,66 @@ export function InventoryRevision({
         <Card className="border-primary/40">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg leading-tight">{product.name}</CardTitle>
-            <CardDescription className="font-mono">{product.barcode}</CardDescription>
+            <CardDescription className="font-mono">{product.barcode || "Sin código"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Marca el sistema</p>
-                <p className="text-3xl font-bold">{product.stock_quantity}</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <Label className="text-xs text-muted-foreground">¿Cuántas tienes?</Label>
+              <div className="space-y-1">
+                <Label>Stock sistema</Label>
                 <Input
-                  className="mt-1 h-12 text-2xl font-bold"
+                  className="h-12 text-xl font-bold"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={editStock}
+                  onChange={(e) => setEditStock(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>¿Cuántas tienes?</Label>
+                <Input
+                  className="h-12 text-xl font-bold"
                   type="number"
                   min={0}
                   inputMode="numeric"
                   value={counted}
-                  autoFocus
                   onChange={(e) => setCounted(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Precio venta (MXN)</Label>
+                <Input
+                  className="h-12"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Sección</Label>
+                <Input
+                  className="h-12 uppercase"
+                  placeholder="A1, B2..."
+                  value={editSection}
+                  onChange={(e) => setEditSection(e.target.value.toUpperCase())}
                 />
               </div>
             </div>
             <p className="text-sm">
-              Faltante: <strong>{missingQty} pzas.</strong> · {formatMoney(missingAmount)} MXN (costo)
+              Faltante vs sistema actual: <strong>{missingQty} pzas.</strong> · {formatMoney(missingAmount)} MXN
             </p>
-            <Button className="h-12 w-full" onClick={addRow} disabled={missingQty <= 0}>
-              Agregar faltante a la lista
-            </Button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button className="h-12" variant="outline" onClick={saveProduct} disabled={savingProduct}>
+                {savingProduct ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Guardar stock / precio / sección
+              </Button>
+              <Button className="h-12" onClick={addRow} disabled={missingQty <= 0}>
+                Agregar faltante
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}

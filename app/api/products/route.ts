@@ -64,10 +64,13 @@ export async function PATCH(request: Request) {
   try {
     const supabase = await createClient()
     const body = await request.json()
-    const { id, stock, reason = "Actualización manual desde admin" } = body
+    const { id, stock, price, section, reason = "Actualización desde revisión de inventario" } = body
 
-    if (!id || stock === undefined) {
-      return NextResponse.json({ error: "Faltan datos requeridos (id, stock)" }, { status: 400 })
+    if (!id) {
+      return NextResponse.json({ error: "Falta el id del producto" }, { status: 400 })
+    }
+    if (stock === undefined && price === undefined && section === undefined) {
+      return NextResponse.json({ error: "Indica stock, precio o sección a actualizar" }, { status: 400 })
     }
 
     const context = await resolveBranchContext(supabase)
@@ -85,7 +88,7 @@ export async function PATCH(request: Request) {
 
     const { data: oldProduct, error: fetchError } = await supabase
       .from("products")
-      .select("stock_quantity, branch_id")
+      .select("stock_quantity, price, section, branch_id")
       .eq("id", id)
       .single()
 
@@ -97,33 +100,57 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "No autorizado para modificar este producto" }, { status: 403 })
     }
 
-    const previous_stock = oldProduct.stock_quantity
-    const difference = stock - previous_stock
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
-    if (difference === 0) {
-      return NextResponse.json({ success: true, message: "El stock es el mismo, no hubo cambios" })
+    if (price !== undefined) {
+      const parsedPrice = Number(price)
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        return NextResponse.json({ error: "Precio inválido" }, { status: 400 })
+      }
+      updates.price = parsedPrice
     }
 
-    const movementType = difference > 0 ? "entrada" : "salida"
-    const quantity = Math.abs(difference)
+    if (section !== undefined) {
+      updates.section = String(section || "").trim().toUpperCase() || null
+    }
 
-    const { error: updateError } = await supabase.from("products").update({ stock_quantity: stock }).eq("id", id)
+    let stockChanged = false
+    if (stock !== undefined) {
+      const parsedStock = Number(stock)
+      if (!Number.isInteger(parsedStock) || parsedStock < 0) {
+        return NextResponse.json({ error: "Stock inválido" }, { status: 400 })
+      }
+      const previousStock = Number(oldProduct.stock_quantity) || 0
+      const difference = parsedStock - previousStock
+      updates.stock_quantity = parsedStock
+      if (difference !== 0) {
+        stockChanged = true
+        const { error: updateError } = await supabase.from("products").update(updates).eq("id", id)
+        if (updateError) throw updateError
+        const { error: logError } = await supabase.from("stock_movements").insert({
+          product_id: id,
+          user_id: user.id,
+          movement_type: difference > 0 ? "entrada" : "salida",
+          quantity: Math.abs(difference),
+          reason,
+          branch_id: oldProduct.branch_id,
+        })
+        if (logError) console.error("Error registrando en bitácora:", logError)
+        return NextResponse.json({
+          success: true,
+          message: "Producto actualizado",
+        })
+      }
+    }
 
-    if (updateError) throw updateError
-
-    const { error: logError } = await supabase.from("stock_movements").insert({
-      product_id: id,
-      user_id: user.id,
-      movement_type: movementType,
-      quantity,
-      reason,
-    })
-
-    if (logError) console.error("Error registrando en bitácora:", logError)
+    if (!stockChanged) {
+      const { error: updateError } = await supabase.from("products").update(updates).eq("id", id)
+      if (updateError) throw updateError
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Inventario actualizado y registrado correctamente",
+      message: "Producto actualizado",
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Error interno del servidor"

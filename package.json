@@ -52,6 +52,7 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "latest",
     "geist": "latest",
+    "html5-qrcode": "^2.3.8",
     "input-otp": "latest",
     "jiti": "latest",
     "less": "latest",
