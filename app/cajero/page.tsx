@@ -815,18 +815,18 @@ function CajeroContent() {
 
             <Card
               className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary"
-              onClick={() => router.push("/cajero/faltantes")}
+              onClick={() => router.push("/cajero/revision")}
             >
               <CardContent className="p-8 text-center">
                 <div className="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <AlertTriangle className="h-10 w-10 text-rose-600" />
                 </div>
-                <h3 className="text-xl font-bold mb-2">Faltantes</h3>
+                <h3 className="text-xl font-bold mb-2">Revisión inventario</h3>
                 <p className="text-muted-foreground text-sm">
-                  Reporta faltantes físicos de tu sucursal
+                  Escanea códigos y anota cuántas piezas hay
                 </p>
                 <Button className="mt-4 w-full bg-transparent" variant="outline">
-                  Reportar
+                  Revisar
                 </Button>
               </CardContent>
             </Card>

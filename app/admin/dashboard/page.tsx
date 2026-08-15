@@ -438,6 +438,7 @@ export default function AdminDashboard() {
             <NavCard href="/admin/traspasos" title="Traspasos" description="Mover stock entre sucursales" icon={ArrowRightLeft} />
             <NavCard href="/admin/pedidos-globales" title="Pedidos sucursales" description="Pedido consolidado" icon={ClipboardList} />
             <NavCard href="/admin/distribuidora" title="Distribuidora" description="Entradas y alertas" icon={Truck} />
+            <NavCard href="/admin/revision-inventario" title="Revisión inventario" description="Escanear y contar en sucursal" icon={ClipboardCheck} />
             <NavCard href="/admin/faltantes" title="Faltantes" description="Revisión y aprobación" icon={ClipboardCheck} />
             <NavCard href="/admin/markup" title="Markup" description="Aumento sobre costo" icon={Percent} />
             <NavCard href="/admin/auditoria" title="Auditoría" description="Historial de cambios" icon={ScrollText} />

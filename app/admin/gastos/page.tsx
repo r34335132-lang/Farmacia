@@ -49,10 +49,12 @@ export default function GastosPage() {
     branch_id: "",
     description: "",
   })
+  const [payrollDiscounts, setPayrollDiscounts] = useState<{ branch: string; amount: number }[]>([])
 
   useEffect(() => {
     checkAuth()
     loadBranches()
+    loadPayrollDiscounts()
   }, [])
 
   useEffect(() => {
@@ -73,6 +75,19 @@ export default function GastosPage() {
       setBranches(json.branches || [])
       if (json.branches?.[0]) setForm((prev) => ({ ...prev, branch_id: json.branches[0].id }))
     }
+  }
+
+  const loadPayrollDiscounts = async () => {
+    const res = await fetch("/api/shortages?status=approved&page_size=100")
+    if (!res.ok) return
+    const json = await res.json()
+    const map = new Map<string, number>()
+    for (const item of json.shortages || []) {
+      const branch = Array.isArray(item.branches) ? item.branches[0]?.name : item.branches?.name
+      const name = branch || "Sin sucursal"
+      map.set(name, (map.get(name) || 0) + Number(item.total_amount || 0))
+    }
+    setPayrollDiscounts([...map.entries()].map(([branch, amount]) => ({ branch, amount })))
   }
 
   const loadExpenses = async () => {
@@ -215,6 +230,26 @@ export default function GastosPage() {
       />
 
       <div className="space-y-6 p-4 sm:p-6">
+        {payrollDiscounts.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Descuento de salarios por sucursal</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Faltantes aprobados. El monto es de la sucursal; ellos lo dividen entre las personas.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {payrollDiscounts.map((row) => (
+                  <div key={row.branch} className="rounded-lg border p-3">
+                    <p className="text-sm text-muted-foreground">{row.branch}</p>
+                    <p className="text-xl font-bold text-destructive">{formatMoney(row.amount)}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
         <div className="flex flex-col gap-3 sm:flex-row">
           <Select value={branchFilter} onValueChange={(v) => { setPage(0); setBranchFilter(v) }}>
             <SelectTrigger className="sm:w-56"><SelectValue /></SelectTrigger>
