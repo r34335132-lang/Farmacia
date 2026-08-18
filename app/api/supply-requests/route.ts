@@ -18,9 +18,9 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
-    const requestedBranchId = searchParams.get("branch_id")
     const id = searchParams.get("id")
-    const context = await resolveBranchContext(supabase, requestedBranchId)
+    const branchId = searchParams.get("branch_id")
+    const context = await resolveBranchContext(supabase, branchId && branchId !== "all" ? branchId : null)
 
     if ("error" in context) {
       return NextResponse.json({ error: context.error }, { status: context.status })
@@ -44,20 +44,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ request: order })
     }
 
+    const branchFilter = searchParams.get("branch_id")
     let query = supabase
       .from("supply_requests")
       .select("*, branches(id, name), profiles:created_by(full_name), supply_request_items(*)")
       .order("created_at", { ascending: false })
       .limit(80)
 
-    const branchId = resolveEffectiveBranchId(context, requestedBranchId)
     if (!context.isAdmin) {
       if (!context.activeBranchId) {
         return NextResponse.json({ error: "Sin sucursal asignada" }, { status: 400 })
       }
       query = query.eq("branch_id", context.activeBranchId)
-    } else if (branchId) {
-      query = query.eq("branch_id", branchId)
+    } else if (branchFilter && branchFilter !== "all") {
+      query = query.eq("branch_id", branchFilter)
     }
 
     const { data, error } = await query

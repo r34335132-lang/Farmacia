@@ -5,7 +5,7 @@ import { normalizeProductKey, type BuyListItem } from "@/lib/supply-request-docu
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient()
     const context = await resolveBranchContext(supabase)
@@ -13,12 +13,25 @@ export async function GET() {
       return NextResponse.json({ error: context.error }, { status: context.status })
     }
 
-    const { data, error } = await supabase
+    const { searchParams } = new URL(request.url)
+    const branchId = searchParams.get("branch_id")
+
+    let query = supabase
       .from("supply_requests")
       .select("id, branch_id, status, created_at, branches(id, name), supply_request_items(*)")
       .eq("status", "submitted")
       .order("created_at", { ascending: false })
 
+    if (!context.isAdmin) {
+      if (!context.activeBranchId) {
+        return NextResponse.json({ error: "Sin sucursal asignada" }, { status: 400 })
+      }
+      query = query.eq("branch_id", context.activeBranchId)
+    } else if (branchId && branchId !== "all") {
+      query = query.eq("branch_id", branchId)
+    }
+
+    const { data, error } = await query
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
