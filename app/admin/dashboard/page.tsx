@@ -25,6 +25,7 @@ import {
   History,
   ClipboardPenLine,
   ArrowRightLeft,
+  PackagePlus,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -436,6 +437,7 @@ export default function AdminDashboard() {
             <NavCard href="/admin/movimientos" title="Movimientos" description="Entradas y salidas" icon={History} />
             <NavCard href="/admin/inventario" title="Conteo de Inventario" description="Excel vs stock real" icon={ClipboardPenLine} />
             <NavCard href="/admin/traspasos" title="Traspasos" description="Mover stock entre sucursales" icon={ArrowRightLeft} />
+            <NavCard href="/admin/pedidos-caja" title="Pedidos de caja" description="Lo que pidieron las sucursales" icon={PackagePlus} />
             <NavCard href="/admin/pedidos-globales" title="Pedidos sucursales" description="Pedido consolidado" icon={ClipboardList} />
             <NavCard href="/admin/distribuidora" title="Distribuidora" description="Entradas y alertas" icon={Truck} />
             <NavCard href="/admin/revision-inventario" title="Revisión inventario" description="Escanear y contar en sucursal" icon={ClipboardCheck} />

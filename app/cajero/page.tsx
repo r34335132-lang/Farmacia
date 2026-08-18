@@ -52,6 +52,7 @@ import {
   MapPin,
   Volume2,
   VolumeX,
+  PackagePlus,
 } from "lucide-react"
 
 interface OrderItem {
@@ -735,7 +736,7 @@ function CajeroContent() {
             <p className="text-muted-foreground">Elige que deseas hacer hoy</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 max-w-6xl mx-auto">
             <Card 
               className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary"
               onClick={() => router.push("/pos")}
@@ -750,6 +751,24 @@ function CajeroContent() {
                 </p>
                 <Button className="mt-4 w-full">
                   Ir a POS
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-emerald-400"
+              onClick={() => router.push("/pos/pedido")}
+            >
+              <CardContent className="p-8 text-center">
+                <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <PackagePlus className="h-10 w-10 text-emerald-700" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Pedir mercancía</h3>
+                <p className="text-muted-foreground text-sm">
+                  Lo que se ocupó, con o sin foto
+                </p>
+                <Button className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700">
+                  Hacer pedido
                 </Button>
               </CardContent>
             </Card>

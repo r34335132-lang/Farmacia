@@ -32,6 +32,7 @@ import {
   Tag,
   Printer,
   Store,
+  PackagePlus,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -1235,6 +1236,13 @@ export default function POSPage() {
                 </span>
               </div>
             )}
+            <Button
+              onClick={() => router.push("/pos/pedido")}
+              className="h-11 bg-emerald-600 px-4 text-base font-black text-white hover:bg-emerald-700"
+            >
+              <PackagePlus className="h-5 w-5 mr-1" />
+              Pedir
+            </Button>
             <Button onClick={openExportDialog} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent">
               <Printer className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Exportar</span>
