@@ -32,6 +32,7 @@ type Product = {
   barcode?: string | null
   image_url?: string | null
   stock_quantity?: number
+  min_stock_level?: number
   is_active?: boolean
 }
 
@@ -80,6 +81,64 @@ export default function PedidoCajaPage() {
   const [done, setDone] = useState<{ number: string; items: BuyListItem[] } | null>(null)
   const [buyList, setBuyList] = useState<BuyListItem[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [quickOrderingId, setQuickOrderingId] = useState<string | null>(null)
+  const [quickOrderNotice, setQuickOrderNotice] = useState<{
+    productName: string
+    requestNumber: string
+    quantity: number
+  } | null>(null)
+
+  const suggestedOrderQty = (product: Product) => {
+    const stock = product.stock_quantity ?? 0
+    const min = product.min_stock_level ?? 10
+    return Math.max(1, min - stock)
+  }
+
+  const isLowStock = (product: Product) =>
+    (product.stock_quantity ?? 0) <= (product.min_stock_level ?? 10)
+
+  const quickSubmitProduct = async (product: Product) => {
+    if (!branch) {
+      setError("Elige la sucursal")
+      return
+    }
+
+    const qty = suggestedOrderQty(product)
+    setQuickOrderingId(product.id)
+    setError(null)
+    try {
+      const res = await fetch("/api/supply-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branch_id: branch.id,
+          items: [
+            {
+              product_id: product.id,
+              product_name: product.name,
+              barcode: product.barcode || null,
+              quantity: qty,
+              photo_url: product.image_url || null,
+            },
+          ],
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "No se pudo enviar el pedido")
+
+      setQuickOrderNotice({
+        productName: product.name,
+        requestNumber: data.request?.request_number || "Pedido",
+        quantity: qty,
+      })
+      window.setTimeout(() => setQuickOrderNotice(null), 4500)
+      await loadBuyList()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar el pedido")
+    } finally {
+      setQuickOrderingId(null)
+    }
+  }
 
   const loadBuyList = useCallback(async () => {
     const res = await fetch("/api/supply-requests/buy-list")
@@ -386,6 +445,19 @@ export default function PedidoCajaPage() {
       </header>
 
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-5">
+        {quickOrderNotice && (
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-4">
+            <CheckCircle2 className="h-8 w-8 shrink-0 text-emerald-600" />
+            <div>
+              <p className="text-lg font-black text-emerald-900">¡Pedido enviado!</p>
+              <p className="text-emerald-800">
+                {quickOrderNotice.quantity} pza de <strong>{quickOrderNotice.productName}</strong> ·{" "}
+                {quickOrderNotice.requestNumber}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-3xl bg-white p-5 shadow-sm">
           <h1 className="text-3xl font-black">¿Qué se ocupó?</h1>
           <p className="mt-1 text-lg text-muted-foreground">
@@ -406,28 +478,60 @@ export default function PedidoCajaPage() {
 
           {search.trim().length >= 2 && (
             <div className="mt-3 space-y-2">
-              {results.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => pickProduct(product)}
-                  className="flex w-full items-center gap-3 rounded-2xl border-2 p-3 text-left hover:border-rose-400 hover:bg-rose-50"
-                >
-                  {product.image_url ? (
-                    <img src={product.image_url} alt="" className="h-16 w-16 rounded-xl object-cover" />
-                  ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
-                      <PackagePlus className="h-7 w-7 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-lg font-bold">{product.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {product.barcode || "Sin código"} · stock {product.stock_quantity ?? 0}
-                    </p>
+              {results.map((product) => {
+                const stock = product.stock_quantity ?? 0
+                const outOfStock = stock === 0
+                const lowStock = isLowStock(product)
+                const orderQty = suggestedOrderQty(product)
+                const isSending = quickOrderingId === product.id
+
+                return (
+                  <div
+                    key={product.id}
+                    className={`rounded-2xl border-2 p-3 ${
+                      outOfStock
+                        ? "border-red-300 bg-red-50"
+                        : lowStock
+                          ? "border-amber-300 bg-amber-50"
+                          : "border-transparent bg-white"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => pickProduct(product)}
+                      className="flex w-full items-center gap-3 text-left hover:opacity-90"
+                    >
+                      {product.image_url ? (
+                        <img src={product.image_url} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
+                          <PackagePlus className="h-7 w-7 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-lg font-bold">{product.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {product.barcode || "Sin código"} · stock {stock}
+                          {outOfStock && " · AGOTADO"}
+                          {lowStock && !outOfStock && " · stock bajo"}
+                        </p>
+                      </div>
+                    </button>
+                    {(outOfStock || lowStock) && (
+                      <Button
+                        type="button"
+                        className="mt-3 h-14 w-full text-lg font-black bg-emerald-600 hover:bg-emerald-700"
+                        disabled={isSending}
+                        onClick={() => quickSubmitProduct(product)}
+                      >
+                        {isSending
+                          ? "Enviando..."
+                          : `Pedir ya · ${orderQty} pza${orderQty === 1 ? "" : "s"}`}
+                      </Button>
+                    )}
                   </div>
-                </button>
-              ))}
+                )
+              })}
               {results.length === 0 && (
                 <p className="rounded-xl bg-amber-50 p-3 text-base text-amber-800">
                   No aparece en la lista. Abajo puedes pedirlo igual, con o sin foto.

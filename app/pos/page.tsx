@@ -33,6 +33,7 @@ import {
   Printer,
   Store,
   PackagePlus,
+  CheckCircle2,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -114,6 +115,13 @@ export default function POSPage() {
   const [authReady, setAuthReady] = useState(false)
   const [branchConfirmed, setBranchConfirmed] = useState(false)
   const [pendingBranchId, setPendingBranchId] = useState<string | null>(null)
+  const [quickOrderingId, setQuickOrderingId] = useState<string | null>(null)
+  const [quickOrderedIds, setQuickOrderedIds] = useState<Set<string>>(new Set())
+  const [quickOrderNotice, setQuickOrderNotice] = useState<{
+    productName: string
+    requestNumber: string
+    quantity: number
+  } | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -188,6 +196,54 @@ export default function POSPage() {
 
   const isLowStock = (product: Product) =>
     product.stock_quantity <= (product.min_stock_level ?? 10)
+
+  const suggestedOrderQty = (product: Product) => {
+    const min = product.min_stock_level ?? 10
+    return Math.max(1, min - product.stock_quantity)
+  }
+
+  const quickOrderProduct = async (product: Product, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const branchId = isAdmin ? selectedBranchId : activeBranch?.id
+    if (!branchId) {
+      alert("Elige la sucursal primero")
+      return
+    }
+
+    const qty = suggestedOrderQty(product)
+    setQuickOrderingId(product.id)
+    try {
+      const res = await fetch("/api/supply-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branch_id: branchId,
+          items: [
+            {
+              product_id: product.id,
+              product_name: product.name,
+              barcode: product.barcode || null,
+              quantity: qty,
+            },
+          ],
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "No se pudo enviar el pedido")
+
+      setQuickOrderedIds((prev) => new Set(prev).add(product.id))
+      setQuickOrderNotice({
+        productName: product.name,
+        requestNumber: data.request?.request_number || "Pedido",
+        quantity: qty,
+      })
+      window.setTimeout(() => setQuickOrderNotice(null), 4500)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo enviar el pedido")
+    } finally {
+      setQuickOrderingId(null)
+    }
+  }
 
   const startCamera = async () => {
     try {
@@ -377,7 +433,10 @@ export default function POSPage() {
 
   const addToCart = (product: Product) => {
     if (product.stock_quantity < 1) {
-      alert("Agotado en esta sucursal")
+      const qty = suggestedOrderQty(product)
+      if (window.confirm(`"${product.name}" está agotado.\n\n¿Pedir ${qty} pieza${qty === 1 ? "" : "s"} ahora?`)) {
+        void quickOrderProduct(product)
+      }
       return
     }
 
@@ -1258,6 +1317,21 @@ export default function POSPage() {
         </div>
       </header>
 
+      {quickOrderNotice && (
+        <div className="fixed top-20 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-emerald-400 bg-emerald-50 px-5 py-4 shadow-xl">
+            <CheckCircle2 className="h-7 w-7 shrink-0 text-emerald-600" />
+            <div>
+              <p className="font-black text-emerald-900">¡Pedido confirmado!</p>
+              <p className="text-sm text-emerald-800">
+                {quickOrderNotice.quantity} pza de <strong>{quickOrderNotice.productName}</strong> ·{" "}
+                {quickOrderNotice.requestNumber}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] pb-24 lg:pb-0">
         <div className="flex-1 p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6 overflow-auto">
           <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
@@ -1454,18 +1528,45 @@ export default function POSPage() {
                             </Badge>
                           </div>
                         </div>
-                        <Button
-                          onClick={() => addToCart(product)}
-                          className={`w-full font-semibold py-3 h-12 text-base ${hasDiscount ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800" : "bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"} text-white`}
-                          disabled={outOfStock}
-                        >
-                          <Plus className="h-5 w-5 mr-2" />
-                          {outOfStock
-                            ? "Agotado en esta sucursal"
-                            : hasDiscount
-                              ? "Agregar con Descuento"
-                              : "Agregar al Carrito"}
-                        </Button>
+                        {outOfStock ? (
+                          <Button
+                            onClick={(e) => quickOrderProduct(product, e)}
+                            disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
+                            className="w-full h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <PackagePlus className="h-5 w-5 mr-2" />
+                            {quickOrderingId === product.id
+                              ? "Enviando pedido..."
+                              : quickOrderedIds.has(product.id)
+                                ? "Pedido enviado"
+                                : `Pedir ${suggestedOrderQty(product)} pza`}
+                          </Button>
+                        ) : (
+                          <div className="space-y-2">
+                            <Button
+                              onClick={() => addToCart(product)}
+                              className={`w-full font-semibold py-3 h-12 text-base ${hasDiscount ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800" : "bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"} text-white`}
+                            >
+                              <Plus className="h-5 w-5 mr-2" />
+                              {hasDiscount ? "Agregar con Descuento" : "Agregar al Carrito"}
+                            </Button>
+                            {isLowStock(product) && (
+                              <Button
+                                variant="outline"
+                                onClick={(e) => quickOrderProduct(product, e)}
+                                disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
+                                className="w-full h-11 text-sm font-bold border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
+                              >
+                                <PackagePlus className="h-4 w-4 mr-2" />
+                                {quickOrderingId === product.id
+                                  ? "Enviando..."
+                                  : quickOrderedIds.has(product.id)
+                                    ? "Pedido enviado"
+                                    : `Pedir ${suggestedOrderQty(product)} más`}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
