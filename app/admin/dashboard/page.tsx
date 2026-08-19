@@ -25,6 +25,7 @@ import {
   History,
   ClipboardPenLine,
   ArrowRightLeft,
+  PiggyBank,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -432,6 +433,7 @@ export default function AdminDashboard() {
             <NavCard href="/admin/products" title="Productos" description="Inventario y precios" icon={Package} />
             <NavCard href="/admin/sales" title="Ventas" description="Reportes e historial" icon={TrendingUp} />
             <NavCard href="/admin/finanzas" title="Finanzas" description="Utilidad y márgenes" icon={DollarSign} />
+            <NavCard href="/admin/inversion" title="Inversión" description="Valor del inventario por sucursal" icon={PiggyBank} />
             <NavCard href="/admin/gastos" title="Gastos" description="Nómina y operativos" icon={Wallet} />
             <NavCard href="/admin/movimientos" title="Movimientos" description="Entradas y salidas" icon={History} />
             <NavCard href="/admin/inventario" title="Conteo de Inventario" description="Excel vs stock real" icon={ClipboardPenLine} />
