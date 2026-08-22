@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext, resolveEffectiveBranchId } from "@/lib/branch"
 import { logAudit } from "@/lib/audit"
+import { notifySupplyRequest } from "@/lib/alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -160,6 +161,16 @@ export async function POST(request: Request) {
       .select("*, branches(id, name), profiles:created_by(full_name), supply_request_items(*)")
       .eq("id", order.id)
       .single()
+
+    const branchRel = (saved || order).branches as { name?: string } | { name?: string }[] | null
+    const branchName = Array.isArray(branchRel) ? branchRel[0]?.name : branchRel?.name
+
+    void notifySupplyRequest(supabase, {
+      requestNumber: order.request_number,
+      branchName: branchName || "Sucursal",
+      itemCount: parsedItems.length,
+      branchId,
+    })
 
     return NextResponse.json({ request: saved || order })
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext } from "@/lib/branch"
+import { notifySalesSpikeIfNeeded } from "@/lib/alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -69,6 +70,13 @@ export async function POST(request: Request) {
       console.error("process_sale error:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
+
+    const { data: branchRow } = await supabase
+      .from("branches")
+      .select("name")
+      .eq("id", effectiveBranchId)
+      .maybeSingle()
+    void notifySalesSpikeIfNeeded(supabase, effectiveBranchId, branchRow?.name || context.activeBranch?.name)
 
     return NextResponse.json({ success: true, ...data })
   } catch (error) {

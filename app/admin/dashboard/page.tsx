@@ -31,6 +31,7 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { NotificationManager } from "@/components/notification-manager"
+import { AdminAlertListener } from "@/components/admin-alert-listener"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatMoney } from "@/lib/money"
 import { cn } from "@/lib/utils"
@@ -465,6 +466,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="min-h-[220px]">
               <NotificationManager userRole="admin" />
+              <AdminAlertListener enabled />
             </div>
 
             <Card className="h-full">

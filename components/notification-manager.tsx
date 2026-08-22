@@ -1,10 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bell, BellOff } from "lucide-react"
+import { Bell, BellOff, Smartphone } from "lucide-react"
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const raw = atob(base64)
+  const output = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i)
+  return output
+}
 
 interface NotificationManagerProps {
   userRole?: string
@@ -13,207 +21,183 @@ interface NotificationManagerProps {
 export function NotificationManager({ userRole }: NotificationManagerProps) {
   const [permission, setPermission] = useState<NotificationPermission>("default")
   const [isSupported, setIsSupported] = useState(false)
-  const supabase = createClient()
+  const [pushReady, setPushReady] = useState(false)
+  const [pushConfigured, setPushConfigured] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [isSafari, setIsSafari] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
 
   useEffect(() => {
-    // Check if notifications are supported
-    setIsSupported("Notification" in window && "serviceWorker" in navigator && "PushManager" in window)
+    const ua = navigator.userAgent
+    const safari = /^((?!chrome|android).)*safari/i.test(ua)
+    setIsSafari(safari)
+    setIsStandalone(
+      window.matchMedia("(display-mode: standalone)").matches ||
+        // @ts-expect-error iOS Safari
+        Boolean(navigator.standalone),
+    )
+
+    const supported =
+      "Notification" in window && "serviceWorker" in navigator && ("PushManager" in window || safari)
+    setIsSupported(supported)
 
     if ("Notification" in window) {
       setPermission(Notification.permission)
     }
 
-    // Only check stock for admins
-    if (userRole === "admin") {
-      checkLowStock()
-      checkExpiringProducts()
-
-      // Set up periodic check every 5 minutes
-      const interval = setInterval(
-        () => {
-          checkLowStock()
-          checkExpiringProducts()
-        },
-        5 * 60 * 1000,
-      )
-      return () => clearInterval(interval)
+    if (userRole === "admin" && Notification.permission === "granted") {
+      void ensurePushSubscription()
     }
   }, [userRole])
 
+  const ensurePushSubscription = async () => {
+    try {
+      const meta = await fetch("/api/push/subscribe")
+      const metaJson = await meta.json().catch(() => ({}))
+      setPushConfigured(Boolean(metaJson.configured && metaJson.publicKey))
+
+      if (!metaJson.configured || !metaJson.publicKey) {
+        setMessage("Faltan claves VAPID en el servidor. Las alertas locales sí funcionan con la app abierta.")
+        return
+      }
+
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        setMessage(
+          isSafari && !isStandalone
+            ? "En iPhone/iPad: Agregar a pantalla de inicio para recibir push."
+            : "Este navegador no soporta push en segundo plano.",
+        )
+        return
+      }
+
+      const registration = await navigator.serviceWorker.ready
+      let subscription = await registration.pushManager.getSubscription()
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(metaJson.publicKey),
+        })
+      }
+
+      const payload = subscription.toJSON()
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMessage(json.hint ? `${json.error}. ${json.hint}` : json.error || "No se pudo registrar push")
+        return
+      }
+
+      setPushReady(true)
+      setMessage(null)
+    } catch (err) {
+      console.error(err)
+      setMessage(err instanceof Error ? err.message : "No se pudo activar push")
+    }
+  }
+
   const requestPermission = async () => {
     if (!isSupported) return
-
+    setBusy(true)
+    setMessage(null)
     try {
-      const permission = await Notification.requestPermission()
-      setPermission(permission)
-
-      if (permission === "granted") {
+      const next = await Notification.requestPermission()
+      setPermission(next)
+      if (next === "granted") {
         new Notification("Farmacia Bienestar", {
-          body: "Notificaciones activadas correctamente",
+          body: "Notificaciones activadas. Te avisaremos de pedidos, movimiento y el resumen de las 10 pm.",
           icon: "/icon-192.jpg",
           tag: "welcome",
         })
+        if (userRole === "admin") await ensurePushSubscription()
       }
     } catch (error) {
       console.error("Error requesting notification permission:", error)
+      setMessage("No se pudo pedir permiso de notificaciones")
+    } finally {
+      setBusy(false)
     }
   }
 
-  const checkLowStock = async () => {
+  const testNotification = async () => {
     if (permission !== "granted") return
-
-    try {
-      const { data: products } = await supabase
-        .from("products")
-        .select("name, stock_quantity, min_stock_level")
-        .eq("is_active", true)
-
-      const lowStockProducts = products?.filter((product) => product.stock_quantity <= product.min_stock_level) || []
-
-      if (lowStockProducts.length > 0) {
-        const productNames = lowStockProducts
-          .slice(0, 3)
-          .map((p) => p.name)
-          .join(", ")
-        const message =
-          lowStockProducts.length === 1
-            ? `Stock bajo: ${productNames}`
-            : `${lowStockProducts.length} productos con stock bajo: ${productNames}${lowStockProducts.length > 3 ? "..." : ""}`
-
-        new Notification("⚠️ Alerta de Stock", {
-          body: message,
-          icon: "/icon-192.jpg",
-          tag: "low-stock",
-          requireInteraction: true,
-        })
-      }
-    } catch (error) {
-      console.error("Error checking stock:", error)
-    }
+    new Notification("Prueba de alerta", {
+      body: "Si ves esto, las notificaciones locales funcionan.",
+      icon: "/icon-192.jpg",
+      tag: "test",
+    })
+    if (userRole === "admin") await ensurePushSubscription()
   }
 
-  const checkExpiringProducts = async () => {
-    if (permission !== "granted") return
-
-    try {
-      const { data: products } = await supabase
-        .from("products")
-        .select("name, expiration_date, days_before_expiry_alert, stock_quantity")
-        .eq("is_active", true)
-        .not("expiration_date", "is", null)
-
-      const today = new Date()
-
-      // Check for expiring products
-      const expiringProducts =
-        products?.filter((product) => {
-          const expirationDate = new Date(product.expiration_date)
-          const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          const alertThreshold = product.days_before_expiry_alert || 30
-          return daysUntilExpiry > 0 && daysUntilExpiry <= alertThreshold
-        }) || []
-
-      // Check for expired products
-      const expiredProducts =
-        products?.filter((product) => {
-          const expirationDate = new Date(product.expiration_date)
-          return expirationDate < today
-        }) || []
-
-      // Notify about expiring products
-      if (expiringProducts.length > 0) {
-        const productNames = expiringProducts
-          .slice(0, 3)
-          .map((p) => p.name)
-          .join(", ")
-        const message =
-          expiringProducts.length === 1
-            ? `Producto por vencer: ${productNames}`
-            : `${expiringProducts.length} productos por vencer: ${productNames}${expiringProducts.length > 3 ? "..." : ""}`
-
-        new Notification("📅 Alerta de Caducidad", {
-          body: message,
-          icon: "/icon-192.jpg",
-          tag: "expiring-products",
-          requireInteraction: true,
-        })
-      }
-
-      // Notify about expired products
-      if (expiredProducts.length > 0) {
-        const productNames = expiredProducts
-          .slice(0, 3)
-          .map((p) => p.name)
-          .join(", ")
-        const message =
-          expiredProducts.length === 1
-            ? `Producto vencido: ${productNames}`
-            : `${expiredProducts.length} productos vencidos: ${productNames}${expiredProducts.length > 3 ? "..." : ""}`
-
-        new Notification("🚨 Productos Vencidos", {
-          body: message,
-          icon: "/icon-192.jpg",
-          tag: "expired-products",
-          requireInteraction: true,
-        })
-      }
-    } catch (error) {
-      console.error("Error checking expiration:", error)
-    }
-  }
-
-  const testNotification = () => {
-    if (permission === "granted") {
-      new Notification("Prueba de Notificación", {
-        body: "Las notificaciones están funcionando correctamente",
-        icon: "/icon-192.jpg",
-        tag: "test",
-      })
-    }
-  }
-
-  if (!isSupported) {
-    return null
-  }
+  if (!isSupported && userRole !== "admin") return null
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="h-5 w-5" />
-          Notificaciones
+    <Card className="h-full">
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Bell className="h-4 w-4" />
+          Alertas push
         </CardTitle>
-        <CardDescription>Recibe alertas de stock bajo y productos por vencer</CardDescription>
+        <CardDescription className="text-xs">
+          Pedidos de stock, mucho movimiento en caja y resumen a las 10 pm
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm">
+      <CardContent className="space-y-3 px-4 pb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span>
             Estado:{" "}
-            {permission === "granted" ? "Activadas" : permission === "denied" ? "Bloqueadas" : "No configuradas"}
+            {permission === "granted"
+              ? pushReady
+                ? "Push activo"
+                : "Permiso OK"
+              : permission === "denied"
+                ? "Bloqueadas"
+                : "No configuradas"}
           </span>
           {permission === "granted" ? (
-            <BellOff className="h-4 w-4 text-green-600" />
+            <Bell className="h-4 w-4 text-emerald-600" />
           ) : (
-            <Bell className="h-4 w-4 text-muted-foreground" />
+            <BellOff className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
 
+        {isSafari && (
+          <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+            <Smartphone className="mr-1 inline h-3 w-3" />
+            Safari: en iPhone/iPad usa <strong>Compartir → Agregar a pantalla de inicio</strong> (iOS 16.4+). En Mac
+            Safari sí permite notificaciones del sitio.
+          </p>
+        )}
+
         {permission === "default" && (
-          <Button onClick={requestPermission} className="w-full">
-            Activar Notificaciones
+          <Button onClick={requestPermission} disabled={busy} className="w-full">
+            {busy ? "Activando..." : "Activar alertas"}
           </Button>
         )}
 
         {permission === "granted" && (
-          <Button onClick={testNotification} variant="outline" className="w-full bg-transparent">
-            Probar Notificación
+          <Button onClick={testNotification} variant="outline" className="w-full bg-transparent" disabled={busy}>
+            Probar notificación
           </Button>
         )}
 
         {permission === "denied" && (
-          <div className="text-sm text-muted-foreground">
-            Las notificaciones están bloqueadas. Puedes habilitarlas en la configuración del navegador.
-          </div>
+          <p className="text-xs text-muted-foreground">
+            Están bloqueadas. Actívalas en la configuración del navegador o de la app.
+          </p>
+        )}
+
+        {message && <p className="text-xs text-amber-800">{message}</p>}
+
+        {!pushConfigured && permission === "granted" && (
+          <p className="text-xs text-muted-foreground">
+            Configura VAPID en Vercel para push con la app cerrada. Sin eso, las alertas llegan si tienes el panel
+            abierto.
+          </p>
         )}
       </CardContent>
     </Card>

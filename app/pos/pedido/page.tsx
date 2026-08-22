@@ -157,7 +157,7 @@ export default function PedidoCajaPage() {
         setBranches(branchData.branches || [])
 
         if (branchData.isAdmin) {
-          const saved = sessionStorage.getItem("pos_admin_branch_id")
+          const saved = localStorage.getItem("pos_admin_branch_id") || sessionStorage.getItem("pos_admin_branch_id")
           const match = (branchData.branches || []).find((b: BranchInfo) => b.id === saved)
           if (match) setBranch(match)
         } else if (branchData.activeBranch) {
@@ -417,6 +417,7 @@ export default function PedidoCajaPage() {
                 onClick={() => {
                   setBranch(item)
                   sessionStorage.setItem("pos_admin_branch_id", item.id)
+                  localStorage.setItem("pos_admin_branch_id", item.id)
                 }}
               >
                 <Store className="mr-3 h-7 w-7" />

@@ -34,6 +34,7 @@ import {
   Store,
   PackagePlus,
   CheckCircle2,
+  ExternalLink,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -185,6 +186,7 @@ export default function POSPage() {
     setActiveBranch(branch)
     setBranchConfirmed(true)
     sessionStorage.setItem("pos_admin_branch_id", pendingBranchId)
+    localStorage.setItem("pos_admin_branch_id", pendingBranchId)
     setLoading(true)
   }
 
@@ -314,7 +316,8 @@ export default function POSPage() {
       setAvailableBranches(branchData.branches || [])
 
       if (branchData.isAdmin) {
-        const savedBranchId = sessionStorage.getItem("pos_admin_branch_id")
+        const savedBranchId =
+          localStorage.getItem("pos_admin_branch_id") || sessionStorage.getItem("pos_admin_branch_id")
         const validSaved = branchData.branches?.find((b: BranchInfo) => b.id === savedBranchId)
         const defaultBranch = validSaved || branchData.branches?.[0] || null
 
@@ -322,7 +325,12 @@ export default function POSPage() {
           setPendingBranchId(defaultBranch.id)
           setSelectedBranchId(defaultBranch.id)
           setActiveBranch(defaultBranch)
-          setBranchConfirmed(false)
+          // Si ya eligió sucursal antes, entra directo (útil para varias ventanas de venta)
+          setBranchConfirmed(Boolean(validSaved))
+          if (validSaved) {
+            localStorage.setItem("pos_admin_branch_id", validSaved.id)
+            sessionStorage.setItem("pos_admin_branch_id", validSaved.id)
+          }
         }
       } else {
         setActiveBranch(branchData.activeBranch)
@@ -1265,6 +1273,7 @@ export default function POSPage() {
                   const branch = availableBranches.find((b) => b.id === value)
                   if (branch) setActiveBranch(branch)
                   sessionStorage.setItem("pos_admin_branch_id", value)
+                  localStorage.setItem("pos_admin_branch_id", value)
                   setLoading(true)
                 }}
               >
@@ -1295,6 +1304,17 @@ export default function POSPage() {
                 </span>
               </div>
             )}
+            <Button
+              onClick={() => {
+                window.open(`/pos?venta=${Date.now()}`, `pos-venta-${Date.now()}`, "noopener,noreferrer")
+              }}
+              variant="outline"
+              className="h-11 border-2 border-rose-300 px-3 text-sm font-bold text-rose-900 hover:bg-rose-50"
+              title="Abre otra caja en una ventana aparte"
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Otra venta</span>
+            </Button>
             <Button
               onClick={() => router.push("/pos/pedido")}
               className="h-11 bg-emerald-600 px-4 text-base font-black text-white hover:bg-emerald-700"
