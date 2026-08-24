@@ -158,7 +158,7 @@ export async function POST(request: Request) {
         cost_price: costPrice,
         markup_percent: markupOverride,
         stock_quantity: branch.stock_quantity ?? 0,
-        min_stock_level: branch.min_stock_level ?? 10,
+        min_stock_level: branch.min_stock_level ?? 5,
         promotion_price: branch.promotion_price ?? null,
         expiration_date: branch.expiration_date || null,
         is_active: true,

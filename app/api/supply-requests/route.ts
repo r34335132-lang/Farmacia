@@ -30,9 +30,9 @@ export async function GET(request: Request) {
     if (id) {
       const { data: order, error } = await supabase
         .from("supply_requests")
-        .select("*, branches(id, name), profiles:created_by(full_name), supply_request_items(*)")
-        .eq("id", id)
-        .maybeSingle()
+      .select("*, branches(id, name), suppliers(id, name), profiles:created_by(full_name), supply_request_items(*)")
+      .eq("id", id)
+      .maybeSingle()
 
       if (error || !order) {
         return NextResponse.json({ error: error?.message || "Pedido no encontrado" }, { status: 404 })
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
     const branchFilter = searchParams.get("branch_id")
     let query = supabase
       .from("supply_requests")
-      .select("*, branches(id, name), profiles:created_by(full_name), supply_request_items(*)")
+      .select("*, branches(id, name), suppliers(id, name), profiles:created_by(full_name), supply_request_items(*)")
       .order("created_at", { ascending: false })
       .limit(80)
 
@@ -91,6 +91,26 @@ export async function POST(request: Request) {
 
     const items = Array.isArray(body.items) ? body.items : []
     const notes = typeof body.notes === "string" ? body.notes.trim() : null
+    const supplierId =
+      typeof body.supplier_id === "string" && body.supplier_id.trim() ? body.supplier_id.trim() : null
+
+    if (supplierId) {
+      const { data: supplier, error: supplierError } = await supabase
+        .from("suppliers")
+        .select("id")
+        .eq("id", supplierId)
+        .eq("is_active", true)
+        .maybeSingle()
+      if (supplierError || !supplier) {
+        return NextResponse.json(
+          {
+            error: "Proveedor no válido",
+            hint: "Ejecuta scripts/030_suppliers_min_stock.sql o crea el proveedor primero",
+          },
+          { status: 400 },
+        )
+      }
+    }
 
     const parsedItems = items
       .map((item: Record<string, unknown>) => {
@@ -128,8 +148,9 @@ export async function POST(request: Request) {
         created_by: context.userId,
         status: "submitted",
         notes,
+        ...(supplierId ? { supplier_id: supplierId } : {}),
       })
-      .select("*, branches(id, name)")
+      .select("*, branches(id, name), suppliers(id, name)")
       .single()
 
     if (orderError || !order) {
@@ -158,7 +179,7 @@ export async function POST(request: Request) {
 
     const { data: saved } = await supabase
       .from("supply_requests")
-      .select("*, branches(id, name), profiles:created_by(full_name), supply_request_items(*)")
+      .select("*, branches(id, name), suppliers(id, name), profiles:created_by(full_name), supply_request_items(*)")
       .eq("id", order.id)
       .single()
 

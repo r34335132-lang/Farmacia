@@ -21,12 +21,20 @@ import {
 
 type BranchInfo = { id: string; name: string }
 
+type SupplierBuyGroup = {
+  supplier_id: string | null
+  supplier_name: string
+  items: BuyListItem[]
+  total_units: number
+}
+
 type RequestRow = {
   id: string
   request_number: string
   status: string
   created_at: string
   branches?: { name: string } | { name: string }[] | null
+  suppliers?: { name: string } | { name: string }[] | null
   profiles?: { full_name: string } | { full_name: string }[] | null
   supply_request_items?: {
     product_name: string
@@ -78,6 +86,7 @@ export default function PedidosGlobalesPage() {
   const [branchId, setBranchId] = useState("all")
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [buyList, setBuyList] = useState<BuyListItem[]>([])
+  const [buyBySupplier, setBuyBySupplier] = useState<SupplierBuyGroup[]>([])
   const [requests, setRequests] = useState<RequestRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -120,6 +129,7 @@ export default function PedidosGlobalesPage() {
       if (!buyRes.ok) throw new Error(buyData.error || "No se pudo cargar lo pedido en caja")
       if (!reqRes.ok) throw new Error(reqData.error || "No se pudieron cargar los pedidos")
       setBuyList(buyData.items || [])
+      setBuyBySupplier(buyData.by_supplier || [])
       setRequests(reqData.requests || [])
       setBranches(branchData.branches || [])
     } catch (err) {
@@ -226,9 +236,12 @@ export default function PedidosGlobalesPage() {
     <div className="min-h-screen bg-background">
       <AdminPageHeader
         title="Pedidos sucursales"
-        subtitle="Lo que pidieron las cajeras, por sucursal o todo junto"
+        subtitle="Por proveedor y sucursal · también desde inventario"
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => router.push("/admin/inventario/pedido")}>
+              Pedir desde inventario
+            </Button>
             <Button variant="outline" onClick={() => openSupplyRequestDocument(documentHtml)} disabled={buyList.length === 0}>
               <Printer className="mr-2 h-4 w-4" />
               Imprimir
@@ -277,18 +290,55 @@ export default function PedidosGlobalesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Lo que pidieron en caja ({buyList.length})</CardTitle>
+            <CardTitle>Lista por proveedor y sucursal ({buyList.length})</CardTitle>
             <CardDescription>
-              Foto, nombre y cantidad por sucursal. Esto es lo que hay que comprar.
+              Agrupado por proveedor. Dentro de cada uno ves cuánto pide cada sucursal.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-5">
             {loading ? (
-              <p className="py-8 text-center text-muted-foreground">Cargando pedidos de caja...</p>
+              <p className="py-8 text-center text-muted-foreground">Cargando pedidos...</p>
             ) : buyList.length === 0 ? (
               <p className="py-8 text-center text-muted-foreground">
-                Nadie ha pedido mercancía todavía desde el POS.
+                Nadie ha pedido mercancía todavía. También puedes pedir desde Inventario → Pedir.
               </p>
+            ) : buyBySupplier.length > 0 ? (
+              buyBySupplier.map((group) => (
+                <div key={group.supplier_id || "sin"} className="space-y-3 rounded-xl border p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-black">{group.supplier_name}</h3>
+                    <Badge>{group.total_units} pzas</Badge>
+                  </div>
+                  {group.items.map((item) => (
+                    <div
+                      key={`${group.supplier_id}-${item.product_name}-${item.barcode}`}
+                      className="flex items-center gap-4 rounded-lg border bg-muted/20 p-3"
+                    >
+                      {item.photo_url ? (
+                        <img src={item.photo_url} alt="" className="h-14 w-14 rounded-lg object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-muted text-xs text-muted-foreground">
+                          Sin foto
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold">{item.product_name}</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {item.branches.map((b) => (
+                            <Badge key={b.branch_id} variant="outline">
+                              {b.branch_name}: {b.quantity}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-rose-800">{item.total}</p>
+                        <p className="text-xs text-muted-foreground">comprar</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))
             ) : (
               buyList.map((item) => (
                 <div key={`${item.product_name}-${item.barcode}`} className="flex items-center gap-4 rounded-xl border p-3">
@@ -332,8 +382,9 @@ export default function PedidosGlobalesPage() {
                   <div>
                     <p className="font-medium">{row.request_number}</p>
                     <p className="text-muted-foreground">
-                      {relName(row.branches)} · {relName(row.profiles)} ·{" "}
-                      {new Date(row.created_at).toLocaleString("es-MX")}
+                      {relName(row.branches)}
+                      {relName(row.suppliers) !== "—" ? ` · ${relName(row.suppliers)}` : ""} ·{" "}
+                      {relName(row.profiles)} · {new Date(row.created_at).toLocaleString("es-MX")}
                     </p>
                     <p>
                       {(row.supply_request_items || [])

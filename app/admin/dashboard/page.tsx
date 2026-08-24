@@ -438,6 +438,7 @@ export default function AdminDashboard() {
             <NavCard href="/admin/gastos" title="Gastos" description="Nómina y operativos" icon={Wallet} />
             <NavCard href="/admin/movimientos" title="Movimientos" description="Entradas y salidas" icon={History} />
             <NavCard href="/admin/inventario" title="Conteo de Inventario" description="Excel vs stock real" icon={ClipboardPenLine} />
+            <NavCard href="/admin/inventario/pedido" title="Pedir inventario" description="Stock 0, proveedor y sucursal" icon={Package} />
             <NavCard href="/admin/traspasos" title="Traspasos" description="Mover stock entre sucursales" icon={ArrowRightLeft} />
             <NavCard href="/admin/pedidos-globales" title="Pedidos sucursales" description="Lo pedido en caja, por sucursal" icon={ClipboardList} />
             <NavCard href="/admin/distribuidora" title="Distribuidora" description="Entradas y alertas" icon={Truck} />

@@ -449,12 +449,18 @@ export default function AdminInventarioPage() {
         title="Conteo de Inventario"
         subtitle="Compara el conteo físico contra el stock del sistema por sucursal"
         actions={
-          rows.length > 0 ? (
-            <Button variant="outline" size="sm" onClick={downloadExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Exportar resultado
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin/inventario/pedido")}>
+              <PackageSearch className="mr-2 h-4 w-4" />
+              Pedir stock 0
             </Button>
-          ) : null
+            {rows.length > 0 ? (
+              <Button variant="outline" size="sm" onClick={downloadExport}>
+                <Download className="mr-2 h-4 w-4" />
+                Exportar resultado
+              </Button>
+            ) : null}
+          </div>
         }
       />
 

@@ -90,12 +90,12 @@ export default function PedidoCajaPage() {
 
   const suggestedOrderQty = (product: Product) => {
     const stock = product.stock_quantity ?? 0
-    const min = product.min_stock_level ?? 10
+    const min = product.min_stock_level ?? 5
     return Math.max(1, min - stock)
   }
 
   const isLowStock = (product: Product) =>
-    (product.stock_quantity ?? 0) <= (product.min_stock_level ?? 10)
+    (product.stock_quantity ?? 0) <= (product.min_stock_level ?? 5)
 
   const quickSubmitProduct = async (product: Product) => {
     if (!branch) {

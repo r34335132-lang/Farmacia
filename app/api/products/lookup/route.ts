@@ -16,7 +16,49 @@ function normalizeBarcode(value: unknown): string {
   return raw
 }
 
-const PRODUCT_FIELDS = "id, name, barcode, stock_quantity, cost_price, price, section, branch_id, is_active"
+const PRODUCT_FIELDS =
+  "id, name, barcode, stock_quantity, cost_price, price, section, branch_id, is_active, updated_at"
+
+function asMoney(value: unknown) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function normalizeProduct(row: Record<string, unknown>) {
+  return {
+    ...row,
+    stock_quantity: Number(row.stock_quantity) || 0,
+    cost_price: asMoney(row.cost_price),
+    price: asMoney(row.price),
+  }
+}
+
+async function enrichPriceFromSibling(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  product: Record<string, unknown>,
+  branchId: string,
+) {
+  const price = asMoney(product.price)
+  if (price > 0) return product
+  const barcode = typeof product.barcode === "string" ? product.barcode.trim() : ""
+  if (!barcode) return product
+
+  const { data } = await supabase
+    .from("products")
+    .select("price")
+    .eq("barcode", barcode)
+    .eq("is_active", true)
+    .neq("branch_id", branchId)
+    .gt("price", 0)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (data && asMoney(data.price) > 0) {
+    return { ...product, price: asMoney(data.price), price_from_sibling: true }
+  }
+  return product
+}
 
 export async function GET(request: Request) {
   try {
@@ -61,7 +103,10 @@ export async function GET(request: Request) {
       if (!data) {
         return NextResponse.json({ error: "Producto no encontrado en esta sucursal", product: null, products: [] }, { status: 404 })
       }
-      return NextResponse.json({ product: data, products: [data] })
+      const enriched = normalizeProduct(
+        await enrichPriceFromSibling(supabase, data as Record<string, unknown>, branchId),
+      )
+      return NextResponse.json({ product: enriched, products: [enriched] })
     }
 
     const sanitized = query.replace(/[%_,()]/g, " ").trim()
@@ -78,7 +123,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    const products = data || []
+    const products = await Promise.all(
+      (data || []).map(async (row) =>
+        normalizeProduct(await enrichPriceFromSibling(supabase, row as Record<string, unknown>, branchId)),
+      ),
+    )
     if (products.length === 0) {
       return NextResponse.json({ error: "No se encontraron productos", products: [] }, { status: 404 })
     }

@@ -197,10 +197,10 @@ export default function POSPage() {
   }
 
   const isLowStock = (product: Product) =>
-    product.stock_quantity <= (product.min_stock_level ?? 10)
+    product.stock_quantity <= (product.min_stock_level ?? 5)
 
   const suggestedOrderQty = (product: Product) => {
-    const min = product.min_stock_level ?? 10
+    const min = product.min_stock_level ?? 5
     return Math.max(1, min - product.stock_quantity)
   }
 
@@ -1001,7 +1001,7 @@ export default function POSPage() {
         } else if (expirationStatus?.status === "expiring") {
           name += " !"
         }
-        const minStock = product.min_stock_level || 10
+        const minStock = product.min_stock_level || 5
         if (product.stock_quantity <= minStock) {
           name += " <B>"
         }
@@ -1017,7 +1017,7 @@ export default function POSPage() {
     })
 
     if (includeStockBajo) {
-      const lowStockProducts = filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 10))
+      const lowStockProducts = filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 5))
       receipt += center("[ STOCK BAJO ]") + "\n"
       receipt += line() + "\n"
       if (lowStockProducts.length > 0) {
@@ -1079,7 +1079,7 @@ export default function POSPage() {
     receipt += line() + "\n"
     receipt += `Total productos: ${pad(filteredBySection.length.toString(), 20, "right")}\n`
     receipt += `Secciones: ${pad(sortedSections.length.toString(), 24, "right")}\n`
-    receipt += `Stock bajo: ${pad(filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 10)).length.toString(), 23, "right")}\n`
+    receipt += `Stock bajo: ${pad(filteredBySection.filter((p: any) => p.stock_quantity <= (p.min_stock_level || 5)).length.toString(), 23, "right")}\n`
     receipt += `Por vencer: ${pad(
       filteredBySection
         .filter((p: any) => {
@@ -1536,7 +1536,7 @@ export default function POSPage() {
                             )}
                             <Badge
                               variant={
-                                product.stock_quantity > (product.min_stock_level ?? 10)
+                                product.stock_quantity > (product.min_stock_level ?? 5)
                                   ? "default"
                                   : product.stock_quantity > 0
                                     ? "secondary"

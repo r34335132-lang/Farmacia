@@ -11,6 +11,7 @@ import { BarcodeScanner } from "@/components/barcode-scanner"
 import { formatMoney, roundMoney } from "@/lib/money"
 import { todayLocalISODate } from "@/lib/periods"
 import { Loader2, Trash2 } from "lucide-react"
+import Link from "next/link"
 
 type Branch = { id: string; name: string }
 
@@ -22,6 +23,7 @@ type ProductHit = {
   cost_price: number
   price?: number
   section?: string | null
+  price_from_sibling?: boolean
 }
 
 type CheckRow = {
@@ -91,8 +93,9 @@ export function InventoryRevision({
     setProduct(hit)
     setMatches([])
     setCounted("")
-    setEditStock(String(hit.stock_quantity ?? 0))
-    setEditPrice(String(hit.price ?? 0))
+    setEditStock(String(Number(hit.stock_quantity) || 0))
+    const salePrice = Number(hit.price)
+    setEditPrice(Number.isFinite(salePrice) ? String(salePrice) : "0")
     setEditSection(hit.section || "")
     setSearch(hit.barcode || hit.name)
     setLookupError("")
@@ -250,7 +253,7 @@ export function InventoryRevision({
           return
         }
       }
-      setMessage(`Se reportaron ${rows.length} faltantes. El descuento de esta sucursal queda pendiente de aprobación.`)
+      setMessage(`Se reportaron ${rows.length} faltantes. Quedaron en el módulo de faltantes para revisión.`)
       setRows([])
       loadBranchTotals()
     } finally {
@@ -319,18 +322,30 @@ export function InventoryRevision({
       </Card>
 
       <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Pendiente de revisar</p>
-            <p className="text-xl font-bold">{formatMoney(branchTotals.pending)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Aprobado (descuento sucursal)</p>
-            <p className="text-xl font-bold text-destructive">{formatMoney(branchTotals.approved)}</p>
-          </CardContent>
-        </Card>
+        <Link href={isAdmin ? "/admin/faltantes" : "/cajero/faltantes"} className="block">
+          <Card className="h-full transition-shadow hover:shadow-md">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Pendiente de revisar · ver faltantes</p>
+              <p className="text-xl font-bold">{formatMoney(branchTotals.pending)}</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href={isAdmin ? "/admin/faltantes" : "/cajero/faltantes"} className="block">
+          <Card className="h-full transition-shadow hover:shadow-md">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Aprobado (descuento sucursal)</p>
+              <p className="text-xl font-bold text-destructive">{formatMoney(branchTotals.approved)}</p>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Link href={isAdmin ? "/admin/faltantes" : "/cajero/faltantes"}>
+          <Button variant="outline" size="sm">
+            Abrir módulo de faltantes
+          </Button>
+        </Link>
       </div>
 
       <Card>
@@ -369,7 +384,8 @@ export function InventoryRevision({
                 >
                   <p className="font-medium leading-tight">{item.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {item.barcode || "Sin código"} · stock {item.stock_quantity} · {item.section || "sin sección"}
+                    {item.barcode || "Sin código"} · stock {item.stock_quantity} · {formatMoney(Number(item.price) || 0)} ·{" "}
+                    {item.section || "sin sección"}
                   </p>
                 </button>
               ))}
@@ -419,6 +435,13 @@ export function InventoryRevision({
                   value={editPrice}
                   onChange={(e) => setEditPrice(e.target.value)}
                 />
+                {product.price_from_sibling ? (
+                  <p className="text-xs text-amber-700">
+                    Este producto estaba en $0 aquí; se tomó el precio de otra sucursal. Guárdalo si aplica.
+                  </p>
+                ) : Number(editPrice) === 0 ? (
+                  <p className="text-xs text-amber-700">Precio en 0. Revísalo antes de guardar.</p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <Label>Sección</Label>
@@ -480,6 +503,11 @@ export function InventoryRevision({
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Reportar faltantes
           </Button>
+          <Link href={isAdmin ? "/admin/faltantes" : "/cajero/faltantes"} className="block">
+            <Button variant="outline" className="h-11 w-full">
+              Ver / revisar faltantes reportados
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 

@@ -849,6 +849,24 @@ function CajeroContent() {
                 </Button>
               </CardContent>
             </Card>
+
+            <Card
+              className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-primary"
+              onClick={() => router.push("/cajero/faltantes")}
+            >
+              <CardContent className="p-8 text-center">
+                <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ClipboardList className="h-10 w-10 text-amber-700" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Faltantes</h3>
+                <p className="text-muted-foreground text-sm">
+                  Ver y reportar faltantes de esta sucursal
+                </p>
+                <Button className="mt-4 w-full bg-transparent" variant="outline">
+                  Abrir faltantes
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </main>
       </div>
