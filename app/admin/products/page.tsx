@@ -33,6 +33,10 @@ import {
   RotateCcw,
   Archive,
   Printer,
+  PackagePlus,
+  Truck,
+  MoreHorizontal,
+  ShoppingCart,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -40,6 +44,13 @@ import { ImageUpload } from "@/components/image-upload"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const PRODUCTS_PER_PAGE = 50
 
@@ -85,6 +96,24 @@ interface BranchPricingRow {
   markup_percent: string
 }
 
+interface Supplier {
+  id: string
+  name: string
+  phone?: string | null
+}
+
+interface OrderDraftItem {
+  key: string
+  product_id: string
+  product_name: string
+  barcode?: string | null
+  branch_id: string
+  branch_name: string
+  quantity: number
+  image_url?: string | null
+  stock_quantity: number
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [deletedProducts, setDeletedProducts] = useState<Product[]>([])
@@ -109,6 +138,17 @@ export default function ProductsPage() {
   const [skuGroupId, setSkuGroupId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"list" | "grouped">("list")
   const [applyMarkup, setApplyMarkup] = useState(false)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [orderSupplierId, setOrderSupplierId] = useState("")
+  const [orderDraft, setOrderDraft] = useState<OrderDraftItem[]>([])
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false)
+  const [orderProduct, setOrderProduct] = useState<Product | null>(null)
+  const [orderQty, setOrderQty] = useState("5")
+  const [newSupplierName, setNewSupplierName] = useState("")
+  const [newSupplierPhone, setNewSupplierPhone] = useState("")
+  const [creatingSupplier, setCreatingSupplier] = useState(false)
+  const [submittingOrder, setSubmittingOrder] = useState(false)
+  const [orderMessage, setOrderMessage] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -119,7 +159,7 @@ export default function ProductsPage() {
     barcode: "",
     price: "",
     stock_quantity: "",
-    min_stock_level: "10",
+    min_stock_level: "5",
     category: "",
     image_url: "",
     expiration_date: "",
@@ -131,6 +171,7 @@ export default function ProductsPage() {
   useEffect(() => {
     checkAuth()
     loadBranches()
+    loadSuppliers()
   }, [])
 
   useEffect(() => {
@@ -138,6 +179,16 @@ export default function ProductsPage() {
       loadProducts()
     }
   }, [branchFilter, branches.length])
+
+  const loadSuppliers = async () => {
+    const res = await fetch("/api/suppliers")
+    if (!res.ok) return
+    const data = await res.json()
+    setSuppliers(data.suppliers || [])
+    if (data.suppliers?.[0]) {
+      setOrderSupplierId((current) => current || data.suppliers[0].id)
+    }
+  }
 
   const loadBranches = async () => {
     const res = await fetch("/api/branches")
@@ -156,7 +207,7 @@ export default function ProductsPage() {
             price: "",
             cost_price: "",
             stock_quantity: "0",
-            min_stock_level: "10",
+            min_stock_level: "5",
             promotion_price: "",
             expiration_date: "",
             markup_percent: "",
@@ -182,7 +233,7 @@ export default function ProductsPage() {
       price: preset?.price || "",
       cost_price: preset?.cost_price || "",
       stock_quantity: preset?.stock_quantity || "0",
-      min_stock_level: preset?.min_stock_level || "10",
+      min_stock_level: preset?.min_stock_level || "5",
       promotion_price: preset?.promotion_price || "",
       expiration_date: preset?.expiration_date || "",
       markup_percent: preset?.markup_percent || "",
@@ -245,7 +296,7 @@ export default function ProductsPage() {
               ? variant.cost_price.toString()
               : current?.cost_price || "",
             stock_quantity: variant ? variant.stock_quantity.toString() : current?.stock_quantity || "0",
-            min_stock_level: variant ? variant.min_stock_level.toString() : current?.min_stock_level || "10",
+            min_stock_level: variant ? variant.min_stock_level.toString() : current?.min_stock_level || "5",
             promotion_price: variant?.promotion_price
               ? variant.promotion_price.toString()
               : current?.promotion_price || "",
@@ -435,7 +486,7 @@ export default function ProductsPage() {
           price: row.enabled ? Number.parseFloat(row.price) : 0,
           cost_price: row.enabled ? Number.parseFloat(row.cost_price || "0") : 0,
           stock_quantity: row.enabled ? Number.parseInt(row.stock_quantity) : 0,
-          min_stock_level: row.enabled ? Number.parseInt(row.min_stock_level || "10") : 10,
+          min_stock_level: row.enabled ? Number.parseInt(row.min_stock_level || "5") : 5,
           promotion_price: row.promotion_price ? Number.parseFloat(row.promotion_price) : null,
           expiration_date: row.expiration_date || null,
           markup_percent: row.markup_percent === "" ? null : Number.parseFloat(row.markup_percent),
@@ -462,7 +513,7 @@ export default function ProductsPage() {
         barcode: "",
         price: "",
         stock_quantity: "",
-        min_stock_level: "10",
+        min_stock_level: "5",
         category: "",
         image_url: "",
         expiration_date: "",
@@ -563,9 +614,126 @@ export default function ProductsPage() {
     if (daysUntilExpiry < 0) {
       return { status: "expired", days: Math.abs(daysUntilExpiry), variant: "destructive" as const }
     } else if (daysUntilExpiry <= alertThreshold) {
-      return { status: "expiring", days: daysUntilExpiry, variant: "warning" as const }
+      return { status: "expiring", days: daysUntilExpiry, variant: "secondary" as const }
     }
     return null
+  }
+
+  const openAddToOrder = (product: Product) => {
+    const min = product.min_stock_level || 5
+    const suggested = Math.max(1, min - (product.stock_quantity || 0))
+    setOrderProduct(product)
+    setOrderQty(String(suggested))
+    setOrderMessage(null)
+    setOrderDialogOpen(true)
+  }
+
+  const addProductToDraft = () => {
+    if (!orderProduct) return
+    const branchId = orderProduct.branch_id
+    if (!branchId) {
+      setOrderMessage("Este producto no tiene sucursal asignada")
+      return
+    }
+    const quantity = Math.max(1, Number.parseInt(orderQty || "1") || 1)
+    const key = `${orderProduct.id}`
+    setOrderDraft((prev) => {
+      const existing = prev.find((item) => item.key === key)
+      if (existing) {
+        return prev.map((item) =>
+          item.key === key ? { ...item, quantity: item.quantity + quantity } : item,
+        )
+      }
+      return [
+        ...prev,
+        {
+          key,
+          product_id: orderProduct.id,
+          product_name: orderProduct.name,
+          barcode: orderProduct.barcode || null,
+          branch_id: branchId,
+          branch_name: getBranchName(orderProduct),
+          quantity,
+          image_url: orderProduct.image_url || null,
+          stock_quantity: orderProduct.stock_quantity,
+        },
+      ]
+    })
+    setOrderDialogOpen(false)
+    setOrderProduct(null)
+    setOrderMessage(`Agregado al pedido: ${orderProduct.name}`)
+  }
+
+  const createSupplierFromProducts = async () => {
+    if (!newSupplierName.trim()) return
+    setCreatingSupplier(true)
+    setOrderMessage(null)
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSupplierName, phone: newSupplierPhone }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.hint ? `${json.error}. ${json.hint}` : json.error || "No se pudo crear")
+      setSuppliers((prev) => [...prev, json.supplier].sort((a, b) => a.name.localeCompare(b.name, "es")))
+      setOrderSupplierId(json.supplier.id)
+      setNewSupplierName("")
+      setNewSupplierPhone("")
+    } catch (err) {
+      setOrderMessage(err instanceof Error ? err.message : "Error al crear proveedor")
+    } finally {
+      setCreatingSupplier(false)
+    }
+  }
+
+  const submitOrderDraft = async () => {
+    if (!orderSupplierId) {
+      setOrderMessage("Elige o crea un proveedor")
+      return
+    }
+    if (orderDraft.length === 0) {
+      setOrderMessage("Agrega productos al pedido desde Acciones")
+      return
+    }
+    setSubmittingOrder(true)
+    setOrderMessage(null)
+    try {
+      const byBranch = new Map<string, OrderDraftItem[]>()
+      for (const item of orderDraft) {
+        const list = byBranch.get(item.branch_id) || []
+        list.push(item)
+        byBranch.set(item.branch_id, list)
+      }
+      const created: string[] = []
+      for (const [branchId, rows] of byBranch) {
+        const res = await fetch("/api/supply-requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            branch_id: branchId,
+            supplier_id: orderSupplierId,
+            notes: "Pedido desde Productos",
+            items: rows.map((row) => ({
+              product_id: row.product_id,
+              product_name: row.product_name,
+              barcode: row.barcode,
+              quantity: row.quantity,
+              photo_url: row.image_url,
+            })),
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || "No se pudo guardar el pedido")
+        created.push(json.request?.request_number || "Pedido")
+      }
+      setOrderDraft([])
+      setOrderMessage(`Pedido enviado: ${created.join(", ")}`)
+    } catch (err) {
+      setOrderMessage(err instanceof Error ? err.message : "Error al enviar pedido")
+    } finally {
+      setSubmittingOrder(false)
+    }
   }
 
   const getUniqueSections = () => {
@@ -840,10 +1008,74 @@ export default function ProductsPage() {
             <Package className="h-6 w-6 text-primary" />
             <h1 className="text-xl font-bold">Gestión de Productos</h1>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin/inventario/pedido")}>
+              <PackagePlus className="h-4 w-4 mr-1" />
+              Pedir stock 0
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin/pedidos-globales")}>
+              <ShoppingCart className="h-4 w-4 mr-1" />
+              Ver pedidos
+            </Button>
+            <Badge variant="secondary" className="hidden sm:inline-flex">
+              <Truck className="h-3 w-3 mr-1" />
+              {suppliers.length} proveedores
+            </Badge>
+          </div>
         </div>
       </header>
 
-      <div className="p-6 space-y-6">
+      <div className={`p-6 space-y-6 ${orderDraft.length > 0 ? "pb-36" : ""}`}>
+        <Card className="border-emerald-200 bg-emerald-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Truck className="h-4 w-4" />
+              Pedido con proveedor
+            </CardTitle>
+            <CardDescription>
+              En Acciones usa “Agregar a pedido”. Elige proveedor aquí y al final envía la lista por sucursal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[1fr_1fr_auto]">
+              <Select value={orderSupplierId || undefined} onValueChange={setOrderSupplierId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar proveedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Input
+                  placeholder="Nuevo proveedor"
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                />
+                <Input
+                  placeholder="Teléfono"
+                  value={newSupplierPhone}
+                  onChange={(e) => setNewSupplierPhone(e.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={creatingSupplier || !newSupplierName.trim()}
+                onClick={createSupplierFromProducts}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Crear proveedor
+              </Button>
+            </div>
+            {orderMessage ? <p className="text-sm text-emerald-900">{orderMessage}</p> : null}
+          </CardContent>
+        </Card>
+
         <div className="flex flex-col sm:flex-col gap-4 justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -900,7 +1132,7 @@ export default function ProductsPage() {
                       barcode: "",
                       price: "",
                       stock_quantity: "",
-                      min_stock_level: "10",
+                      min_stock_level: "5",
                       category: "",
                       image_url: "",
                       expiration_date: "",
@@ -1383,9 +1615,20 @@ export default function ProductsPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Button variant="outline" size="sm" onClick={() => handleEdit(items[0])}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button variant="outline" size="sm" onClick={() => handleEdit(items[0])}>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-emerald-700"
+                                  onClick={() => openAddToOrder(items[0])}
+                                  title="Agregar a pedido"
+                                >
+                                  <PackagePlus className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1491,14 +1734,32 @@ export default function ProductsPage() {
                             <Badge variant="outline">Activo</Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleEdit(product)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="ml-1 hidden lg:inline">Acciones</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-52">
+                                <DropdownMenuItem onClick={() => openAddToOrder(product)}>
+                                  <PackagePlus className="mr-2 h-4 w-4" />
+                                  Agregar a pedido
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEdit(product)}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  Editar
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDelete(product.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
                       )
@@ -1733,6 +1994,72 @@ export default function ProductsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Agregar a pedido</DialogTitle>
+            <DialogDescription>
+              {orderProduct
+                ? `${orderProduct.name} · ${getBranchName(orderProduct)} · stock ${orderProduct.stock_quantity}`
+                : "Producto"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Cantidad a pedir</Label>
+              <Input
+                type="number"
+                min={1}
+                value={orderQty}
+                onChange={(e) => setOrderQty(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Proveedor actual:{" "}
+              <strong>{suppliers.find((s) => s.id === orderSupplierId)?.name || "sin elegir"}</strong>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOrderDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={addProductToDraft} className="bg-emerald-600 hover:bg-emerald-700">
+              <PackagePlus className="mr-2 h-4 w-4" />
+              Agregar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {orderDraft.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-white p-4 shadow-lg">
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-bold">
+                Pedido listo · {orderDraft.length} producto{orderDraft.length === 1 ? "" : "s"} ·{" "}
+                {orderDraft.reduce((sum, item) => sum + item.quantity, 0)} pzas
+              </p>
+              <p className="truncate text-sm text-muted-foreground">
+                {suppliers.find((s) => s.id === orderSupplierId)?.name || "Elige proveedor arriba"} ·{" "}
+                {orderDraft.map((item) => `${item.product_name} (${item.quantity})`).join(", ")}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setOrderDraft([])}>
+                Vaciar
+              </Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={submittingOrder || !orderSupplierId}
+                onClick={submitOrderDraft}
+              >
+                {submittingOrder ? "Enviando..." : "Enviar pedido"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
