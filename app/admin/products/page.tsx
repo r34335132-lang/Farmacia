@@ -140,10 +140,12 @@ export default function ProductsPage() {
   const [applyMarkup, setApplyMarkup] = useState(false)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [orderSupplierId, setOrderSupplierId] = useState("")
+  const [orderBranchId, setOrderBranchId] = useState("")
   const [orderDraft, setOrderDraft] = useState<OrderDraftItem[]>([])
   const [orderDialogOpen, setOrderDialogOpen] = useState(false)
   const [orderProduct, setOrderProduct] = useState<Product | null>(null)
   const [orderQty, setOrderQty] = useState("5")
+  const [orderDialogError, setOrderDialogError] = useState<string | null>(null)
   const [newSupplierName, setNewSupplierName] = useState("")
   const [newSupplierPhone, setNewSupplierPhone] = useState("")
   const [creatingSupplier, setCreatingSupplier] = useState(false)
@@ -624,19 +626,62 @@ export default function ProductsPage() {
     const suggested = Math.max(1, min - (product.stock_quantity || 0))
     setOrderProduct(product)
     setOrderQty(String(suggested))
+    setOrderBranchId(product.branch_id || branches[0]?.id || "")
+    setOrderDialogError(null)
     setOrderMessage(null)
     setOrderDialogOpen(true)
   }
 
+  const resolveProductForBranch = (product: Product, branchId: string) => {
+    if (product.branch_id === branchId) {
+      return {
+        product_id: product.id,
+        product_name: product.name,
+        barcode: product.barcode || null,
+        image_url: product.image_url || null,
+        stock_quantity: product.stock_quantity,
+      }
+    }
+    const sibling = products.find(
+      (p) =>
+        p.branch_id === branchId &&
+        p.is_active !== false &&
+        ((product.barcode && p.barcode === product.barcode) ||
+          (product.sku_group_id && p.sku_group_id === product.sku_group_id) ||
+          p.name.toLowerCase() === product.name.toLowerCase()),
+    )
+    if (sibling) {
+      return {
+        product_id: sibling.id,
+        product_name: sibling.name,
+        barcode: sibling.barcode || product.barcode || null,
+        image_url: sibling.image_url || product.image_url || null,
+        stock_quantity: sibling.stock_quantity,
+      }
+    }
+    return {
+      product_id: product.id,
+      product_name: product.name,
+      barcode: product.barcode || null,
+      image_url: product.image_url || null,
+      stock_quantity: product.stock_quantity,
+    }
+  }
+
   const addProductToDraft = () => {
     if (!orderProduct) return
-    const branchId = orderProduct.branch_id
-    if (!branchId) {
-      setOrderMessage("Este producto no tiene sucursal asignada")
+    if (!orderBranchId) {
+      setOrderDialogError("Elige la sucursal del pedido")
+      return
+    }
+    if (!orderSupplierId) {
+      setOrderDialogError("Elige o crea un proveedor")
       return
     }
     const quantity = Math.max(1, Number.parseInt(orderQty || "1") || 1)
-    const key = `${orderProduct.id}`
+    const branch = branches.find((b) => b.id === orderBranchId)
+    const resolved = resolveProductForBranch(orderProduct, orderBranchId)
+    const key = `${resolved.product_id}-${orderBranchId}-${orderSupplierId}`
     setOrderDraft((prev) => {
       const existing = prev.find((item) => item.key === key)
       if (existing) {
@@ -648,25 +693,34 @@ export default function ProductsPage() {
         ...prev,
         {
           key,
-          product_id: orderProduct.id,
-          product_name: orderProduct.name,
-          barcode: orderProduct.barcode || null,
-          branch_id: branchId,
-          branch_name: getBranchName(orderProduct),
+          product_id: resolved.product_id,
+          product_name: resolved.product_name,
+          barcode: resolved.barcode,
+          branch_id: orderBranchId,
+          branch_name: branch?.name || "Sucursal",
           quantity,
-          image_url: orderProduct.image_url || null,
-          stock_quantity: orderProduct.stock_quantity,
+          image_url: resolved.image_url,
+          stock_quantity: resolved.stock_quantity,
         },
       ]
     })
     setOrderDialogOpen(false)
     setOrderProduct(null)
-    setOrderMessage(`Agregado al pedido: ${orderProduct.name}`)
+    setOrderDialogError(null)
+    setOrderMessage(
+      `Agregado: ${orderProduct.name} · ${branch?.name || "sucursal"} · proveedor ${
+        suppliers.find((s) => s.id === orderSupplierId)?.name || ""
+      }`,
+    )
   }
 
   const createSupplierFromProducts = async () => {
-    if (!newSupplierName.trim()) return
+    if (!newSupplierName.trim()) {
+      setOrderDialogError("Escribe el nombre del proveedor")
+      return
+    }
     setCreatingSupplier(true)
+    setOrderDialogError(null)
     setOrderMessage(null)
     try {
       const res = await fetch("/api/suppliers", {
@@ -680,8 +734,9 @@ export default function ProductsPage() {
       setOrderSupplierId(json.supplier.id)
       setNewSupplierName("")
       setNewSupplierPhone("")
+      setOrderMessage(`Proveedor creado: ${json.supplier.name}`)
     } catch (err) {
-      setOrderMessage(err instanceof Error ? err.message : "Error al crear proveedor")
+      setOrderDialogError(err instanceof Error ? err.message : "Error al crear proveedor")
     } finally {
       setCreatingSupplier(false)
     }
@@ -1033,7 +1088,7 @@ export default function ProductsPage() {
               Pedido con proveedor
             </CardTitle>
             <CardDescription>
-              En Acciones usa “Agregar a pedido”. Elige proveedor aquí y al final envía la lista por sucursal.
+              En Acciones → Agregar a pedido: eliges sucursal, proveedor (o lo creas) y cantidad.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1996,16 +2051,72 @@ export default function ProductsPage() {
       </div>
 
       <Dialog open={orderDialogOpen} onOpenChange={setOrderDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Agregar a pedido</DialogTitle>
             <DialogDescription>
               {orderProduct
-                ? `${orderProduct.name} · ${getBranchName(orderProduct)} · stock ${orderProduct.stock_quantity}`
+                ? `${orderProduct.name} · stock actual ${orderProduct.stock_quantity}`
                 : "Producto"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Sucursal</Label>
+              <Select value={orderBranchId || undefined} onValueChange={setOrderBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Elegir sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Proveedor</Label>
+              <Select value={orderSupplierId || undefined} onValueChange={setOrderSupplierId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Elegir proveedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <Label className="text-sm">Crear proveedor nuevo</Label>
+              <Input
+                placeholder="Nombre del proveedor"
+                value={newSupplierName}
+                onChange={(e) => setNewSupplierName(e.target.value)}
+              />
+              <Input
+                placeholder="Teléfono (opcional)"
+                value={newSupplierPhone}
+                onChange={(e) => setNewSupplierPhone(e.target.value)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={creatingSupplier || !newSupplierName.trim()}
+                onClick={createSupplierFromProducts}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {creatingSupplier ? "Creando..." : "Crear y seleccionar proveedor"}
+              </Button>
+            </div>
+
             <div className="space-y-2">
               <Label>Cantidad a pedir</Label>
               <Input
@@ -2015,16 +2126,18 @@ export default function ProductsPage() {
                 onChange={(e) => setOrderQty(e.target.value)}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Proveedor actual:{" "}
-              <strong>{suppliers.find((s) => s.id === orderSupplierId)?.name || "sin elegir"}</strong>
-            </p>
+
+            {orderDialogError ? <p className="text-sm text-destructive">{orderDialogError}</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOrderDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={addProductToDraft} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button
+              onClick={addProductToDraft}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={!orderBranchId || !orderSupplierId}
+            >
               <PackagePlus className="mr-2 h-4 w-4" />
               Agregar
             </Button>
@@ -2041,8 +2154,10 @@ export default function ProductsPage() {
                 {orderDraft.reduce((sum, item) => sum + item.quantity, 0)} pzas
               </p>
               <p className="truncate text-sm text-muted-foreground">
-                {suppliers.find((s) => s.id === orderSupplierId)?.name || "Elige proveedor arriba"} ·{" "}
-                {orderDraft.map((item) => `${item.product_name} (${item.quantity})`).join(", ")}
+                {suppliers.find((s) => s.id === orderSupplierId)?.name || "Elige proveedor"} ·{" "}
+                {orderDraft
+                  .map((item) => `${item.product_name} (${item.quantity}) → ${item.branch_name}`)
+                  .join(", ")}
               </p>
             </div>
             <div className="flex gap-2">

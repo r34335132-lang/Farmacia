@@ -11,13 +11,22 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CheckCircle2, Download, Printer, RefreshCw, ShoppingCart } from "lucide-react"
+import { CheckCircle2, Download, Pencil, Printer, RefreshCw, ShoppingCart, Trash2 } from "lucide-react"
 import {
   buildSupplyRequestDocumentHtml,
   downloadSupplyRequestDocument,
   openSupplyRequestDocument,
   type BuyListItem,
 } from "@/lib/supply-request-document"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 
 type BranchInfo = { id: string; name: string }
 
@@ -28,19 +37,29 @@ type SupplierBuyGroup = {
   total_units: number
 }
 
+type SupplierInfo = { id: string; name: string }
+
+type RequestItem = {
+  id: string
+  product_name: string
+  barcode?: string | null
+  quantity: number
+  photo_url?: string | null
+  product_id?: string | null
+}
+
 type RequestRow = {
   id: string
   request_number: string
   status: string
   created_at: string
-  branches?: { name: string } | { name: string }[] | null
-  suppliers?: { name: string } | { name: string }[] | null
+  branch_id?: string
+  supplier_id?: string | null
+  notes?: string | null
+  branches?: { id?: string; name: string } | { id?: string; name: string }[] | null
+  suppliers?: { id?: string; name: string } | { id?: string; name: string }[] | null
   profiles?: { full_name: string } | { full_name: string }[] | null
-  supply_request_items?: {
-    product_name: string
-    quantity: number
-    photo_url?: string | null
-  }[]
+  supply_request_items?: RequestItem[]
 }
 
 interface BranchNeed {
@@ -100,6 +119,13 @@ export default function PedidosGlobalesPage() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [suggestionsLoaded, setSuggestionsLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [suppliers, setSuppliers] = useState<SupplierInfo[]>([])
+  const [supplierFilter, setSupplierFilter] = useState("all")
+  const [editing, setEditing] = useState<RequestRow | null>(null)
+  const [editBranchId, setEditBranchId] = useState("")
+  const [editSupplierId, setEditSupplierId] = useState("")
+  const [editItems, setEditItems] = useState<RequestItem[]>([])
+  const [editSaving, setEditSaving] = useState(false)
 
   const branchQuery = branchId === "all" ? "" : `?branch_id=${branchId}`
   const selectedBranchName =
@@ -118,20 +144,23 @@ export default function PedidosGlobalesPage() {
     setLoading(true)
     setError(null)
     try {
-      const [buyRes, reqRes, branchRes] = await Promise.all([
+      const [buyRes, reqRes, branchRes, supplierRes] = await Promise.all([
         fetch(`/api/supply-requests/buy-list${branchQuery}`),
         fetch(`/api/supply-requests${branchQuery}`),
         fetch("/api/branches"),
+        fetch("/api/suppliers"),
       ])
       const buyData = await buyRes.json()
       const reqData = await reqRes.json()
       const branchData = await branchRes.json()
+      const supplierData = await supplierRes.json().catch(() => ({ suppliers: [] }))
       if (!buyRes.ok) throw new Error(buyData.error || "No se pudo cargar lo pedido en caja")
       if (!reqRes.ok) throw new Error(reqData.error || "No se pudieron cargar los pedidos")
       setBuyList(buyData.items || [])
       setBuyBySupplier(buyData.by_supplier || [])
       setRequests(reqData.requests || [])
       setBranches(branchData.branches || [])
+      setSuppliers(supplierData.suppliers || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar")
     } finally {
@@ -232,6 +261,122 @@ export default function PedidosGlobalesPage() {
     if (res.ok) loadCaja()
   }
 
+  const openEdit = (row: RequestRow) => {
+    setEditing(row)
+    setEditBranchId(row.branch_id || "")
+    setEditSupplierId(row.supplier_id || "")
+    setEditItems([...(row.supply_request_items || [])].map((item) => ({ ...item })))
+  }
+
+  const saveEdit = async () => {
+    if (!editing) return
+    setEditSaving(true)
+    setError(null)
+    try {
+      const originalIds = new Set((editing.supply_request_items || []).map((item) => item.id))
+      const currentIds = new Set(editItems.map((item) => item.id))
+      const delete_item_ids = [...originalIds].filter((id) => !currentIds.has(id))
+
+      const res = await fetch("/api/supply-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editing.id,
+          branch_id: editBranchId || undefined,
+          supplier_id: editSupplierId || null,
+          delete_item_ids,
+          items: editItems.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            product_name: item.product_name,
+          })),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "No se pudo guardar")
+      setEditing(null)
+      await loadCaja()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al editar")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const deleteRequest = async (id: string, number: string) => {
+    if (!confirm(`¿Eliminar el pedido ${number}? Esta acción no se puede deshacer.`)) return
+    const res = await fetch("/api/supply-requests", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setError(json.error || "No se pudo eliminar")
+      return
+    }
+    if (editing?.id === id) setEditing(null)
+    loadCaja()
+  }
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter((row) => {
+      if (supplierFilter === "all") return true
+      if (supplierFilter === "none") return !row.supplier_id
+      return row.supplier_id === supplierFilter
+    })
+  }, [requests, supplierFilter])
+
+  const requestsBySupplierBranch = useMemo(() => {
+    const supplierMap = new Map<
+      string,
+      {
+        supplier_id: string | null
+        supplier_name: string
+        branches: Map<
+          string,
+          {
+            branch_id: string
+            branch_name: string
+            requests: RequestRow[]
+          }
+        >
+      }
+    >()
+
+    for (const row of filteredRequests) {
+      const supplierKey = row.supplier_id || "sin-proveedor"
+      const supplierName = relName(row.suppliers) !== "—" ? relName(row.suppliers) : "Sin proveedor"
+      if (!supplierMap.has(supplierKey)) {
+        supplierMap.set(supplierKey, {
+          supplier_id: row.supplier_id || null,
+          supplier_name: supplierName,
+          branches: new Map(),
+        })
+      }
+      const supplierBucket = supplierMap.get(supplierKey)!
+      const branchKey = row.branch_id || relName(row.branches)
+      const branchName = relName(row.branches)
+      if (!supplierBucket.branches.has(branchKey)) {
+        supplierBucket.branches.set(branchKey, {
+          branch_id: row.branch_id || branchKey,
+          branch_name: branchName,
+          requests: [],
+        })
+      }
+      supplierBucket.branches.get(branchKey)!.requests.push(row)
+    }
+
+    return [...supplierMap.values()]
+      .map((supplier) => ({
+        ...supplier,
+        branches: [...supplier.branches.values()].sort((a, b) =>
+          a.branch_name.localeCompare(b.branch_name, "es"),
+        ),
+      }))
+      .sort((a, b) => a.supplier_name.localeCompare(b.supplier_name, "es"))
+  }, [filteredRequests])
+
   return (
     <div className="min-h-screen bg-background">
       <AdminPageHeader
@@ -265,9 +410,9 @@ export default function PedidosGlobalesPage() {
       <div className="space-y-6 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Ver</span>
+            <span className="text-sm font-medium">Sucursal</span>
             <Select value={branchId} onValueChange={setBranchId}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="w-56">
                 <SelectValue placeholder="Sucursal" />
               </SelectTrigger>
               <SelectContent>
@@ -275,6 +420,23 @@ export default function PedidosGlobalesPage() {
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
                     {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Proveedor</span>
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los proveedores</SelectItem>
+                <SelectItem value="none">Sin proveedor</SelectItem>
+                {suppliers.map((supplier) => (
+                  <SelectItem key={supplier.id} value={supplier.id}>
+                    {supplier.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -371,42 +533,80 @@ export default function PedidosGlobalesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Pedidos enviados desde caja</CardTitle>
+            <CardTitle>Pedidos por proveedor y sucursal</CardTitle>
+            <CardDescription>
+              Revisa, edita cantidades, cambia proveedor/sucursal o elimina cada pedido.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {requests.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Todavía no hay pedidos de caja.</p>
+          <CardContent className="space-y-5">
+            {loading ? (
+              <p className="py-8 text-center text-muted-foreground">Cargando pedidos...</p>
+            ) : filteredRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay pedidos con este filtro.</p>
             ) : (
-              requests.map((row) => (
-                <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded border p-3 text-sm">
-                  <div>
-                    <p className="font-medium">{row.request_number}</p>
-                    <p className="text-muted-foreground">
-                      {relName(row.branches)}
-                      {relName(row.suppliers) !== "—" ? ` · ${relName(row.suppliers)}` : ""} ·{" "}
-                      {relName(row.profiles)} · {new Date(row.created_at).toLocaleString("es-MX")}
-                    </p>
-                    <p>
-                      {(row.supply_request_items || [])
-                        .map((item) => `${item.product_name} (${item.quantity})`)
-                        .join(", ")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={row.status === "submitted" ? "default" : "secondary"}>
-                      {row.status === "submitted"
-                        ? "Pendiente"
-                        : row.status === "purchased"
-                          ? "Comprado"
-                          : "Cancelado"}
+              requestsBySupplierBranch.map((supplierGroup) => (
+                <div key={supplierGroup.supplier_id || "sin"} className="space-y-3 rounded-xl border p-4">
+                  <div className="flex items-center justify-between gap-2 border-b pb-2">
+                    <h3 className="text-lg font-black">{supplierGroup.supplier_name}</h3>
+                    <Badge variant="outline">
+                      {supplierGroup.branches.reduce((sum, b) => sum + b.requests.length, 0)} pedido
+                      {supplierGroup.branches.reduce((sum, b) => sum + b.requests.length, 0) === 1 ? "" : "s"}
                     </Badge>
-                    {row.status === "submitted" && (
-                      <Button size="sm" variant="outline" onClick={() => markPurchased(row.id)}>
-                        <CheckCircle2 className="mr-1 h-4 w-4" />
-                        Ya se compró
-                      </Button>
-                    )}
                   </div>
+
+                  {supplierGroup.branches.map((branchGroup) => (
+                    <div key={branchGroup.branch_id} className="space-y-2 rounded-lg bg-muted/20 p-3">
+                      <p className="text-sm font-semibold text-rose-900">{branchGroup.branch_name}</p>
+                      {branchGroup.requests.map((row) => (
+                        <div
+                          key={row.id}
+                          className="flex flex-col gap-3 rounded-lg border bg-white p-3 sm:flex-row sm:items-start sm:justify-between"
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <p className="font-medium">{row.request_number}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {relName(row.profiles)} · {new Date(row.created_at).toLocaleString("es-MX")}
+                            </p>
+                            <div className="space-y-1">
+                              {(row.supply_request_items || []).map((item) => (
+                                <p key={item.id} className="text-sm">
+                                  {item.product_name}{" "}
+                                  <span className="font-bold text-rose-800">× {item.quantity}</span>
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={row.status === "submitted" ? "default" : "secondary"}>
+                              {row.status === "submitted"
+                                ? "Pendiente"
+                                : row.status === "purchased"
+                                  ? "Comprado"
+                                  : "Cancelado"}
+                            </Badge>
+                            <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
+                              <Pencil className="mr-1 h-4 w-4" />
+                              Editar
+                            </Button>
+                            {row.status === "submitted" && (
+                              <Button size="sm" variant="outline" onClick={() => markPurchased(row.id)}>
+                                <CheckCircle2 className="mr-1 h-4 w-4" />
+                                Ya se compró
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => deleteRequest(row.id, row.request_number)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               ))
             )}
@@ -527,6 +727,109 @@ export default function PedidosGlobalesPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={Boolean(editing)} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar pedido {editing?.request_number}</DialogTitle>
+            <DialogDescription>
+              Ajusta sucursal, proveedor y cantidades. También puedes quitar renglones.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editing && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Sucursal</Label>
+                <Select value={editBranchId || undefined} onValueChange={setEditBranchId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Proveedor</Label>
+                <Select
+                  value={editSupplierId || "none"}
+                  onValueChange={(value) => setEditSupplierId(value === "none" ? "" : value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Proveedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin proveedor</SelectItem>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Productos</Label>
+                {editItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sin productos. Al guardar vacío se puede eliminar el pedido.</p>
+                ) : (
+                  editItems.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{item.product_name}</p>
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="h-9 w-20"
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const quantity = Math.max(1, Number(e.target.value) || 1)
+                          setEditItems((prev) =>
+                            prev.map((row) => (row.id === item.id ? { ...row, quantity } : row)),
+                          )
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => setEditItems((prev) => prev.filter((row) => row.id !== item.id))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="destructive"
+              disabled={editSaving || !editing}
+              onClick={() => editing && deleteRequest(editing.id, editing.request_number)}
+            >
+              Eliminar pedido
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Cancelar
+            </Button>
+            <Button disabled={editSaving || editItems.length === 0} onClick={saveEdit}>
+              {editSaving ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
