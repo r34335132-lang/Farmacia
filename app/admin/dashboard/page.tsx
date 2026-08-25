@@ -30,11 +30,23 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { NotificationManager } from "@/components/notification-manager"
+import dynamic from "next/dynamic"
 import { AdminAlertListener } from "@/components/admin-alert-listener"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatMoney } from "@/lib/money"
 import { cn } from "@/lib/utils"
+
+const NotificationManager = dynamic(
+  () => import("@/components/notification-manager").then((m) => m.NotificationManager),
+  {
+    ssr: false,
+    loading: () => (
+      <Card className="h-full">
+        <CardContent className="py-8 text-sm text-muted-foreground">Cargando alertas...</CardContent>
+      </Card>
+    ),
+  },
+)
 
 interface DashboardStats {
   totalProducts: number

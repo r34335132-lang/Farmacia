@@ -14,6 +14,29 @@ function urlBase64ToUint8Array(base64String: string) {
   return output
 }
 
+function hasNotificationApi() {
+  return typeof window !== "undefined" && "Notification" in window
+}
+
+function safeNotificationPermission(): NotificationPermission {
+  try {
+    if (!hasNotificationApi()) return "denied"
+    return Notification.permission
+  } catch {
+    return "denied"
+  }
+}
+
+function showLocalNotification(title: string, options?: NotificationOptions) {
+  try {
+    if (!hasNotificationApi() || Notification.permission !== "granted") return
+    // En iOS Safari a veces falla fuera de gesto de usuario; no tumbar la app
+    new Notification(title, options)
+  } catch (err) {
+    console.warn("No se pudo mostrar notificación:", err)
+  }
+}
+
 interface NotificationManagerProps {
   userRole?: string
 }
@@ -27,28 +50,32 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
   const [message, setMessage] = useState<string | null>(null)
   const [isSafari, setIsSafari] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    const ua = navigator.userAgent
-    const safari = /^((?!chrome|android).)*safari/i.test(ua)
-    setIsSafari(safari)
-    setIsStandalone(
-      window.matchMedia("(display-mode: standalone)").matches ||
-        // @ts-expect-error iOS Safari
-        Boolean(navigator.standalone),
-    )
+    setMounted(true)
+    try {
+      const ua = navigator.userAgent || ""
+      const safari = /^((?!chrome|android).)*safari/i.test(ua)
+      setIsSafari(safari)
+      setIsStandalone(
+        window.matchMedia("(display-mode: standalone)").matches ||
+          Boolean((navigator as Navigator & { standalone?: boolean }).standalone),
+      )
 
-    const supported =
-      "Notification" in window && "serviceWorker" in navigator && ("PushManager" in window || safari)
-    setIsSupported(supported)
+      const notificationOk = hasNotificationApi()
+      const supported = notificationOk && "serviceWorker" in navigator
+      setIsSupported(supported)
+      setPermission(safeNotificationPermission())
 
-    if ("Notification" in window) {
-      setPermission(Notification.permission)
+      if (userRole === "admin" && notificationOk && Notification.permission === "granted") {
+        void ensurePushSubscription()
+      }
+    } catch (err) {
+      console.warn("NotificationManager init failed:", err)
+      setIsSupported(false)
     }
-
-    if (userRole === "admin" && Notification.permission === "granted") {
-      void ensurePushSubscription()
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole])
 
   const ensurePushSubscription = async () => {
@@ -58,14 +85,14 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
       setPushConfigured(Boolean(metaJson.configured && metaJson.publicKey))
 
       if (!metaJson.configured || !metaJson.publicKey) {
-        setMessage("Faltan claves VAPID en el servidor. Las alertas locales sí funcionan con la app abierta.")
+        setMessage("Las alertas locales sí funcionan con el panel abierto.")
         return
       }
 
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
         setMessage(
           isSafari && !isStandalone
-            ? "En iPhone/iPad: Agregar a pantalla de inicio para recibir push."
+            ? "En iPhone/iPad: Compartir → Agregar a pantalla de inicio para push."
             : "Este navegador no soporta push en segundo plano.",
         )
         return
@@ -95,28 +122,31 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
       setPushReady(true)
       setMessage(null)
     } catch (err) {
-      console.error(err)
+      console.warn(err)
       setMessage(err instanceof Error ? err.message : "No se pudo activar push")
     }
   }
 
   const requestPermission = async () => {
-    if (!isSupported) return
+    if (!hasNotificationApi()) {
+      setMessage("Este teléfono no soporta notificaciones web en el navegador.")
+      return
+    }
     setBusy(true)
     setMessage(null)
     try {
       const next = await Notification.requestPermission()
       setPermission(next)
       if (next === "granted") {
-        new Notification("Farmacia Bienestar", {
-          body: "Notificaciones activadas. Te avisaremos de pedidos, movimiento y el resumen de las 10 pm.",
+        showLocalNotification("Farmacia Bienestar", {
+          body: "Notificaciones activadas.",
           icon: "/icon-192.jpg",
           tag: "welcome",
         })
         if (userRole === "admin") await ensurePushSubscription()
       }
     } catch (error) {
-      console.error("Error requesting notification permission:", error)
+      console.warn("Error requesting notification permission:", error)
       setMessage("No se pudo pedir permiso de notificaciones")
     } finally {
       setBusy(false)
@@ -125,15 +155,27 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
 
   const testNotification = async () => {
     if (permission !== "granted") return
-    new Notification("Prueba de alerta", {
-      body: "Si ves esto, las notificaciones locales funcionan.",
+    showLocalNotification("Prueba de alerta", {
+      body: "Las notificaciones locales funcionan.",
       icon: "/icon-192.jpg",
       tag: "test",
     })
     if (userRole === "admin") await ensurePushSubscription()
   }
 
-  if (!isSupported && userRole !== "admin") return null
+  if (!mounted) {
+    return (
+      <Card className="h-full">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bell className="h-4 w-4" />
+            Alertas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 text-sm text-muted-foreground">Cargando...</CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="h-full">
@@ -143,20 +185,22 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
           Alertas push
         </CardTitle>
         <CardDescription className="text-xs">
-          Pedidos de stock, mucho movimiento en caja y resumen a las 10 pm
+          Pedidos de stock, mucho movimiento en caja y resumen del día
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 px-4 pb-4">
         <div className="flex items-center justify-between text-sm">
           <span>
             Estado:{" "}
-            {permission === "granted"
-              ? pushReady
-                ? "Push activo"
-                : "Permiso OK"
-              : permission === "denied"
-                ? "Bloqueadas"
-                : "No configuradas"}
+            {!hasNotificationApi()
+              ? "No disponible en este navegador"
+              : permission === "granted"
+                ? pushReady
+                  ? "Push activo"
+                  : "Permiso OK"
+                : permission === "denied"
+                  ? "Bloqueadas"
+                  : "No configuradas"}
           </span>
           {permission === "granted" ? (
             <Bell className="h-4 w-4 text-emerald-600" />
@@ -165,27 +209,26 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
           )}
         </div>
 
-        {isSafari && (
+        {(isSafari || !hasNotificationApi()) && (
           <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
             <Smartphone className="mr-1 inline h-3 w-3" />
-            Safari: en iPhone/iPad usa <strong>Compartir → Agregar a pantalla de inicio</strong> (iOS 16.4+). En Mac
-            Safari sí permite notificaciones del sitio.
+            En iPhone: usa <strong>Compartir → Agregar a pantalla de inicio</strong> para mejores alertas.
           </p>
         )}
 
-        {permission === "default" && (
+        {hasNotificationApi() && permission === "default" && (
           <Button onClick={requestPermission} disabled={busy} className="w-full">
             {busy ? "Activando..." : "Activar alertas"}
           </Button>
         )}
 
-        {permission === "granted" && (
+        {hasNotificationApi() && permission === "granted" && (
           <Button onClick={testNotification} variant="outline" className="w-full bg-transparent" disabled={busy}>
             Probar notificación
           </Button>
         )}
 
-        {permission === "denied" && (
+        {permission === "denied" && hasNotificationApi() && (
           <p className="text-xs text-muted-foreground">
             Están bloqueadas. Actívalas en la configuración del navegador o de la app.
           </p>
@@ -193,10 +236,9 @@ export function NotificationManager({ userRole }: NotificationManagerProps) {
 
         {message && <p className="text-xs text-amber-800">{message}</p>}
 
-        {!pushConfigured && permission === "granted" && (
+        {!pushConfigured && permission === "granted" && isSupported && (
           <p className="text-xs text-muted-foreground">
-            Configura VAPID en Vercel para push con la app cerrada. Sin eso, las alertas llegan si tienes el panel
-            abierto.
+            Sin VAPID las alertas llegan si tienes el panel abierto.
           </p>
         )}
       </CardContent>

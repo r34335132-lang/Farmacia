@@ -1,5 +1,5 @@
-const CACHE_NAME = "farmacia-bienestar-v2"
-const urlsToCache = ["/", "/pos", "/admin/dashboard", "/manifest.json", "/icon-192.jpg", "/icon-512.jpg"]
+const CACHE_NAME = "farmacia-bienestar-v3"
+const urlsToCache = ["/", "/manifest.json", "/icon-192.jpg", "/icon-512.jpg"]
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache)))
@@ -16,11 +16,38 @@ self.addEventListener("activate", (event) => {
 })
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url)
-  if (url.pathname.startsWith("/api/")) {
+  const request = event.request
+  if (request.method !== "GET") return
+
+  const url = new URL(request.url)
+  if (url.pathname.startsWith("/api/")) return
+
+  // HTML y JS siempre de red primero (evita pantallas rotas en iPhone por caché vieja)
+  const isNavigate = request.mode === "navigate"
+  const isAsset =
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".html")
+
+  if (isNavigate || isAsset) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => response)
+        .catch(async () => {
+          const cached = await caches.match(request)
+          return cached || caches.match("/")
+        }),
+    )
     return
   }
-  event.respondWith(caches.match(event.request).then((response) => response || fetch(event.request)))
+
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached
+      return fetch(request)
+    }),
+  )
 })
 
 self.addEventListener("push", (event) => {
@@ -54,7 +81,6 @@ self.addEventListener("push", (event) => {
       tag,
       renotify: true,
       data: { url },
-      vibrate: [120, 60, 120],
     }),
   )
 })
