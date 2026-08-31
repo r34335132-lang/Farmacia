@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from("shortages")
       .select(
-        "*, products(id, name, barcode, cost_price), branches(id, name), reporter:reported_by(full_name), reviewer:reviewed_by(full_name)",
+        "*, products(id, name, barcode, price), branches(id, name), reporter:reported_by(full_name), reviewer:reviewed_by(full_name)",
         { count: "exact" },
       )
       .order("created_at", { ascending: false })
@@ -81,7 +81,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { product_id, quantity, reason, comment, branch_id: requestedBranchId } = body
+    const {
+      product_id,
+      quantity,
+      reason,
+      comment,
+      unit_cost: unitCostRaw,
+      branch_id: requestedBranchId,
+    } = body
 
     if (!product_id) {
       return NextResponse.json({ error: "Producto requerido" }, { status: 400 })
@@ -108,7 +115,7 @@ export async function POST(request: Request) {
 
     const { data: product, error: productError } = await supabase
       .from("products")
-      .select("id, name, branch_id, cost_price, is_active")
+      .select("id, name, barcode, branch_id, price, is_active")
       .eq("id", product_id)
       .single()
 
@@ -120,8 +127,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "El producto no pertenece a la sucursal" }, { status: 400 })
     }
 
-    const unitCost = Number(product.cost_price) || 0
-    const totalAmount = roundMoney(unitCost * qty)
+    // Cobro de faltantes = precio de venta al público (columna unit_cost = precio unitario cobrado)
+    let unitPrice = Number(product.price) || 0
+    const overridePrice = Number(unitCostRaw)
+    if (Number.isFinite(overridePrice) && overridePrice >= 0) {
+      unitPrice = overridePrice
+    }
+
+    if (unitPrice <= 0 && product.barcode) {
+      const { data: sibling } = await supabase
+        .from("products")
+        .select("price")
+        .eq("barcode", product.barcode)
+        .eq("is_active", true)
+        .neq("branch_id", branchId)
+        .gt("price", 0)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (sibling && Number(sibling.price) > 0) {
+        unitPrice = Number(sibling.price)
+      }
+    }
+
+    if ((Number(product.price) || 0) <= 0 && unitPrice > 0) {
+      await supabase.from("products").update({ price: unitPrice, updated_at: new Date().toISOString() }).eq("id", product_id)
+    }
+
+    const totalAmount = roundMoney(unitPrice * qty)
 
     const { data, error } = await supabase
       .from("shortages")
@@ -129,7 +162,7 @@ export async function POST(request: Request) {
         product_id,
         branch_id: branchId,
         quantity: qty,
-        unit_cost: unitCost,
+        unit_cost: unitPrice,
         total_amount: totalAmount,
         reason,
         comment: comment?.trim() || null,
@@ -137,7 +170,7 @@ export async function POST(request: Request) {
         reported_by: context.userId,
       })
       .select(
-        "*, products(id, name, barcode, cost_price), branches(id, name), reporter:reported_by(full_name)",
+        "*, products(id, name, barcode, price), branches(id, name), reporter:reported_by(full_name)",
       )
       .single()
 
@@ -148,9 +181,10 @@ export async function POST(request: Request) {
     await logAudit(supabase, "shortage_reported", "shortage", data.id, branchId, {
       product_id,
       quantity: qty,
-      unit_cost: unitCost,
+      unit_cost: unitPrice,
       total_amount: totalAmount,
       reason,
+      priced_by: "sale_price",
     })
 
     return NextResponse.json({ success: true, shortage: data })

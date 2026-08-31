@@ -163,7 +163,7 @@ export default function AdminFaltantesPage() {
                     <TableHead>Producto</TableHead>
                     <TableHead>Sucursal</TableHead>
                     <TableHead>Cant.</TableHead>
-                    <TableHead>Costo</TableHead>
+                    <TableHead>Precio</TableHead>
                     <TableHead>Importe</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead></TableHead>
@@ -207,13 +207,13 @@ export default function AdminFaltantesPage() {
           <DialogHeader>
             <DialogTitle>Revisión de faltante</DialogTitle>
             <DialogDescription>
-              El importe usa el costo del producto, no el precio de venta. El encargado no puede aprobar su propio reporte.
+              El importe usa el precio de venta al público. El encargado no puede aprobar su propio reporte.
             </DialogDescription>
           </DialogHeader>
           {selected && (
             <div className="space-y-3 text-sm">
               <p><strong>{nameOf(selected.products)}</strong> · {selected.quantity} pzas</p>
-              <p>Importe: {formatMoney(selected.total_amount)} (costo {formatMoney(selected.unit_cost)})</p>
+              <p>Importe: {formatMoney(selected.total_amount)} (precio {formatMoney(selected.unit_cost)})</p>
               <p>Motivo: {selected.reason}</p>
               {selected.comment && <p>Comentario: {selected.comment}</p>}
               <Textarea placeholder="Comentario de revisión" value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} />

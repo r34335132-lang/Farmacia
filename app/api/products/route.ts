@@ -64,13 +64,20 @@ export async function PATCH(request: Request) {
   try {
     const supabase = await createClient()
     const body = await request.json()
-    const { id, stock, price, section, reason = "Actualización desde revisión de inventario" } = body
+    const {
+      id,
+      stock,
+      price,
+      cost_price,
+      section,
+      reason = "Actualización desde revisión de inventario",
+    } = body
 
     if (!id) {
       return NextResponse.json({ error: "Falta el id del producto" }, { status: 400 })
     }
-    if (stock === undefined && price === undefined && section === undefined) {
-      return NextResponse.json({ error: "Indica stock, precio o sección a actualizar" }, { status: 400 })
+    if (stock === undefined && price === undefined && cost_price === undefined && section === undefined) {
+      return NextResponse.json({ error: "Indica stock, precio, costo o sección a actualizar" }, { status: 400 })
     }
 
     const context = await resolveBranchContext(supabase)
@@ -88,7 +95,7 @@ export async function PATCH(request: Request) {
 
     const { data: oldProduct, error: fetchError } = await supabase
       .from("products")
-      .select("stock_quantity, price, section, branch_id")
+      .select("stock_quantity, price, cost_price, section, branch_id")
       .eq("id", id)
       .single()
 
@@ -108,6 +115,14 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: "Precio inválido" }, { status: 400 })
       }
       updates.price = parsedPrice
+    }
+
+    if (cost_price !== undefined) {
+      const parsedCost = Number(cost_price)
+      if (!Number.isFinite(parsedCost) || parsedCost < 0) {
+        return NextResponse.json({ error: "Costo inválido" }, { status: 400 })
+      }
+      updates.cost_price = parsedCost
     }
 
     if (section !== undefined) {

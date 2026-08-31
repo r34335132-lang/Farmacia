@@ -139,9 +139,15 @@ export function InventoryRevision({
     return Math.max(0, Number(product.stock_quantity) - physical)
   }, [product, counted])
 
+  const effectivePrice = useMemo(() => {
+    const fromEdit = Number(editPrice)
+    if (Number.isFinite(fromEdit) && fromEdit >= 0) return fromEdit
+    return Number(product?.price) || 0
+  }, [editPrice, product])
+
   const missingAmount = useMemo(
-    () => roundMoney(missingQty * (Number(product?.cost_price) || 0)),
-    [missingQty, product],
+    () => roundMoney(missingQty * effectivePrice),
+    [missingQty, effectivePrice],
   )
 
   const saveProduct = async () => {
@@ -182,6 +188,7 @@ export function InventoryRevision({
         stock_quantity: stock,
         price,
         section: editSection.trim().toUpperCase() || null,
+        price_from_sibling: false,
       }
       setProduct(updated)
       setMessage("Stock, precio y sección guardados")
@@ -202,6 +209,15 @@ export function InventoryRevision({
       setLookupError("Cuadra o hay de más: no hay faltante para descuento")
       return
     }
+    const unitPrice = effectivePrice
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      setLookupError("El precio de venta no es válido")
+      return
+    }
+    if (unitPrice <= 0) {
+      setLookupError("Pon el precio de venta antes de agregar el faltante")
+      return
+    }
 
     const row: CheckRow = {
       product_id: product.id,
@@ -210,8 +226,8 @@ export function InventoryRevision({
       system_stock: product.stock_quantity,
       counted: physical,
       missing,
-      unit_cost: Number(product.cost_price) || 0,
-      amount: roundMoney(missing * (Number(product.cost_price) || 0)),
+      unit_cost: unitPrice,
+      amount: roundMoney(missing * unitPrice),
     }
 
     setRows((prev) => {
@@ -222,7 +238,7 @@ export function InventoryRevision({
     setCounted("")
     setSearch("")
     setLookupError("")
-    setMessage(`${row.name}: faltan ${missing} pzas.`)
+    setMessage(`${row.name}: faltan ${missing} pzas. · ${formatMoney(row.amount)}`)
   }
 
   const sessionTotal = useMemo(
@@ -242,6 +258,7 @@ export function InventoryRevision({
           body: JSON.stringify({
             product_id: row.product_id,
             quantity: row.missing,
+            unit_cost: row.unit_cost,
             reason: "error_inventario",
             comment: `Revisión física: sistema ${row.system_stock}, conteo ${row.counted}`,
             branch_id: branchId,
@@ -440,7 +457,7 @@ export function InventoryRevision({
                     Este producto estaba en $0 aquí; se tomó el precio de otra sucursal. Guárdalo si aplica.
                   </p>
                 ) : Number(editPrice) === 0 ? (
-                  <p className="text-xs text-amber-700">Precio en 0. Revísalo antes de guardar.</p>
+                  <p className="text-xs text-amber-700">Precio en 0. Revísalo antes de agregar el faltante.</p>
                 ) : null}
               </div>
               <div className="space-y-1">
@@ -454,7 +471,8 @@ export function InventoryRevision({
               </div>
             </div>
             <p className="text-sm">
-              Faltante vs sistema actual: <strong>{missingQty} pzas.</strong> · {formatMoney(missingAmount)} MXN
+              Faltante vs sistema actual: <strong>{missingQty} pzas.</strong> · precio unit.{" "}
+              {formatMoney(effectivePrice)} · <strong>{formatMoney(missingAmount)} MXN</strong>
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button className="h-12" variant="outline" onClick={saveProduct} disabled={savingProduct}>
@@ -486,7 +504,8 @@ export function InventoryRevision({
                   <div>
                     <p className="font-medium leading-tight">{row.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      Sistema {row.system_stock} · tienes {row.counted} · faltan {row.missing}
+                      Sistema {row.system_stock} · tienes {row.counted} · faltan {row.missing} · precio{" "}
+                      {formatMoney(row.unit_cost)}
                     </p>
                     <Badge variant="outline" className="mt-1">
                       {formatMoney(row.amount)}

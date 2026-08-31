@@ -33,31 +33,42 @@ function normalizeProduct(row: Record<string, unknown>) {
   }
 }
 
-async function enrichPriceFromSibling(
+async function enrichMoneyFromSibling(
   supabase: Awaited<ReturnType<typeof createClient>>,
   product: Record<string, unknown>,
   branchId: string,
 ) {
-  const price = asMoney(product.price)
-  if (price > 0) return product
   const barcode = typeof product.barcode === "string" ? product.barcode.trim() : ""
   if (!barcode) return product
 
+  const needsPrice = asMoney(product.price) <= 0
+  const needsCost = asMoney(product.cost_price) <= 0
+  if (!needsPrice && !needsCost) return product
+
   const { data } = await supabase
     .from("products")
-    .select("price")
+    .select("price, cost_price, updated_at")
     .eq("barcode", barcode)
     .eq("is_active", true)
     .neq("branch_id", branchId)
-    .gt("price", 0)
+    .or("price.gt.0,cost_price.gt.0")
     .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .limit(20)
 
-  if (data && asMoney(data.price) > 0) {
-    return { ...product, price: asMoney(data.price), price_from_sibling: true }
+  let next = { ...product }
+  if (needsPrice) {
+    const sibling = (data || []).find((row) => asMoney(row.price) > 0)
+    if (sibling) {
+      next = { ...next, price: asMoney(sibling.price), price_from_sibling: true }
+    }
   }
-  return product
+  if (needsCost) {
+    const sibling = (data || []).find((row) => asMoney(row.cost_price) > 0)
+    if (sibling) {
+      next = { ...next, cost_price: asMoney(sibling.cost_price), cost_from_sibling: true }
+    }
+  }
+  return next
 }
 
 export async function GET(request: Request) {
@@ -104,7 +115,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Producto no encontrado en esta sucursal", product: null, products: [] }, { status: 404 })
       }
       const enriched = normalizeProduct(
-        await enrichPriceFromSibling(supabase, data as Record<string, unknown>, branchId),
+        await enrichMoneyFromSibling(supabase, data as Record<string, unknown>, branchId),
       )
       return NextResponse.json({ product: enriched, products: [enriched] })
     }
@@ -125,7 +136,7 @@ export async function GET(request: Request) {
 
     const products = await Promise.all(
       (data || []).map(async (row) =>
-        normalizeProduct(await enrichPriceFromSibling(supabase, row as Record<string, unknown>, branchId)),
+        normalizeProduct(await enrichMoneyFromSibling(supabase, row as Record<string, unknown>, branchId)),
       ),
     )
     if (products.length === 0) {

@@ -20,6 +20,7 @@ interface Product {
   id: string
   name: string
   barcode?: string
+  price?: number
   cost_price?: number
   stock_quantity: number
 }
@@ -82,7 +83,8 @@ export default function CajeroFaltantesPage() {
   }, [products, search])
 
   const selectedProduct = products.find((p) => p.id === form.product_id)
-  const estimated = selectedProduct ? (Number(selectedProduct.cost_price) || 0) * Number(form.quantity || 0) : 0
+  const unitPrice = Number(selectedProduct?.price) || 0
+  const estimated = selectedProduct ? unitPrice * Number(form.quantity || 0) : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -130,7 +132,7 @@ export default function CajeroFaltantesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Nuevo reporte</CardTitle>
-            <CardDescription>El importe se calcula con el costo, no con el precio de venta.</CardDescription>
+            <CardDescription>El importe se calcula con el precio de venta al público.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -166,7 +168,7 @@ export default function CajeroFaltantesPage() {
               </div>
               <Textarea placeholder="Comentario" value={form.comment} onChange={(e) => setForm({ ...form, comment: e.target.value })} />
               <p className="text-sm text-muted-foreground">
-                Costo unitario: {formatMoney(selectedProduct?.cost_price || 0)} · Importe estimado: {formatMoney(estimated)}
+                Precio unitario: {formatMoney(unitPrice)} · Importe estimado: {formatMoney(estimated)}
               </p>
               {message && <p className="text-sm">{message}</p>}
               <Button type="submit" disabled={saving || !form.product_id}>{saving ? "Enviando..." : "Reportar faltante"}</Button>
