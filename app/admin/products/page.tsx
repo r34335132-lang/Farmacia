@@ -1064,6 +1064,10 @@ export default function ProductsPage() {
             <h1 className="text-xl font-bold">Gestión de Productos</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" onClick={() => router.push("/admin/products/agregado-rapido")}>
+              <QrCode className="h-4 w-4 mr-1" />
+              Agregado rápido
+            </Button>
             <Button variant="outline" size="sm" onClick={() => router.push("/admin/inventario/pedido")}>
               <PackagePlus className="h-4 w-4 mr-1" />
               Pedir stock 0
