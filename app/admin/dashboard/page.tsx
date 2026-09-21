@@ -25,6 +25,7 @@ import { AdminDashboardNav } from "@/components/admin-dashboard-nav"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { formatMoney } from "@/lib/money"
+import { formatAlertLocation } from "@/lib/inventory-alerts"
 import { cn } from "@/lib/utils"
 import {
   ResponsiveContainer,
@@ -132,7 +133,9 @@ export default function AdminDashboard() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
   const [branchFilter, setBranchFilter] = useState("all")
   const [lowStockItems, setLowStockItems] = useState<any[]>([])
+  const [outOfStockItems, setOutOfStockItems] = useState<any[]>([])
   const [expiringItems, setExpiringItems] = useState<any[]>([])
+  const [expiredItems, setExpiredItems] = useState<any[]>([])
   const [recentSales, setRecentSales] = useState<any[]>([])
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,7 +201,9 @@ export default function AdminDashboard() {
       })
       setBranchSummaries(data.branchSummaries || [])
       setLowStockItems(data.lowStockItems || [])
+      setOutOfStockItems(data.outOfStockItems || [])
       setExpiringItems(data.expiringItems || [])
+      setExpiredItems(data.expiredItems || [])
       setRecentSales(data.recentSales || [])
       setTopProducts(data.topProductsByBranch || [])
     } catch (err) {
@@ -537,7 +542,9 @@ export default function AdminDashboard() {
           <section className="space-y-4 pb-8">
             <div>
               <h2 className="text-sm font-semibold tracking-wide">Alertas y actividad</h2>
-              <p className="text-xs text-muted-foreground">Push, inventario y ventas recientes</p>
+              <p className="text-xs text-muted-foreground">
+                Cada alerta muestra sucursal y sección para ubicar el producto
+              </p>
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               <div className="min-h-[220px]">
@@ -547,27 +554,33 @@ export default function AdminDashboard() {
 
               <Card className="border-border/70 shadow-none">
                 <CardHeader className="pb-3 pt-5">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <AlertTriangle className="h-4 w-4 text-destructive" />
-                    Stock bajo
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                      Stock bajo
+                    </span>
+                    <Badge variant="outline">{stats?.lowStockProducts ?? lowStockItems.length}</Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2.5 pb-5">
+                <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
                   {lowStockItems.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Sin alertas</p>
                   ) : (
                     lowStockItems.map((product) => (
-                      <div key={product.id} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3 text-sm">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Stock: {product.stock_quantity}
-                            {product.branch_name ? ` · ${product.branch_name}` : ""}
-                          </p>
+                      <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 font-medium leading-tight">{product.name}</p>
+                          <Badge variant="destructive" className="shrink-0">
+                            {product.stock_quantity}/{product.min_stock_level ?? "—"}
+                          </Badge>
                         </div>
-                        <Badge variant="destructive" className="shrink-0">
-                          Bajo
-                        </Badge>
+                        <p className="mt-1 text-xs font-medium text-foreground/80">
+                          {formatAlertLocation(product)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Stock {product.stock_quantity}
+                          {product.barcode ? ` · ${product.barcode}` : ""}
+                        </p>
                       </div>
                     ))
                   )}
@@ -576,28 +589,70 @@ export default function AdminDashboard() {
 
               <Card className="border-border/70 shadow-none">
                 <CardHeader className="pb-3 pt-5">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Calendar className="h-4 w-4 text-orange-500" />
-                    Por vencer
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-destructive" />
+                      Agotados
+                    </span>
+                    <Badge variant="outline">{outOfStockItems.length}</Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2.5 pb-5">
+                <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
+                  {outOfStockItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin alertas</p>
+                  ) : (
+                    outOfStockItems.map((product) => (
+                      <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 font-medium leading-tight">{product.name}</p>
+                          <Badge variant="destructive" className="shrink-0">
+                            0
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs font-medium text-foreground/80">
+                          {formatAlertLocation(product)}
+                        </p>
+                        {product.barcode ? (
+                          <p className="text-xs text-muted-foreground">{product.barcode}</p>
+                        ) : null}
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70 shadow-none">
+                <CardHeader className="pb-3 pt-5">
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-orange-500" />
+                      Por vencer
+                    </span>
+                    <Badge variant="outline">{stats?.expiringProducts ?? expiringItems.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
                   {expiringItems.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Sin alertas</p>
                   ) : (
                     expiringItems.map((product) => {
                       const expirationDate = new Date(product.expiration_date)
-                      const daysUntilExpiry = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                      const daysUntilExpiry =
+                        product.days_left ??
+                        Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
                       return (
-                        <div key={product.id} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3 text-sm">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {expirationDate.toLocaleDateString("es-ES")}
-                              {product.branch_name ? ` · ${product.branch_name}` : ""}
-                            </p>
+                        <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 font-medium leading-tight">{product.name}</p>
+                            <Badge className="shrink-0 bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
                           </div>
-                          <Badge className="shrink-0 bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
+                          <p className="mt-1 text-xs font-medium text-foreground/80">
+                            {formatAlertLocation(product)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Caduca {expirationDate.toLocaleDateString("es-MX")}
+                            {product.barcode ? ` · ${product.barcode}` : ""}
+                          </p>
                         </div>
                       )
                     })
@@ -606,6 +661,48 @@ export default function AdminDashboard() {
               </Card>
 
               <Card className="border-border/70 shadow-none">
+                <CardHeader className="pb-3 pt-5">
+                  <CardTitle className="flex items-center justify-between gap-2 text-base">
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                      Vencidos
+                    </span>
+                    <Badge variant="outline">{stats?.expiredProducts ?? expiredItems.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
+                  {expiredItems.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin alertas</p>
+                  ) : (
+                    expiredItems.map((product) => {
+                      const expirationDate = new Date(product.expiration_date)
+                      const daysAgo = Math.abs(
+                        product.days_left ??
+                          Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+                      )
+                      return (
+                        <div key={product.id} className="rounded-lg bg-destructive/5 p-3 text-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 font-medium leading-tight">{product.name}</p>
+                            <Badge variant="destructive" className="shrink-0">
+                              {daysAgo}d
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-xs font-medium text-foreground/80">
+                            {formatAlertLocation(product)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Venció {expirationDate.toLocaleDateString("es-MX")}
+                            {product.barcode ? ` · ${product.barcode}` : ""}
+                          </p>
+                        </div>
+                      )
+                    })
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/70 shadow-none lg:col-span-2">
                 <CardHeader className="pb-3 pt-5">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <ShoppingCart className="h-4 w-4" />
@@ -616,20 +713,22 @@ export default function AdminDashboard() {
                   {recentSales.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No hay ventas hoy</p>
                   ) : (
-                    recentSales.map((sale) => (
-                      <div key={sale.id} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3 text-sm">
-                        <div className="min-w-0">
-                          <p className="font-medium">{formatMoney(sale.total_amount)}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {sale.cashier_name || "Cajero"} · {new Date(sale.created_at).toLocaleTimeString()}
-                            {sale.branch_name ? ` · ${sale.branch_name}` : ""}
-                          </p>
+                    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                      {recentSales.map((sale) => (
+                        <div key={sale.id} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3 text-sm">
+                          <div className="min-w-0">
+                            <p className="font-medium">{formatMoney(sale.total_amount)}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {sale.cashier_name || "Cajero"} · {new Date(sale.created_at).toLocaleTimeString()}
+                              {sale.branch_name ? ` · ${sale.branch_name}` : ""}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="shrink-0">
+                            {sale.payment_method}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="shrink-0">
-                          {sale.payment_method}
-                        </Badge>
-                      </div>
-                    ))
+                      ))}
+                    </div>
                   )}
                 </CardContent>
               </Card>

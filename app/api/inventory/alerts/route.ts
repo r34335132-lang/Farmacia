@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext } from "@/lib/branch"
+import { fetchInventoryAlerts } from "@/lib/inventory-alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -18,15 +19,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const branchId = searchParams.get("branch_id")
 
-    const { data, error } = await supabase.rpc("get_inventory_alerts", {
-      p_branch_id: branchId && branchId !== "all" ? branchId : null,
-    })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json(data)
+    const alerts = await fetchInventoryAlerts(supabase, branchId, 150)
+    return NextResponse.json(alerts)
   } catch (error) {
     console.error("GET inventory alerts error:", error)
     return NextResponse.json({ error: "Error al consultar alertas" }, { status: 500 })

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { resolveBranchContext } from "@/lib/branch"
+import { fetchInventoryAlerts } from "@/lib/inventory-alerts"
 
 export const dynamic = "force-dynamic"
 
@@ -19,10 +20,13 @@ export async function GET(request: Request) {
     const branchId = searchParams.get("branch_id")
     const topLimit = Math.min(10, Math.max(3, Number(searchParams.get("top_limit") || 5)))
 
-    const { data, error } = await supabase.rpc("get_admin_dashboard", {
-      p_branch_id: branchId && branchId !== "all" ? branchId : null,
-      p_top_limit: topLimit,
-    })
+    const [{ data, error }, alerts] = await Promise.all([
+      supabase.rpc("get_admin_dashboard", {
+        p_branch_id: branchId && branchId !== "all" ? branchId : null,
+        p_top_limit: topLimit,
+      }),
+      fetchInventoryAlerts(supabase, branchId, 12),
+    ])
 
     if (error) {
       console.error("get_admin_dashboard error:", error)
@@ -35,7 +39,14 @@ export async function GET(request: Request) {
       )
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json({
+      ...(data || {}),
+      // Listas enriquecidas con sucursal + sección (independientes del RPC viejo)
+      lowStockItems: alerts.low_stock,
+      outOfStockItems: alerts.out_of_stock,
+      expiringItems: alerts.expiring,
+      expiredItems: alerts.expired,
+    })
   } catch (error) {
     console.error("dashboard summary error:", error)
     return NextResponse.json({ error: "Error al cargar dashboard" }, { status: 500 })

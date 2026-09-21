@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { formatMoney } from "@/lib/money"
+import { formatAlertLocation } from "@/lib/inventory-alerts"
 import { AlertTriangle, Package, Plus, Search } from "lucide-react"
 import Link from "next/link"
 
@@ -23,6 +24,7 @@ interface Product {
   id: string
   name: string
   barcode?: string
+  section?: string | null
   stock_quantity: number
   min_stock_level: number
   cost_price?: number
@@ -359,11 +361,16 @@ export default function DistribuidoraPage() {
                   <CardContent className="space-y-2">
                     {group.items.length === 0 ? (
                       <p className="text-sm text-muted-foreground">Sin alertas.</p>
-                    ) : group.items.slice(0, 8).map((item) => (
-                      <div key={item.id} className="flex items-center justify-between rounded border p-2 text-sm">
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <p className="text-muted-foreground">{item.branch_name} · stock {item.stock_quantity}</p>
+                    ) : group.items.slice(0, 20).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium leading-tight">{item.name}</p>
+                          <p className="text-xs font-medium text-foreground/80">{formatAlertLocation(item)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Stock {item.stock_quantity}
+                            {item.expiration_date ? ` · caduca ${new Date(item.expiration_date).toLocaleDateString("es-MX")}` : ""}
+                            {item.barcode ? ` · ${item.barcode}` : ""}
+                          </p>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => openEntry(item as Product)}>Entrada</Button>
                       </div>
