@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const branchId = searchParams.get("branch_id")
 
-    const alerts = await fetchInventoryAlerts(supabase, branchId, 150)
+    const alerts = await fetchInventoryAlerts(supabase, branchId, 200)
     return NextResponse.json(alerts)
   } catch (error) {
     console.error("GET inventory alerts error:", error)

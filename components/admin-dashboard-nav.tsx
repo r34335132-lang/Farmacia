@@ -23,6 +23,8 @@ import {
   PiggyBank,
   LayoutDashboard,
   ChevronDown,
+  AlertTriangle,
+  Trophy,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -58,6 +60,7 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
       { href: "/admin/movimientos", title: "Movimientos", description: "Entradas y salidas", icon: History },
       { href: "/admin/distribuidora", title: "Distribuidora", description: "Entradas y alertas", icon: Truck },
       { href: "/admin/faltantes", title: "Faltantes", description: "Revisión y cobro", icon: ClipboardCheck },
+      { href: "/admin/alertas", title: "Alertas stock/caducidad", description: "Bajo, vencidos y por vencer", icon: AlertTriangle },
     ],
   },
   {
@@ -66,6 +69,7 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { href: "/admin/sales", title: "Ventas", description: "Reportes e historial", icon: TrendingUp },
+      { href: "/admin/mas-vendidos", title: "Más vendidos", description: "Ranking por periodo", icon: Trophy },
       { href: "/admin/finanzas", title: "Finanzas", description: "Utilidad y márgenes", icon: DollarSign },
       { href: "/admin/inversion", title: "Inversión", description: "Valor del inventario", icon: PiggyBank },
       { href: "/admin/gastos", title: "Gastos", description: "Nómina y operativos", icon: Wallet },

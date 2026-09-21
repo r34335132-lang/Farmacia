@@ -72,7 +72,7 @@ export async function fetchInventoryAlerts(
   limit = 100,
 ): Promise<InventoryAlerts> {
   const today = todayMexicoCity()
-  const page = Math.min(Math.max(limit, 10), 200)
+  const page = Math.min(Math.max(limit, 10), 500)
 
   const outQuery = withBranchFilter(
     supabase
