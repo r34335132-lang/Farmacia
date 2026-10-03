@@ -104,29 +104,41 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+type NavVariant = "light" | "dark"
+
+function NavLink({ item, onNavigate, variant }: { item: NavItem; onNavigate?: () => void; variant: NavVariant }) {
   const Icon = item.icon
+  const dark = variant === "dark"
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-muted/80",
-        item.tone === "pos" && "bg-rose-50 text-rose-900 hover:bg-rose-100",
-        item.tone === "store" && "hover:bg-primary/5",
+        "group flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition-colors",
+        dark ? "text-white/80 hover:bg-white/10 hover:text-white" : "hover:bg-primary/5",
       )}
     >
-      <Icon
+      <span
         className={cn(
-          "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground",
-          item.tone === "pos" && "text-rose-700",
-          item.tone === "store" && "text-primary",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+          dark
+            ? "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white"
+            : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
         )}
-      />
+      >
+        <Icon className="h-4 w-4" />
+      </span>
       <span className="min-w-0">
-        <span className="block font-medium leading-tight">{item.title}</span>
+        <span className="block truncate font-medium leading-tight">{item.title}</span>
         {item.description ? (
-          <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{item.description}</span>
+          <span
+            className={cn(
+              "mt-0.5 block truncate text-[11px] leading-snug",
+              dark ? "text-white/45" : "text-muted-foreground",
+            )}
+          >
+            {item.description}
+          </span>
         ) : null}
       </span>
     </Link>
@@ -136,21 +148,29 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
 function NavGroupBlock({
   group,
   onNavigate,
+  variant,
 }: {
   group: NavGroup
   onNavigate?: () => void
+  variant: NavVariant
 }) {
   const [open, setOpen] = useState(Boolean(group.defaultOpen))
+  const dark = variant === "dark"
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/50">
+      <CollapsibleTrigger
+        className={cn(
+          "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.14em]",
+          dark ? "text-white/40 hover:text-white/70" : "text-muted-foreground hover:text-foreground",
+        )}
+      >
         {group.title}
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
       </CollapsibleTrigger>
-      <CollapsibleContent className="space-y-0.5 pb-2 pt-0.5">
+      <CollapsibleContent className="space-y-0.5 pb-3 pt-0.5">
         {group.items.map((item) => (
-          <NavLink key={item.href + item.title} item={item} onNavigate={onNavigate} />
+          <NavLink key={item.href + item.title} item={item} onNavigate={onNavigate} variant={variant} />
         ))}
       </CollapsibleContent>
     </Collapsible>
@@ -160,34 +180,59 @@ function NavGroupBlock({
 export function AdminDashboardNav({
   onNavigate,
   className,
+  variant = "light",
 }: {
   onNavigate?: () => void
   className?: string
+  variant?: NavVariant
 }) {
+  const dark = variant === "dark"
   return (
     <nav className={cn("flex h-full flex-col", className)}>
-      <div className="space-y-1 border-b px-3 py-4">
+      <div className="space-y-1.5 px-3 pb-3 pt-2">
         <Link
           href="/admin/dashboard"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg bg-primary/10 px-2.5 py-2.5 text-sm font-semibold text-primary"
+          className={cn(
+            "flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold",
+            dark ? "bg-white text-primary shadow-sm" : "bg-primary text-primary-foreground shadow-sm",
+          )}
         >
-          <LayoutDashboard className="h-4 w-4" />
+          <span
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-xl",
+              dark ? "bg-primary/10" : "bg-white/15",
+            )}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+          </span>
           Resumen
         </Link>
         <Link
           href="/pos"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2.5 text-sm font-semibold text-rose-900 hover:bg-rose-100"
+          className={cn(
+            "flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold transition-colors",
+            dark
+              ? "bg-white/10 text-white ring-1 ring-white/10 hover:bg-white/15"
+              : "bg-primary/10 text-primary hover:bg-primary/15",
+          )}
         >
-          <ShoppingCart className="h-4 w-4" />
+          <span
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-xl",
+              dark ? "bg-white/10" : "bg-white",
+            )}
+          >
+            <ShoppingCart className="h-4 w-4" />
+          </span>
           Punto de venta
         </Link>
       </div>
 
-      <div className="flex-1 space-y-1 overflow-y-auto px-2 py-3">
+      <div className={cn("scrollbar-thin flex-1 space-y-1 overflow-y-auto px-2 py-2", dark && "[scrollbar-color:rgb(255_255_255/0.15)_transparent]")}>
         {DASHBOARD_NAV_GROUPS.map((group) => (
-          <NavGroupBlock key={group.id} group={group} onNavigate={onNavigate} />
+          <NavGroupBlock key={group.id} group={group} onNavigate={onNavigate} variant={variant} />
         ))}
       </div>
     </nav>

@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import {
   Package,
   ShoppingCart,
@@ -15,6 +13,10 @@ import {
   Store,
   Trophy,
   Menu,
+  LogOut,
+  ArrowUpRight,
+  PackageX,
+  Receipt,
   type LucideIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -38,22 +40,17 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
 } from "recharts"
 
 const NotificationManager = dynamic(
   () => import("@/components/notification-manager").then((m) => m.NotificationManager),
   {
     ssr: false,
-    loading: () => (
-      <Card className="h-full">
-        <CardContent className="py-8 text-sm text-muted-foreground">Cargando alertas...</CardContent>
-      </Card>
-    ),
+    loading: () => <div className="bento h-full p-6 text-sm text-muted-foreground">Cargando alertas...</div>,
   },
 )
 
-const CHART_COLORS = ["#8B1538", "#059669", "#d97706", "#2563eb", "#0f766e", "#b45309", "#1d4ed8", "#65a30d"]
+const CHART_COLORS = ["#8B1538", "#c2416b", "#e8a0b4", "#5c0d26", "#d97706", "#0f766e", "#2563eb", "#65a30d"]
 
 interface DashboardStats {
   totalProducts: number
@@ -87,36 +84,124 @@ interface TopProduct {
   rank: number
 }
 
+type Tone = "default" | "danger" | "warning"
+
+const TONE_STYLES: Record<Tone, { icon: string; value: string }> = {
+  default: { icon: "bg-primary/10 text-primary", value: "text-foreground" },
+  danger: { icon: "bg-red-100 text-red-600", value: "text-red-600" },
+  warning: { icon: "bg-amber-100 text-amber-600", value: "text-amber-600" },
+}
+
 function KpiCard({
   title,
   value,
   icon: Icon,
-  valueClassName,
+  tone = "default",
+  href,
 }: {
   title: string
   value: ReactNode
   icon: LucideIcon
-  valueClassName?: string
+  tone?: Tone
+  href?: string
 }) {
+  const styles = TONE_STYLES[tone]
+  const body = (
+    <div className={cn("bento flex h-full flex-col justify-between gap-4 p-4 sm:p-5", href && "bento-hover")}>
+      <div className="flex items-center justify-between">
+        <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", styles.icon)}>
+          <Icon className="h-5 w-5" />
+        </span>
+        {href ? (
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <ArrowUpRight className="h-4 w-4" />
+          </span>
+        ) : null}
+      </div>
+      <div>
+        <p className={cn("text-2xl font-bold tracking-tight sm:text-3xl", styles.value)}>{value}</p>
+        <p className="mt-0.5 text-xs font-medium text-muted-foreground sm:text-sm">{title}</p>
+      </div>
+    </div>
+  )
+  return href ? (
+    <Link href={href} className="block h-full">
+      {body}
+    </Link>
+  ) : (
+    body
+  )
+}
+
+function SectionTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <Card className="h-full border-border/70 shadow-none">
-      <CardContent className="flex items-start justify-between gap-3 p-5">
-        <div className="min-w-0 space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">{title}</p>
-          <p className={cn("text-2xl font-bold tracking-tight", valueClassName)}>{value}</p>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function AlertListCard({
+  href,
+  title,
+  icon: Icon,
+  tone,
+  count,
+  children,
+  empty,
+}: {
+  href: string
+  title: string
+  icon: LucideIcon
+  tone: Tone
+  count: number
+  children: ReactNode
+  empty: boolean
+}) {
+  const styles = TONE_STYLES[tone]
+  return (
+    <Link href={href} className="block h-full">
+      <div className="bento bento-hover flex h-full flex-col p-5">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", styles.icon)}>
+              <Icon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-semibold leading-tight">{title}</p>
+              <p className="text-xs text-muted-foreground">Toca para ver todos</p>
+            </div>
+          </div>
+          <span className={cn("text-2xl font-bold", styles.value)}>{count}</span>
         </div>
-        <div className="rounded-xl bg-muted/70 p-2.5">
-          <Icon className="h-4 w-4 text-muted-foreground" />
+        <div className="scrollbar-thin max-h-72 flex-1 space-y-2 overflow-y-auto pr-1">
+          {empty ? <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">Sin alertas</p> : children}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Link>
+  )
+}
+
+function AlertRow({ name, location, badge, badgeClass }: { name: string; location: string; badge: ReactNode; badgeClass: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm">
+      <div className="min-w-0">
+        <p className="font-medium leading-tight">{name}</p>
+        <p className="mt-1 truncate text-xs text-muted-foreground">{location}</p>
+      </div>
+      <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", badgeClass)}>{badge}</span>
+    </div>
   )
 }
 
 function ChartTooltipMoney({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number; name?: string }>; label?: string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-lg border bg-white px-3 py-2 text-xs shadow-sm">
+    <div className="rounded-xl border bg-white px-3 py-2 text-xs shadow-lg">
       {label ? <p className="mb-1 font-medium">{label}</p> : null}
       {payload.map((entry, idx) => (
         <p key={idx} className="text-muted-foreground">
@@ -141,6 +226,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [userName, setUserName] = useState("")
   const router = useRouter()
   const supabase = createClient()
 
@@ -170,10 +256,12 @@ export default function AdminDashboard() {
       return
     }
 
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    const { data: profile } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single()
     if (profile?.role !== "admin") {
       router.push("/pos")
+      return
     }
+    setUserName(profile?.full_name || "")
   }
 
   const loadDashboardData = async () => {
@@ -247,6 +335,13 @@ export default function AdminDashboard() {
     [branchSummaries],
   )
 
+  const todayTotalForPie = pieToday.reduce((sum, p) => sum + p.value, 0)
+  const branchQuery = branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""
+  const firstName = userName.trim().split(/\s+/)[0] || ""
+  const todayLabel = new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })
+  const selectedBranchName =
+    branchFilter === "all" ? "Todas las sucursales" : branches.find((b) => b.id === branchFilter)?.name || "Sucursal"
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/auth/login")
@@ -254,57 +349,78 @@ export default function AdminDashboard() {
 
   if (loading && !stats) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7f5f3]">
-        <div className="text-lg text-muted-foreground">Cargando dashboard...</div>
+      <div className="app-canvas flex min-h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Cargando dashboard...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f7f5f3]">
-      <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 border-r border-border/60 bg-white lg:flex lg:flex-col">
-        <div className="flex items-center gap-3 border-b px-4 py-4">
-          <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-10 w-10 rounded-full object-cover" />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-primary">Farmacia Bienestar</p>
-            <p className="text-[11px] text-muted-foreground">Panel administrativo</p>
+    <div className="app-canvas flex min-h-screen">
+      <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 p-3 lg:block">
+        <div className="rail-dark flex h-full flex-col overflow-hidden rounded-[28px] shadow-xl shadow-black/10">
+          <div className="flex items-center gap-3 px-5 pb-4 pt-5">
+            <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-11 w-11 rounded-2xl object-cover ring-2 ring-white/10" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">Farmacia Bienestar</p>
+              <p className="text-[11px] text-white/50">Panel administrativo</p>
+            </div>
+          </div>
+          <AdminDashboardNav variant="dark" className="min-h-0 flex-1" />
+          <div className="p-3">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5">
+                <LogOut className="h-4 w-4" />
+              </span>
+              Cerrar sesión
+            </button>
           </div>
         </div>
-        <AdminDashboardNav className="min-h-0 flex-1" />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border/60 bg-white/95 backdrop-blur">
-          <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
-            <div className="flex min-w-0 items-center gap-2">
+        <header className="sticky top-0 z-30 px-3 pt-3 sm:px-6 lg:static lg:px-8 lg:pt-6">
+          <div className="bento flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+            <div className="flex min-w-0 items-center gap-3">
               <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="icon" className="lg:hidden">
-                    <Menu className="h-4 w-4" />
+                  <Button variant="ghost" size="icon" className="h-10 w-10 rounded-2xl bg-muted lg:hidden">
+                    <Menu className="h-5 w-5" />
                     <span className="sr-only">Menú</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[300px] p-0 sm:max-w-[300px]">
-                  <SheetHeader className="border-b px-4 py-4 text-left">
-                    <SheetTitle className="text-primary">Menú</SheetTitle>
+                <SheetContent side="left" className="w-[300px] gap-0 border-0 bg-[oklch(0.2_0.045_350)] p-0 text-white sm:max-w-[300px] [&>button]:text-white!">
+                  <SheetHeader className="flex-row items-center gap-3 space-y-0 px-5 py-5 text-left">
+                    <img src="/logo.jpeg" alt="" className="h-10 w-10 rounded-2xl object-cover" />
+                    <SheetTitle className="text-white">Farmacia Bienestar</SheetTitle>
                   </SheetHeader>
-                  <AdminDashboardNav onNavigate={() => setMobileNavOpen(false)} className="h-[calc(100vh-4.5rem)]" />
+                  <AdminDashboardNav
+                    variant="dark"
+                    onNavigate={() => setMobileNavOpen(false)}
+                    className="h-[calc(100vh-5.5rem)]"
+                  />
                 </SheetContent>
               </Sheet>
-              <div className="min-w-0 lg:hidden">
-                <p className="truncate text-sm font-semibold text-primary">Farmacia Bienestar</p>
-              </div>
-              <div className="hidden min-w-0 lg:block">
-                <h1 className="text-base font-semibold tracking-tight">Resumen</h1>
-                <p className="text-xs text-muted-foreground">
-                  {branchFilter === "all" ? "Todas las sucursales" : "Filtrado por sucursal"}
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
+                  Hola{firstName ? `, ${firstName}` : ""}
+                </h1>
+                <p className="truncate text-xs capitalize text-muted-foreground sm:text-sm">
+                  {todayLabel} · {selectedBranchName}
                 </p>
               </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
               <Select value={branchFilter} onValueChange={setBranchFilter}>
-                <SelectTrigger className="h-9 w-[140px] sm:w-48">
+                <SelectTrigger className="h-10 w-[130px] rounded-full border-0 bg-muted px-4 sm:w-48 lg:bg-white lg:shadow-sm">
                   <SelectValue placeholder="Sucursal" />
                 </SelectTrigger>
                 <SelectContent>
@@ -317,79 +433,116 @@ export default function AdminDashboard() {
                 </SelectContent>
               </Select>
               <Link href="/pos" className="hidden sm:block">
-                <Button variant="outline" size="sm" className="border-rose-200 text-rose-800">
+                <Button className="h-10 rounded-full px-5 shadow-sm">
                   <ShoppingCart className="mr-1.5 h-4 w-4" />
                   POS
                 </Button>
               </Link>
-              <Button onClick={handleLogout} variant="outline" size="sm">
-                Salir
+              <Button
+                onClick={handleLogout}
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-full bg-muted lg:hidden"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only">Salir</span>
               </Button>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 space-y-8 px-4 py-6 sm:px-6 lg:px-8">
-          <div className="lg:hidden">
-            <h1 className="text-xl font-semibold tracking-tight">Resumen</h1>
-            <p className="text-sm text-muted-foreground">
-              {branchFilter === "all" ? "Todas las sucursales" : "Filtrado por sucursal"}
-            </p>
-          </div>
-
+        <main className="flex-1 space-y-8 px-3 py-5 sm:px-6 lg:px-8 lg:py-6">
           {error ? (
-            <Card className="border-destructive/40 bg-destructive/5">
-              <CardContent className="py-4 text-sm text-destructive">{error}</CardContent>
-            </Card>
+            <div className="rounded-3xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>
           ) : null}
 
-          <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            <KpiCard title="Ingresos hoy" value={formatMoney(stats?.totalRevenue || 0)} icon={DollarSign} />
-            <KpiCard title="Ventas hoy" value={stats?.todaySales ?? 0} icon={ShoppingCart} />
-            <Link href={`/admin/alertas?type=low_stock${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="bento-accent relative flex flex-col justify-between gap-6 overflow-hidden p-6 lg:col-span-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white/70">Ingresos de hoy</p>
+                  <p className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">{formatMoney(stats?.totalRevenue || 0)}</p>
+                </div>
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
+                  <DollarSign className="h-6 w-6" />
+                </span>
+              </div>
+
+              {pieToday.length > 0 ? (
+                <div className="space-y-2.5">
+                  {pieToday.slice(0, 4).map((b) => {
+                    const pct = todayTotalForPie > 0 ? Math.round((b.value / todayTotalForPie) * 100) : 0
+                    return (
+                      <div key={b.name} className="space-y-1">
+                        <div className="flex justify-between gap-2 text-xs">
+                          <span className="truncate text-white/80">{b.name}</span>
+                          <span className="shrink-0 font-semibold">{formatMoney(b.value)}</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
+                          <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <p className="text-2xl font-bold">{stats?.todaySales ?? 0}</p>
+                  <p className="text-xs text-white/70">Ventas hoy</p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <p className="truncate text-2xl font-bold">
+                    {formatMoney(stats?.todaySales ? (stats.totalRevenue || 0) / stats.todaySales : 0)}
+                  </p>
+                  <p className="text-xs text-white/70">Ticket promedio</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:col-span-7">
+              <KpiCard title="Cajeros activos" value={stats?.activeCashiers ?? 0} icon={Users} />
+              <KpiCard title="Productos" value={stats?.totalProducts ?? 0} icon={Package} />
+              <KpiCard title="Sucursales" value={branches.length} icon={Store} />
               <KpiCard
                 title="Stock bajo"
                 value={stats?.lowStockProducts ?? 0}
                 icon={AlertTriangle}
-                valueClassName="text-destructive"
+                tone="danger"
+                href={`/admin/alertas?type=low_stock${branchQuery}`}
               />
-            </Link>
-            <Link href={`/admin/alertas?type=expiring${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
               <KpiCard
                 title="Por vencer"
                 value={stats?.expiringProducts ?? 0}
                 icon={Calendar}
-                valueClassName="text-orange-600"
+                tone="warning"
+                href={`/admin/alertas?type=expiring${branchQuery}`}
               />
-            </Link>
-          </section>
-
-          <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <KpiCard title="Productos" value={stats?.totalProducts ?? 0} icon={Package} />
-            <KpiCard title="Cajeros activos" value={stats?.activeCashiers ?? 0} icon={Users} />
-            <Link href={`/admin/alertas?type=expired${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
               <KpiCard
                 title="Vencidos"
                 value={stats?.expiredProducts ?? 0}
                 icon={AlertTriangle}
-                valueClassName="text-destructive"
+                tone="danger"
+                href={`/admin/alertas?type=expired${branchQuery}`}
               />
-            </Link>
-            <KpiCard title="Sucursales" value={branches.length} icon={Store} />
+            </div>
           </section>
 
           {(branchFilter === "all" || branchSummaries.length > 0) && (
-            <section className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-              <Card className="border-border/70 shadow-none xl:col-span-2">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Dinero de hoy por sucursal</CardTitle>
-                  <CardDescription>Participación de ingresos del día</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-2">
-                  {pieToday.length === 0 ? (
-                    <p className="py-16 text-center text-sm text-muted-foreground">Aún no hay ingresos hoy.</p>
-                  ) : (
-                    <div className="h-[280px]">
+            <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+              <div className="bento p-5 xl:col-span-5">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">Dinero de hoy por sucursal</p>
+                    <p className="text-xs text-muted-foreground">Participación de ingresos del día</p>
+                  </div>
+                </div>
+                {pieToday.length === 0 ? (
+                  <p className="py-16 text-center text-sm text-muted-foreground">Aún no hay ingresos hoy.</p>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 sm:flex-row">
+                    <div className="relative h-[220px] w-full sm:w-1/2">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -398,162 +551,176 @@ export default function AdminDashboard() {
                             nameKey="name"
                             cx="50%"
                             cy="50%"
-                            innerRadius={58}
+                            innerRadius={62}
                             outerRadius={92}
-                            paddingAngle={2}
+                            paddingAngle={3}
+                            cornerRadius={8}
+                            stroke="none"
                           >
                             {pieToday.map((_, index) => (
                               <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip content={<ChartTooltipMoney />} />
-                          <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <p className="text-[11px] text-muted-foreground">Total</p>
+                        <p className="text-sm font-bold">{formatMoney(todayTotalForPie)}</p>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                    <div className="w-full space-y-2 sm:w-1/2">
+                      {pieToday.map((p, index) => (
+                        <div key={p.name} className="flex items-center justify-between gap-2 rounded-2xl bg-muted/50 px-3 py-2 text-sm">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                            />
+                            <span className="truncate">{p.name}</span>
+                          </span>
+                          <span className="shrink-0 font-semibold">{formatMoney(p.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-              <Card className="border-border/70 shadow-none xl:col-span-3">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Ingresos del mes por sucursal</CardTitle>
-                  <CardDescription>Comparativo del mes actual</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-2">
-                  {barsMonth.length === 0 ? (
-                    <p className="py-16 text-center text-sm text-muted-foreground">Sin datos de sucursales.</p>
-                  ) : (
-                    <div className="h-[280px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={barsMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                          <YAxis
-                            tick={{ fontSize: 11 }}
-                            tickFormatter={(v) =>
-                              Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(v)
-                            }
-                          />
-                          <Tooltip
-                            content={<ChartTooltipMoney />}
-                            labelFormatter={(_, payload) => {
-                              const row = payload?.[0]?.payload as { fullName?: string } | undefined
-                              return row?.fullName || ""
-                            }}
-                          />
-                          <Bar dataKey="ingresos" name="Ingresos" fill="#8B1538" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="bento p-5 xl:col-span-7">
+                <div className="mb-4">
+                  <p className="font-semibold">Ingresos del mes por sucursal</p>
+                  <p className="text-xs text-muted-foreground">Comparativo del mes actual</p>
+                </div>
+                {barsMonth.length === 0 ? (
+                  <p className="py-16 text-center text-sm text-muted-foreground">Sin datos de sucursales.</p>
+                ) : (
+                  <div className="h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={barsMonth} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#ece7e3" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(v) => (Math.abs(v) >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "rgba(139,21,56,0.06)", radius: 12 }}
+                          content={<ChartTooltipMoney />}
+                          labelFormatter={(_, payload) => {
+                            const row = payload?.[0]?.payload as { fullName?: string } | undefined
+                            return row?.fullName || ""
+                          }}
+                        />
+                        <Bar dataKey="ingresos" name="Ingresos" fill="#8B1538" radius={[12, 12, 12, 12]} maxBarSize={48} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
           {branchSummaries.length > 0 ? (
             <section className="space-y-4">
-              <div>
-                <h2 className="text-sm font-semibold tracking-wide">Detalle por sucursal</h2>
-                <p className="text-xs text-muted-foreground">Ventas, ingresos y alertas de inventario</p>
-              </div>
+              <SectionTitle title="Sucursales" subtitle="Ventas, ingresos y alertas de inventario" />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {branchSummaries.map((branch, index) => (
-                  <Card key={branch.id} className="border-border/70 shadow-none">
-                    <CardHeader className="pb-3 pt-5">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                        />
-                        <span className="truncate">{branch.name}</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2.5 pb-5 text-sm">
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Hoy</span>
-                        <span className="text-right font-semibold">
-                          {branch.todaySales} · {formatMoney(branch.todayRevenue)}
-                        </span>
+                  <div key={branch.id} className="bento p-5">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white"
+                        style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                      >
+                        <Store className="h-5 w-5" />
+                      </span>
+                      <p className="truncate font-semibold">{branch.name}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-muted/50 p-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Hoy</p>
+                        <p className="mt-1 font-bold">{formatMoney(branch.todayRevenue)}</p>
+                        <p className="text-xs text-muted-foreground">{branch.todaySales} ventas</p>
                       </div>
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Mes</span>
-                        <span className="text-right font-semibold">
-                          {branch.monthSales} · {formatMoney(branch.monthRevenue)}
-                        </span>
+                      <div className="rounded-2xl bg-muted/50 p-3">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Mes</p>
+                        <p className="mt-1 font-bold">{formatMoney(branch.monthRevenue)}</p>
+                        <p className="text-xs text-muted-foreground">{branch.monthSales} ventas</p>
                       </div>
-                      <div className="flex justify-between gap-2 border-t pt-2.5">
-                        <span className="text-muted-foreground">Stock bajo</span>
-                        <span className="font-semibold text-orange-600">{branch.lowStock}</span>
-                      </div>
-                      <div className="flex justify-between gap-2">
-                        <span className="text-muted-foreground">Agotados</span>
-                        <span className="font-semibold text-destructive">{branch.outOfStock}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">Stock bajo: {branch.lowStock}</span>
+                      <span className="rounded-full bg-red-100 px-3 py-1 text-red-700">Agotados: {branch.outOfStock}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
           ) : null}
 
           <section className="space-y-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold tracking-wide">Más vendidos del mes</h2>
-                <p className="text-xs text-muted-foreground">Top por piezas en cada sucursal · toca para ver todos</p>
-              </div>
-              <Link href={`/admin/mas-vendidos?period=month${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
-                <Button variant="outline" size="sm">
-                  Ver todos
-                </Button>
-              </Link>
-            </div>
+            <SectionTitle
+              title="Más vendidos del mes"
+              subtitle="Top por piezas en cada sucursal"
+              action={
+                <Link href={`/admin/mas-vendidos?period=month${branchQuery}`}>
+                  <Button variant="outline" className="h-9 rounded-full bg-white">
+                    Ver todos
+                  </Button>
+                </Link>
+              }
+            />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {topByBranch.length === 0 ? (
-                <Link
-                  href={`/admin/mas-vendidos?period=month${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}
-                  className="md:col-span-2 xl:col-span-3"
-                >
-                  <Card className="border-border/70 shadow-none transition-shadow hover:shadow-md">
-                    <CardContent className="flex items-center gap-3 py-10 text-sm text-muted-foreground">
-                      <Trophy className="h-5 w-5 text-amber-500" />
-                      Aún no hay ventas suficientes este mes. Abrir ranking.
-                    </CardContent>
-                  </Card>
+                <Link href={`/admin/mas-vendidos?period=month${branchQuery}`} className="md:col-span-2 xl:col-span-3">
+                  <div className="bento bento-hover flex items-center gap-3 p-8 text-sm text-muted-foreground">
+                    <Trophy className="h-5 w-5 text-amber-500" />
+                    Aún no hay ventas suficientes este mes. Abrir ranking.
+                  </div>
                 </Link>
               ) : (
                 topByBranch.map(([branchId, group]) => (
-                  <Link key={branchId} href={`/admin/mas-vendidos?period=month&branch_id=${branchId}`}>
-                    <Card className="h-full border-border/70 shadow-none transition-shadow hover:shadow-md">
-                      <CardHeader className="pb-3 pt-5">
-                        <CardTitle className="flex items-center gap-2 text-base">
-                          <Trophy className="h-4 w-4 shrink-0 text-amber-500" />
-                          <span className="truncate">{group.name}</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-2 pb-5">
+                  <Link key={branchId} href={`/admin/mas-vendidos?period=month&branch_id=${branchId}`} className="block h-full">
+                    <div className="bento bento-hover flex h-full flex-col p-5">
+                      <div className="mb-4 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                            <Trophy className="h-5 w-5" />
+                          </span>
+                          <p className="truncate font-semibold">{group.name}</p>
+                        </div>
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <ArrowUpRight className="h-4 w-4" />
+                        </span>
+                      </div>
+                      <div className="space-y-2">
                         {group.items.map((item) => (
                           <div
                             key={`${item.branch_id}-${item.product_id}`}
-                            className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2.5 text-sm"
+                            className="flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5 text-sm"
                           >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">
-                                #{item.rank} {item.product_name}
-                              </p>
+                            <span
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                                item.rank === 1 ? "bg-primary text-primary-foreground" : "bg-white text-muted-foreground",
+                              )}
+                            >
+                              {item.rank}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{item.product_name}</p>
                               <p className="truncate text-xs text-muted-foreground">{item.barcode || "Sin código"}</p>
                             </div>
                             <div className="shrink-0 text-right">
-                              <p className="font-semibold">{item.qty_sold}</p>
+                              <p className="font-semibold">{item.qty_sold} pz</p>
                               <p className="text-xs text-muted-foreground">{formatMoney(item.revenue)}</p>
                             </div>
                           </div>
                         ))}
-                        <p className="pt-1 text-xs font-medium text-primary">Ver ranking completo →</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </Link>
                 ))
               )}
@@ -561,202 +728,146 @@ export default function AdminDashboard() {
           </section>
 
           <section className="space-y-4 pb-8">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold tracking-wide">Alertas y actividad</h2>
-                <p className="text-xs text-muted-foreground">
-                  Toca una tarjeta para ver la lista completa con filtros
-                </p>
-              </div>
-              <Link href={`/admin/alertas${branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""}`}>
-                <Button variant="outline" size="sm">
-                  Ver todas las alertas
-                </Button>
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="min-h-[220px]">
+            <SectionTitle
+              title="Alertas y actividad"
+              subtitle="Toca una tarjeta para ver la lista completa con filtros"
+              action={
+                <Link href={`/admin/alertas${branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""}`}>
+                  <Button variant="outline" className="h-9 rounded-full bg-white">
+                    Ver todas las alertas
+                  </Button>
+                </Link>
+              }
+            />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="min-h-[220px] [&>div]:h-full [&>div]:rounded-3xl">
                 <NotificationManager userRole="admin" />
                 <AdminAlertListener enabled />
               </div>
 
-              <Link href={`/admin/alertas?type=low_stock${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
-                <Card className="h-full border-border/70 shadow-none transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-3 pt-5">
-                    <CardTitle className="flex items-center justify-between gap-2 text-base">
-                      <span className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                        Stock bajo
-                      </span>
-                      <Badge variant="outline">{stats?.lowStockProducts ?? lowStockItems.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
-                    {lowStockItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sin alertas · abrir lista</p>
-                    ) : (
-                      lowStockItems.map((product) => (
-                        <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 font-medium leading-tight">{product.name}</p>
-                            <Badge variant="destructive" className="shrink-0">
-                              {product.stock_quantity}/{product.min_stock_level ?? "—"}
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs font-medium text-foreground/80">
-                            {formatAlertLocation(product)}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                    <p className="pt-1 text-xs font-medium text-primary">Ver todos →</p>
-                  </CardContent>
-                </Card>
-              </Link>
+              <AlertListCard
+                href={`/admin/alertas?type=low_stock${branchQuery}`}
+                title="Stock bajo"
+                icon={AlertTriangle}
+                tone="danger"
+                count={stats?.lowStockProducts ?? lowStockItems.length}
+                empty={lowStockItems.length === 0}
+              >
+                {lowStockItems.map((product) => (
+                  <AlertRow
+                    key={product.id}
+                    name={product.name}
+                    location={formatAlertLocation(product)}
+                    badge={`${product.stock_quantity}/${product.min_stock_level ?? "—"}`}
+                    badgeClass="bg-red-100 text-red-700"
+                  />
+                ))}
+              </AlertListCard>
 
-              <Link href={`/admin/alertas?type=out_of_stock${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
-                <Card className="h-full border-border/70 shadow-none transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-3 pt-5">
-                    <CardTitle className="flex items-center justify-between gap-2 text-base">
-                      <span className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-destructive" />
-                        Agotados
-                      </span>
-                      <Badge variant="outline">{outOfStockItems.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
-                    {outOfStockItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sin alertas · abrir lista</p>
-                    ) : (
-                      outOfStockItems.map((product) => (
-                        <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="min-w-0 font-medium leading-tight">{product.name}</p>
-                            <Badge variant="destructive" className="shrink-0">
-                              0
-                            </Badge>
-                          </div>
-                          <p className="mt-1 text-xs font-medium text-foreground/80">
-                            {formatAlertLocation(product)}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                    <p className="pt-1 text-xs font-medium text-primary">Ver todos →</p>
-                  </CardContent>
-                </Card>
-              </Link>
+              <AlertListCard
+                href={`/admin/alertas?type=out_of_stock${branchQuery}`}
+                title="Agotados"
+                icon={PackageX}
+                tone="danger"
+                count={outOfStockItems.length}
+                empty={outOfStockItems.length === 0}
+              >
+                {outOfStockItems.map((product) => (
+                  <AlertRow
+                    key={product.id}
+                    name={product.name}
+                    location={formatAlertLocation(product)}
+                    badge="0"
+                    badgeClass="bg-red-100 text-red-700"
+                  />
+                ))}
+              </AlertListCard>
 
-              <Link href={`/admin/alertas?type=expiring${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
-                <Card className="h-full border-border/70 shadow-none transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-3 pt-5">
-                    <CardTitle className="flex items-center justify-between gap-2 text-base">
-                      <span className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-orange-500" />
-                        Por vencer
-                      </span>
-                      <Badge variant="outline">{stats?.expiringProducts ?? expiringItems.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
-                    {expiringItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sin alertas · abrir lista</p>
-                    ) : (
-                      expiringItems.map((product) => {
-                        const expirationDate = new Date(product.expiration_date)
-                        const daysUntilExpiry =
-                          product.days_left ??
-                          Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                        return (
-                          <div key={product.id} className="rounded-lg bg-muted/40 p-3 text-sm">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="min-w-0 font-medium leading-tight">{product.name}</p>
-                              <Badge className="shrink-0 bg-orange-500 text-white">{daysUntilExpiry}d</Badge>
-                            </div>
-                            <p className="mt-1 text-xs font-medium text-foreground/80">
-                              {formatAlertLocation(product)}
-                            </p>
-                          </div>
-                        )
-                      })
-                    )}
-                    <p className="pt-1 text-xs font-medium text-primary">Ver todos →</p>
-                  </CardContent>
-                </Card>
-              </Link>
+              <AlertListCard
+                href={`/admin/alertas?type=expiring${branchQuery}`}
+                title="Por vencer"
+                icon={Calendar}
+                tone="warning"
+                count={stats?.expiringProducts ?? expiringItems.length}
+                empty={expiringItems.length === 0}
+              >
+                {expiringItems.map((product) => {
+                  const expirationDate = new Date(product.expiration_date)
+                  const daysUntilExpiry =
+                    product.days_left ?? Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  return (
+                    <AlertRow
+                      key={product.id}
+                      name={product.name}
+                      location={formatAlertLocation(product)}
+                      badge={`${daysUntilExpiry}d`}
+                      badgeClass="bg-amber-100 text-amber-700"
+                    />
+                  )
+                })}
+              </AlertListCard>
 
-              <Link href={`/admin/alertas?type=expired${branchFilter !== "all" ? `&branch_id=${branchFilter}` : ""}`}>
-                <Card className="h-full border-border/70 shadow-none transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-3 pt-5">
-                    <CardTitle className="flex items-center justify-between gap-2 text-base">
-                      <span className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                        Vencidos
-                      </span>
-                      <Badge variant="outline">{stats?.expiredProducts ?? expiredItems.length}</Badge>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-80 space-y-2.5 overflow-y-auto pb-5">
-                    {expiredItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sin alertas · abrir lista</p>
-                    ) : (
-                      expiredItems.map((product) => {
-                        const expirationDate = new Date(product.expiration_date)
-                        const daysAgo = Math.abs(
-                          product.days_left ??
-                            Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-                        )
-                        return (
-                          <div key={product.id} className="rounded-lg bg-destructive/5 p-3 text-sm">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="min-w-0 font-medium leading-tight">{product.name}</p>
-                              <Badge variant="destructive" className="shrink-0">
-                                {daysAgo}d
-                              </Badge>
-                            </div>
-                            <p className="mt-1 text-xs font-medium text-foreground/80">
-                              {formatAlertLocation(product)}
-                            </p>
-                          </div>
-                        )
-                      })
-                    )}
-                    <p className="pt-1 text-xs font-medium text-primary">Ver todos →</p>
-                  </CardContent>
-                </Card>
-              </Link>
+              <AlertListCard
+                href={`/admin/alertas?type=expired${branchQuery}`}
+                title="Vencidos"
+                icon={AlertTriangle}
+                tone="danger"
+                count={stats?.expiredProducts ?? expiredItems.length}
+                empty={expiredItems.length === 0}
+              >
+                {expiredItems.map((product) => {
+                  const expirationDate = new Date(product.expiration_date)
+                  const daysAgo = Math.abs(
+                    product.days_left ?? Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+                  )
+                  return (
+                    <AlertRow
+                      key={product.id}
+                      name={product.name}
+                      location={formatAlertLocation(product)}
+                      badge={`${daysAgo}d`}
+                      badgeClass="bg-red-600 text-white"
+                    />
+                  )
+                })}
+              </AlertListCard>
 
-              <Card className="border-border/70 shadow-none lg:col-span-2">
-                <CardHeader className="pb-3 pt-5">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <ShoppingCart className="h-4 w-4" />
-                    Ventas recientes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2.5 pb-5">
-                  {recentSales.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No hay ventas hoy</p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                      {recentSales.map((sale) => (
-                        <div key={sale.id} className="flex items-start justify-between gap-2 rounded-lg bg-muted/40 p-3 text-sm">
+              <div className="bento p-5 lg:col-span-2">
+                <div className="mb-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <ShoppingCart className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold leading-tight">Ventas recientes</p>
+                    <p className="text-xs text-muted-foreground">Últimos cobros del día</p>
+                  </div>
+                </div>
+                {recentSales.length === 0 ? (
+                  <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">No hay ventas hoy</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    {recentSales.map((sale) => (
+                      <div key={sale.id} className="flex items-center justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary">
+                            <Receipt className="h-4 w-4" />
+                          </span>
                           <div className="min-w-0">
-                            <p className="font-medium">{formatMoney(sale.total_amount)}</p>
+                            <p className="font-semibold">{formatMoney(sale.total_amount)}</p>
                             <p className="truncate text-xs text-muted-foreground">
                               {sale.cashier_name || "Cajero"} · {new Date(sale.created_at).toLocaleTimeString()}
                               {sale.branch_name ? ` · ${sale.branch_name}` : ""}
                             </p>
                           </div>
-                          <Badge variant="outline" className="shrink-0">
-                            {sale.payment_method}
-                          </Badge>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                        <span className="shrink-0 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium capitalize">
+                          {sale.payment_method}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         </main>

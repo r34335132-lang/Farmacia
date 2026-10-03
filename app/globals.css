@@ -125,6 +125,46 @@
   }
 }
 
+@layer components {
+  .app-canvas {
+    background-color: #f4f1ee;
+    background-image:
+      radial-gradient(60rem 30rem at 100% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 70%),
+      radial-gradient(40rem 24rem at -10% 110%, color-mix(in oklch, var(--primary) 6%, transparent), transparent 70%);
+    background-attachment: fixed;
+  }
+  .bento {
+    background-color: var(--card);
+    border-radius: 1.5rem;
+    border: 1px solid color-mix(in oklch, var(--foreground) 6%, transparent);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.03),
+      0 12px 32px -18px rgb(60 10 30 / 0.22);
+  }
+  .bento-hover {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .bento-hover:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.04),
+      0 18px 40px -18px rgb(60 10 30 / 0.32);
+  }
+  .bento-accent {
+    color: var(--primary-foreground);
+    border-radius: 1.5rem;
+    background-color: var(--primary);
+    background-image:
+      radial-gradient(24rem 14rem at 110% -20%, rgb(255 255 255 / 0.18), transparent 60%),
+      radial-gradient(18rem 12rem at -10% 120%, rgb(0 0 0 / 0.22), transparent 60%);
+    box-shadow: 0 18px 40px -20px color-mix(in oklch, var(--primary) 80%, transparent);
+  }
+  .rail-dark {
+    background-color: oklch(0.2 0.045 350);
+    color: oklch(0.96 0.01 350);
+  }
+}
+
 /* Custom scrollbar */
 @layer utilities {
   .scrollbar-thin {

@@ -35,6 +35,8 @@ import {
   PackagePlus,
   CheckCircle2,
   ExternalLink,
+  Search,
+  Wallet,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -1168,18 +1170,21 @@ export default function POSPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Cargando punto de venta...</div>
+      <div className="app-canvas flex min-h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Cargando punto de venta...</p>
+        </div>
       </div>
     )
   }
 
   if (authReady && isAdmin && !branchConfirmed) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-rose-200">
+      <div className="app-canvas min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md rounded-3xl border-0 shadow-xl shadow-black/5">
           <CardHeader className="text-center">
-            <div className="mx-auto p-3 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl w-fit mb-2">
+            <div className="mx-auto mb-2 w-fit rounded-2xl bg-primary p-3">
               <Store className="h-8 w-8 text-white" />
             </div>
             <CardTitle className="text-2xl">Selecciona la sucursal</CardTitle>
@@ -1196,7 +1201,7 @@ export default function POSPage() {
             ) : (
               <>
                 <Select value={pendingBranchId || undefined} onValueChange={setPendingBranchId}>
-                  <SelectTrigger className="h-12 text-base border-rose-200">
+                  <SelectTrigger className="h-12 rounded-2xl border-0 bg-muted text-base">
                     <SelectValue placeholder="Elegir sucursal" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1210,11 +1215,11 @@ export default function POSPage() {
                 <Button
                   onClick={confirmAdminBranch}
                   disabled={!pendingBranchId}
-                  className="w-full h-12 text-base bg-gradient-to-r from-rose-800 to-red-900 text-white"
+                  className="h-12 w-full rounded-2xl text-base"
                 >
                   Entrar al POS
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => router.push("/admin/dashboard")}>
+                <Button variant="ghost" className="w-full rounded-2xl" onClick={() => router.push("/admin/dashboard")}>
                   Volver al dashboard
                 </Button>
               </>
@@ -1246,18 +1251,20 @@ export default function POSPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-rose-50 to-red-50 overflow-x-hidden">
-      <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm sticky top-0 z-30">
-        <div className="flex min-h-16 lg:h-20 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between px-4 sm:px-6 py-3">
+    <div className="app-canvas min-h-screen overflow-x-hidden">
+      <header className="z-30 px-3 pt-3 sm:px-4 lg:sticky lg:top-0 lg:px-6">
+        <div className="bento flex flex-col gap-3 px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 bg-gradient-to-r from-rose-800 to-red-900 rounded-xl shrink-0">
-              <ShoppingCart className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-            </div>
+            <img
+              src="/logo.jpeg"
+              alt="Farmacia Bienestar"
+              className="h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-black/5"
+            />
             <div className="min-w-0">
-              <h1 className="text-xl lg:text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent truncate">
+              <h1 className="truncate text-lg font-bold tracking-tight text-primary lg:text-xl">
                 Farmacia Bienestar
               </h1>
-              <p className="text-xs lg:text-sm text-muted-foreground truncate">
+              <p className="text-xs text-muted-foreground truncate">
                 {currentUser?.full_name}
                 {activeBranch ? ` · ${activeBranch.name}` : ""}
               </p>
@@ -1277,8 +1284,8 @@ export default function POSPage() {
                   setLoading(true)
                 }}
               >
-                <SelectTrigger className="w-full sm:w-52 border-rose-200 h-11">
-                  <Store className="h-4 w-4 mr-2 shrink-0" />
+                <SelectTrigger className="h-10 w-full rounded-full border-0 bg-muted px-4 sm:w-52">
+                  <Store className="h-4 w-4 mr-2 shrink-0 text-primary" />
                   <SelectValue placeholder="Sucursal" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1291,15 +1298,15 @@ export default function POSPage() {
               </Select>
             )}
             {!isAdmin && activeBranch && (
-              <Badge variant="outline" className="border-rose-300 text-rose-800 px-3 py-2 text-sm">
+              <Badge variant="outline" className="h-10 rounded-full border-0 bg-primary/10 px-4 text-sm text-primary">
                 <Store className="h-4 w-4 mr-1" />
                 {activeBranch.name}
               </Badge>
             )}
             {promotions.length > 0 && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-green-100 border border-green-300 rounded-lg">
-                <Tag className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-700">
+              <div className="hidden h-10 items-center gap-2 rounded-full bg-emerald-100 px-4 sm:flex">
+                <Tag className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm font-semibold text-emerald-700">
                   {promotions.length} Promo{promotions.length === 1 ? "" : "s"}
                 </span>
               </div>
@@ -1308,8 +1315,8 @@ export default function POSPage() {
               onClick={() => {
                 window.open(`/pos?venta=${Date.now()}`, `pos-venta-${Date.now()}`, "noopener,noreferrer")
               }}
-              variant="outline"
-              className="h-11 border-2 border-rose-300 px-3 text-sm font-bold text-rose-900 hover:bg-rose-50"
+              variant="ghost"
+              className="h-10 rounded-full bg-primary/10 px-4 text-sm font-semibold text-primary hover:bg-primary/15 hover:text-primary"
               title="Abre otra caja en una ventana aparte"
             >
               <ExternalLink className="h-4 w-4 mr-1" />
@@ -1317,20 +1324,20 @@ export default function POSPage() {
             </Button>
             <Button
               onClick={() => router.push("/pos/pedido")}
-              className="h-11 bg-emerald-600 px-4 text-base font-black text-white hover:bg-emerald-700"
+              className="h-10 rounded-full bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
             >
-              <PackagePlus className="h-5 w-5 mr-1" />
+              <PackagePlus className="h-4 w-4 mr-1" />
               Pedir
             </Button>
-            <Button onClick={openExportDialog} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent">
-              <Printer className="h-4 w-4 mr-1" />
+            <Button onClick={openExportDialog} variant="ghost" className="h-10 rounded-full bg-muted px-4 text-sm hover:bg-muted/70">
+              <Printer className="h-4 w-4 sm:mr-1" />
               <span className="hidden sm:inline">Exportar</span>
             </Button>
-            <Button onClick={handleCorteTurno} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent hidden md:inline-flex">
+            <Button onClick={handleCorteTurno} variant="ghost" className="hidden h-10 rounded-full bg-muted px-4 text-sm hover:bg-muted/70 md:inline-flex">
               <Banknote className="h-4 w-4 mr-1" />
               Corte
             </Button>
-            <Button onClick={handleLogout} variant="outline" size="sm" className="border-rose-200 hover:bg-rose-50 bg-transparent">
+            <Button onClick={handleLogout} variant="ghost" size="icon" className="h-10 w-10 rounded-full bg-muted hover:bg-muted/70" title="Cerrar sesión">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -1352,106 +1359,83 @@ export default function POSPage() {
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)] pb-24 lg:pb-0">
-        <div className="flex-1 p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6 overflow-auto">
-          <Card className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white/20 rounded-full">
-                    <Banknote className="h-8 w-8" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Saldo de Caja</h2>
-                    <p className="text-blue-100 text-sm">Dinero inicial disponible</p>
-                  </div>
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-5rem)] pb-28 lg:pb-0">
+        <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5 overflow-auto">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+            <div className="bento-accent flex flex-col justify-between gap-5 p-5 sm:p-6 xl:col-span-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-white/70">Tu salud es nuestro compromiso</p>
+                  <h2 className="mt-0.5 truncate text-xl font-bold sm:text-2xl">¡Hola {currentUser?.full_name}!</h2>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-blue-100">Efectivo disponible:</p>
-                  <p className="text-4xl font-bold">${boxBalance.toFixed(2)}</p>
-                </div>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                  <Wallet className="h-5 w-5" />
+                </span>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-rose-800 to-red-900 text-white border-0">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-full">
-                  <ShoppingCart className="h-8 w-8" />
-                </div>
+              <div className="flex items-end justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3">
                 <div>
-                  <h2 className="text-2xl font-bold">¡Hola {currentUser?.full_name}!</h2>
-                  <p className="text-rose-100">Tu salud es nuestro compromiso</p>
+                  <p className="text-xs text-white/70">Efectivo en caja</p>
+                  <p className="text-3xl font-bold tracking-tight sm:text-4xl">${boxBalance.toFixed(2)}</p>
                 </div>
+                <Banknote className="mb-1 h-7 w-7 text-white/60" />
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card className="border-rose-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
-              <CardTitle className="flex items-center gap-2 text-rose-900">
-                <Scan className="h-5 w-5" />
-                Escáner de Código de Barras / QR
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <div className="flex gap-2">
+            <div className="bento space-y-3 p-4 sm:p-5 xl:col-span-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Scan className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
                   <Input
                     ref={barcodeInputRef}
-                    placeholder="Escanea o ingresa código de barras..."
+                    placeholder="Escanea o escribe el código de barras..."
                     value={barcodeInput}
                     onChange={(e) => setBarcodeInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleBarcodeSearch()}
-                    className="border-rose-200 focus:border-rose-400 h-12 text-base"
+                    className="h-14 rounded-2xl border-2 border-primary/20 bg-white pl-12 text-base focus-visible:border-primary focus-visible:ring-primary/20"
                     autoFocus
                   />
-                  <Button
-                    onClick={handleBarcodeSearch}
-                    className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 h-12 px-4"
-                  >
-                    <Scan className="h-5 w-5" />
-                  </Button>
                 </div>
+                <Button onClick={handleBarcodeSearch} className="h-14 rounded-2xl px-5 text-base font-semibold shadow-sm">
+                  <Plus className="h-5 w-5 sm:mr-1" />
+                  <span className="hidden sm:inline">Agregar</span>
+                </Button>
                 <Button
                   onClick={() => setIsQRScannerOpen(true)}
-                  variant="outline"
-                  className="w-full border-rose-200 text-rose-800 hover:bg-rose-50"
+                  variant="ghost"
+                  className="h-14 w-14 shrink-0 rounded-2xl bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  title="Abrir escáner QR avanzado"
                 >
-                  Abrir Escáner QR Avanzado
+                  <Camera className="h-5 w-5" />
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  Tip: Si el producto no existe en activos, te mostrará si está en eliminados
-                </p>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-rose-200 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-rose-50 to-red-50">
-              <CardTitle className="text-rose-900">Buscar Medicamentos</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <Input
-                placeholder="Buscar por nombre o código de barras..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value)
-                  setCurrentPage(1)
-                }}
-                className="border-rose-200 focus:border-rose-400 h-12 text-base"
-              />
-            </CardContent>
-          </Card>
-
-          <div className="text-sm text-muted-foreground bg-white/80 backdrop-blur-sm p-3 rounded-lg">
-            Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length}{" "}
-            productos
-            {searchTerm && ` (filtrados de ${products.length} totales)`}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar medicamento por nombre o código..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value)
+                    setCurrentPage(1)
+                  }}
+                  className="h-12 rounded-2xl border-0 bg-muted pl-11 text-base"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Tip: Si el producto no existe en activos, te mostrará si está en eliminados
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 lg:gap-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+            <h3 className="text-lg font-semibold tracking-tight">Productos</h3>
+            <p className="text-xs text-muted-foreground">
+              Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length}{" "}
+              productos
+              {searchTerm && ` (filtrados de ${products.length} totales)`}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 lg:gap-4">
             {paginatedProducts.map((product) => {
               const promo = getProductPromotion(product.id)
               const discountedPrice = getDiscountedPrice(product)
@@ -1459,16 +1443,16 @@ export default function POSPage() {
               const outOfStock = product.stock_quantity === 0
               
               return (
-                <Card
+                <div
                   key={product.id}
-                  className={`cursor-pointer hover:shadow-xl transition-all duration-300 border-0 shadow-lg bg-white/80 backdrop-blur-sm ${hasDiscount ? "ring-2 ring-green-400" : ""}`}
+                  className={`bento bento-hover flex flex-col overflow-hidden p-2.5 sm:p-3 ${hasDiscount ? "ring-2 ring-emerald-400" : ""}`}
                 >
-                  <CardContent className="p-4 lg:p-6">
-                    <div className="space-y-3">
-                      <div className="w-full h-28 lg:h-32 bg-gradient-to-br from-rose-100 to-red-100 rounded-lg flex items-center justify-center overflow-hidden relative">
+                  <div className="flex flex-1 flex-col">
+                    <div className="flex flex-1 flex-col gap-2.5">
+                      <div className="relative flex h-24 w-full items-center justify-center overflow-hidden rounded-2xl bg-primary/5 sm:h-28">
                         {hasDiscount && (
-                          <div className="absolute top-2 left-2 z-10">
-                            <Badge className="bg-green-500 text-white text-xs font-bold px-2 py-1">
+                          <div className="absolute left-2 top-2 z-10">
+                            <Badge className="rounded-full bg-emerald-500 px-2 py-0.5 text-[11px] font-bold text-white">
                               <Percent className="h-3 w-3 mr-1" />
                               {promo.discount_type === "percentage" 
                                 ? `${promo.discount_value}% OFF` 
@@ -1483,139 +1467,136 @@ export default function POSPage() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="text-center">
-                            <div className="w-16 h-16 bg-gradient-to-r from-rose-600 to-red-700 rounded-full flex items-center justify-center mx-auto mb-2">
-                              <span className="text-2xl">{'💊'}</span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">Sin imagen</span>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 sm:h-14 sm:w-14">
+                            <span className="text-2xl">{'💊'}</span>
                           </div>
                         )}
                       </div>
 
-                      <div className="space-y-2">
-                        <h3 className="font-bold text-base lg:text-lg text-gray-800 line-clamp-2">{product.name}</h3>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Store className="h-3 w-3" />
-                          Disponible en: {getBranchName(product)}
+                      <div className="flex flex-1 flex-col gap-1.5 px-0.5">
+                        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:text-base">
+                          {product.name}
+                        </h3>
+                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Store className="h-3 w-3 shrink-0" />
+                          <span className="truncate">Disponible en: {getBranchName(product)}</span>
                         </p>
                         {hasDiscount && (
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 border-green-300">
-                              <Tag className="h-3 w-3 mr-1" />
-                              {promo.name}
-                            </Badge>
-                          </div>
+                          <Badge variant="secondary" className="w-fit max-w-full rounded-full border-0 bg-emerald-100 text-[11px] text-emerald-700">
+                            <Tag className="h-3 w-3 mr-1 shrink-0" />
+                            <span className="truncate">{promo.name}</span>
+                          </Badge>
                         )}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex flex-col">
-                            {hasDiscount ? (
-                              <>
-                                <span className="text-xl lg:text-2xl font-bold text-green-600">
-                                  ${discountedPrice.toFixed(2)}
-                                </span>
-                                <span className="text-sm text-muted-foreground line-through">
-                                  ${product.price.toFixed(2)}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-xl lg:text-2xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {product.section && (
+                            <Badge variant="outline" className="rounded-full border-0 bg-primary/10 text-[11px] text-primary">
+                              {product.section}
+                            </Badge>
+                          )}
+                          {isLowStock(product) && !outOfStock && (
+                            <Badge variant="destructive" className="rounded-full text-[11px] font-semibold">
+                              Stock bajo
+                            </Badge>
+                          )}
+                          <Badge
+                            variant={
+                              product.stock_quantity > (product.min_stock_level ?? 5)
+                                ? "default"
+                                : product.stock_quantity > 0
+                                  ? "secondary"
+                                  : "destructive"
+                            }
+                            className="rounded-full text-[11px] font-semibold"
+                          >
+                            Stock: {product.stock_quantity}
+                          </Badge>
+                        </div>
+                        <div className="mt-auto flex flex-wrap items-baseline gap-x-2 pt-1">
+                          {hasDiscount ? (
+                            <>
+                              <span className="text-xl font-bold tracking-tight text-emerald-600 sm:text-2xl">
+                                ${discountedPrice.toFixed(2)}
+                              </span>
+                              <span className="text-xs text-muted-foreground line-through">
                                 ${product.price.toFixed(2)}
                               </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {product.section && (
-                              <Badge variant="outline" className="text-xs border-rose-300 text-rose-800 bg-rose-50">
-                                {product.section}
-                              </Badge>
-                            )}
-                            {isLowStock(product) && !outOfStock && (
-                              <Badge variant="destructive" className="text-xs font-semibold">
-                                Stock bajo
-                              </Badge>
-                            )}
-                            <Badge
-                              variant={
-                                product.stock_quantity > (product.min_stock_level ?? 5)
-                                  ? "default"
-                                  : product.stock_quantity > 0
-                                    ? "secondary"
-                                    : "destructive"
-                              }
-                              className="font-semibold text-xs"
-                            >
-                              Stock: {product.stock_quantity}
-                            </Badge>
-                          </div>
+                            </>
+                          ) : (
+                            <span className="text-xl font-bold tracking-tight text-primary sm:text-2xl">
+                              ${product.price.toFixed(2)}
+                            </span>
+                          )}
                         </div>
-                        {outOfStock ? (
-                          <Button
-                            onClick={(e) => quickOrderProduct(product, e)}
-                            disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
-                            className="w-full h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            <PackagePlus className="h-5 w-5 mr-2" />
-                            {quickOrderingId === product.id
-                              ? "Enviando pedido..."
-                              : quickOrderedIds.has(product.id)
-                                ? "Pedido enviado"
-                                : `Pedir ${suggestedOrderQty(product)} pza`}
-                          </Button>
-                        ) : (
-                          <div className="space-y-2">
-                            <Button
-                              onClick={() => addToCart(product)}
-                              className={`w-full font-semibold py-3 h-12 text-base ${hasDiscount ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800" : "bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"} text-white`}
-                            >
-                              <Plus className="h-5 w-5 mr-2" />
-                              {hasDiscount ? "Agregar con Descuento" : "Agregar al Carrito"}
-                            </Button>
-                            {isLowStock(product) && (
-                              <Button
-                                variant="outline"
-                                onClick={(e) => quickOrderProduct(product, e)}
-                                disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
-                                className="w-full h-11 text-sm font-bold border-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50"
-                              >
-                                <PackagePlus className="h-4 w-4 mr-2" />
-                                {quickOrderingId === product.id
-                                  ? "Enviando..."
-                                  : quickOrderedIds.has(product.id)
-                                    ? "Pedido enviado"
-                                    : `Pedir ${suggestedOrderQty(product)} más`}
-                              </Button>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+
+                    <div className="mt-2.5">
+                      {outOfStock ? (
+                        <Button
+                          onClick={(e) => quickOrderProduct(product, e)}
+                          disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
+                          className="h-11 w-full rounded-2xl bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700"
+                        >
+                          <PackagePlus className="h-4 w-4 mr-1.5" />
+                          {quickOrderingId === product.id
+                            ? "Enviando pedido..."
+                            : quickOrderedIds.has(product.id)
+                              ? "Pedido enviado"
+                              : `Pedir ${suggestedOrderQty(product)} pza`}
+                        </Button>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <Button
+                            onClick={() => addToCart(product)}
+                            className={`h-11 w-full rounded-2xl text-sm font-semibold text-white shadow-sm ${hasDiscount ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary hover:bg-primary/90"}`}
+                          >
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            <span className="sm:hidden">Agregar</span>
+                            <span className="hidden sm:inline">
+                              {hasDiscount ? "Agregar con Descuento" : "Agregar al Carrito"}
+                            </span>
+                          </Button>
+                          {isLowStock(product) && (
+                            <Button
+                              variant="ghost"
+                              onClick={(e) => quickOrderProduct(product, e)}
+                              disabled={quickOrderingId === product.id || quickOrderedIds.has(product.id)}
+                              className="h-9 w-full rounded-2xl bg-emerald-50 text-xs font-bold text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                            >
+                              <PackagePlus className="h-4 w-4 mr-1" />
+                              {quickOrderingId === product.id
+                                ? "Enviando..."
+                                : quickOrderedIds.has(product.id)
+                                  ? "Pedido enviado"
+                                  : `Pedir ${suggestedOrderQty(product)} más`}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )
             })}
           </div>
 
           {filteredProducts.length > PRODUCTS_PER_PAGE && (
-            <div className="flex flex-col items-center gap-4 mt-6 mb-6">
-              <div className="flex justify-center items-center gap-2">
+            <div className="flex flex-col items-center gap-3 mt-6 mb-6">
+              <div className="bento flex flex-wrap justify-center items-center gap-1.5 p-1.5 rounded-full">
                 <Button
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
-                  variant="outline"
-                  className="bg-white/80 backdrop-blur-sm"
+                  variant="ghost"
+                  className="rounded-full"
                 >
                   Anterior
                 </Button>
 
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <Button
                     onClick={() => setCurrentPage(1)}
-                    variant={currentPage === 1 ? "default" : "outline"}
-                    className={
-                      currentPage === 1
-                        ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
-                        : "bg-white/80 backdrop-blur-sm"
-                    }
+                    variant={currentPage === 1 ? "default" : "ghost"}
+                    className="h-9 w-9 rounded-full p-0"
                   >
                     1
                   </Button>
@@ -1628,12 +1609,8 @@ export default function POSPage() {
                       <Button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        variant={currentPage === page ? "default" : "outline"}
-                        className={
-                          currentPage === page
-                            ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
-                            : "bg-white/80 backdrop-blur-sm"
-                        }
+                        variant={currentPage === page ? "default" : "ghost"}
+                        className="h-9 w-9 rounded-full p-0"
                       >
                         {page}
                       </Button>
@@ -1644,12 +1621,8 @@ export default function POSPage() {
                   {totalPages > 1 && (
                     <Button
                       onClick={() => setCurrentPage(totalPages)}
-                      variant={currentPage === totalPages ? "default" : "outline"}
-                      className={
-                        currentPage === totalPages
-                          ? "bg-gradient-to-r from-rose-800 to-red-900 text-white"
-                          : "bg-white/80 backdrop-blur-sm"
-                      }
+                      variant={currentPage === totalPages ? "default" : "ghost"}
+                      className="h-9 w-9 rounded-full p-0"
                     >
                       {totalPages}
                     </Button>
@@ -1659,127 +1632,131 @@ export default function POSPage() {
                 <Button
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
-                  variant="outline"
-                  className="bg-white/80 backdrop-blur-sm"
+                  variant="ghost"
+                  className="rounded-full"
                 >
                   Siguiente
                 </Button>
               </div>
 
-              <div className="text-center text-sm text-muted-foreground bg-white/80 backdrop-blur-sm px-4 py-2 rounded-lg">
+              <div className="text-center text-xs text-muted-foreground">
                 Página {currentPage} de {totalPages}
               </div>
             </div>
           )}
         </div>
 
-        <div className="hidden lg:flex lg:w-96 xl:w-[26rem] border-l bg-white/90 backdrop-blur-sm p-4 lg:p-6 space-y-4 shadow-xl flex-col">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              Carrito de Compras
-            </h2>
+        <aside className="hidden lg:block lg:w-[380px] xl:w-[420px] shrink-0 py-6 pr-6">
+          <div className="bento sticky top-28 flex h-[calc(100vh-8.5rem)] flex-col p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <ShoppingCart className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-lg font-bold leading-tight">Carrito</h2>
+                <p className="text-xs text-muted-foreground">
+                  {cart.length} producto{cart.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
             {cart.length > 0 && (
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={clearCart}
-                className="border-red-200 text-red-600 hover:bg-red-50 bg-transparent"
+                className="h-9 rounded-full bg-red-50 px-3 text-red-600 hover:bg-red-100 hover:text-red-700"
+                title="Vaciar carrito"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4 mr-1" />
+                Vaciar
               </Button>
             )}
           </div>
 
-          <div className="space-y-3 flex-1 overflow-auto max-h-[calc(100vh-18rem)]">
+          <div className="scrollbar-thin -mx-1 flex-1 space-y-2 overflow-auto px-1">
             {cart.map((item) => (
-              <Card key={item.product.id} className={`shadow-md ${item.hasPromotion ? 'border-green-300 bg-green-50/50' : 'border-rose-100'}`}>
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <h4 className="font-semibold text-gray-800">{item.product.name}</h4>
-                      {item.hasPromotion && (
-                        <Badge className="bg-green-500 text-white text-xs ml-2 shrink-0">
-                          <Percent className="h-3 w-3 mr-1" />
-                          Promo
-                        </Badge>
+              <div
+                key={item.product.id}
+                className={`rounded-2xl p-3 ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/50"}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h4 className="line-clamp-2 text-sm font-semibold leading-tight">{item.product.name}</h4>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                      {item.hasPromotion ? (
+                        <>
+                          <span className="font-semibold text-emerald-600">${item.discountedPrice.toFixed(2)}</span>
+                          <span className="text-muted-foreground line-through">${item.originalPrice.toFixed(2)}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">${item.product.price.toFixed(2)} c/u</span>
                       )}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
                       {item.product.section && (
-                        <Badge variant="outline" className="text-xs border-rose-300 text-rose-800">
+                        <Badge variant="outline" className="rounded-full border-0 bg-primary/10 px-2 py-0 text-[10px] text-primary">
                           {item.product.section}
                         </Badge>
                       )}
-                      {item.hasPromotion && item.promotionName && (
-                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
-                          {item.promotionName}
+                      {item.hasPromotion && (
+                        <Badge className="rounded-full bg-emerald-500 px-2 py-0 text-[10px] text-white">
+                          <Percent className="h-2.5 w-2.5 mr-0.5" />
+                          {item.promotionName || "Promo"}
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        {item.hasPromotion ? (
-                          <>
-                            <span className="text-sm font-medium text-green-600">${item.discountedPrice.toFixed(2)}</span>
-                            <span className="text-xs text-muted-foreground line-through">${item.originalPrice.toFixed(2)}</span>
-                          </>
-                        ) : (
-                          <span className="text-sm font-medium text-rose-800">${item.product.price.toFixed(2)}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                          className="h-10 w-10 p-0 border-rose-200"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        <span className="w-10 text-center font-bold text-lg">{item.quantity}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                          className="h-10 w-10 p-0 border-rose-200"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="flex flex-col">
-                        <span className={`font-bold text-lg ${item.hasPromotion ? 'text-green-600' : 'text-rose-800'}`}>
-                          ${item.subtotal.toFixed(2)}
-                        </span>
-                        {item.hasPromotion && (
-                          <span className="text-xs text-green-600">
-                            Ahorras ${((item.originalPrice - item.discountedPrice) * item.quantity).toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                  <button
+                    type="button"
+                    onClick={() => removeFromCart(item.product.id)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                    title="Quitar"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1 rounded-full bg-white p-1 shadow-sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                      className="h-8 w-8 rounded-full p-0"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="w-8 text-center text-base font-bold">{item.quantity}</span>
+                    <Button
+                      size="sm"
+                      onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                      className="h-8 w-8 rounded-full p-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="text-right">
+                    <span className={`block text-base font-bold ${item.hasPromotion ? "text-emerald-600" : "text-foreground"}`}>
+                      ${item.subtotal.toFixed(2)}
+                    </span>
+                    {item.hasPromotion && (
+                      <span className="text-[11px] text-emerald-600">
+                        Ahorras ${((item.originalPrice - item.discountedPrice) * item.quantity).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))}
-          </div>
 
-          {cart.length === 0 && (
-            <div className="text-center text-muted-foreground py-12">
-              <ShoppingCart className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-lg">El carrito está vacío</p>
-              <p className="text-sm">Agrega productos para comenzar</p>
-            </div>
-          )}
+            {cart.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <span className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                  <ShoppingCart className="h-9 w-9 text-muted-foreground/50" />
+                </span>
+                <p className="font-semibold text-foreground">El carrito está vacío</p>
+                <p className="text-sm">Escanea o agrega productos para comenzar</p>
+              </div>
+            )}
+          </div>
 
           {cart.length > 0 && (() => {
             const promoSavings = cart.reduce((sum, item) => {
@@ -1791,92 +1768,139 @@ export default function POSPage() {
             const hasPromotions = promoSavings > 0
             
             return (
-              <div className="space-y-4 border-t pt-4">
+              <div className="mt-4 space-y-3">
                 {hasPromotions && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div className="flex items-center justify-between text-green-700">
-                      <span className="text-sm font-medium flex items-center gap-1">
-                        <Tag className="h-4 w-4" />
-                        Ahorro por promociones:
-                      </span>
-                      <span className="font-bold">-${promoSavings.toFixed(2)}</span>
-                    </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-2.5 text-emerald-700">
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                      <Tag className="h-4 w-4" />
+                      Ahorro por promociones
+                    </span>
+                    <span className="font-bold">-${promoSavings.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Total a pagar</p>
-                  <div className="text-3xl font-bold bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-                    ${total.toFixed(2)}
+                <div className="bento-accent p-4">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-white/70">Total a pagar</p>
+                      <p className="text-4xl font-bold tracking-tight">${total.toFixed(2)}</p>
+                    </div>
+                    <Receipt className="mb-1 h-7 w-7 text-white/50" />
                   </div>
+                  <Button
+                    onClick={() => setIsPaymentDialogOpen(true)}
+                    className="mt-4 h-14 w-full rounded-2xl bg-white text-lg font-bold text-primary shadow-sm hover:bg-white/90"
+                    size="lg"
+                  >
+                    <Banknote className="h-5 w-5 mr-2" />
+                    Cobrar
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => setIsPaymentDialogOpen(true)}
-                  className="w-full bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold py-4 text-lg"
-                  size="lg"
-                >
-                  <Receipt className="h-5 w-5 mr-2" />
-                  Procesar Pago
-                </Button>
               </div>
             )
           })()}
-        </div>
+          </div>
+        </aside>
 
         {/* Mobile sticky cart bar */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white/95 backdrop-blur-sm p-3 shadow-[0_-4px_20px_rgba(0,0,0,0.1)]">
-          <div className="flex items-center gap-3 max-w-screen-xl mx-auto">
+        <div className="lg:hidden fixed inset-x-3 bottom-3 z-40">
+          <div className="bento-accent mx-auto flex max-w-screen-sm items-center gap-2 p-2">
             <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1 h-12 border-rose-200 justify-start">
-                  <ShoppingCart className="h-5 w-5 mr-2" />
-                  Carrito ({cart.length})
+                <Button
+                  variant="ghost"
+                  className="h-14 flex-1 justify-start gap-3 rounded-2xl bg-white/10 px-3 text-white hover:bg-white/15 hover:text-white"
+                >
+                  <span className="relative">
+                    <ShoppingCart className="h-6 w-6" />
+                    {cart.length > 0 && (
+                      <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-primary">
+                        {cart.length}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex flex-col items-start leading-tight">
+                    <span className="text-[11px] font-normal text-white/70">Ver carrito</span>
+                    <span className="text-lg font-bold">${total.toFixed(2)}</span>
+                  </span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="bottom" className="h-[85vh] overflow-y-auto">
-                <SheetHeader>
-                  <SheetTitle>Carrito de Compras</SheetTitle>
+              <SheetContent side="bottom" className="h-[88vh] gap-0 rounded-t-[28px] border-0 p-0">
+                <SheetHeader className="px-5 pb-3 pt-5">
+                  <SheetTitle className="flex items-center gap-2 text-lg">
+                    <ShoppingCart className="h-5 w-5 text-primary" />
+                    Carrito ({cart.length})
+                  </SheetTitle>
                 </SheetHeader>
-                <div className="mt-4 space-y-3 pb-24">
+                <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-4">
                   {cart.map((item) => (
-                    <Card key={item.product.id} className="border-rose-100">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start gap-2">
-                          <div>
-                            <h4 className="font-semibold">{item.product.name}</h4>
-                            <p className="text-sm text-muted-foreground">${item.discountedPrice.toFixed(2)} c/u</p>
-                          </div>
-                          <span className="font-bold text-rose-800">${item.subtotal.toFixed(2)}</span>
+                    <div
+                      key={item.product.id}
+                      className={`rounded-2xl p-3 ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/60"}`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
+                          <h4 className="line-clamp-2 text-sm font-semibold leading-tight">{item.product.name}</h4>
+                          <p className="mt-0.5 text-xs text-muted-foreground">${item.discountedPrice.toFixed(2)} c/u</p>
                         </div>
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-3">
-                            <Button variant="outline" size="sm" className="h-10 w-10 p-0" onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                            <span className="w-8 text-center font-bold text-lg">{item.quantity}</span>
-                            <Button variant="outline" size="sm" className="h-10 w-10 p-0" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => removeFromCart(item.product.id)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                        <span className="shrink-0 font-bold">${item.subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-2.5">
+                        <div className="flex items-center gap-1 rounded-full bg-white p-1 shadow-sm">
+                          <Button variant="ghost" size="sm" className="h-10 w-10 rounded-full p-0" onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                          <span className="w-8 text-center font-bold text-lg">{item.quantity}</span>
+                          <Button size="sm" className="h-10 w-10 rounded-full p-0" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                            <Plus className="h-4 w-4" />
                           </Button>
                         </div>
-                      </CardContent>
-                    </Card>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-10 w-10 rounded-full p-0 text-red-500 hover:bg-red-50 hover:text-red-600"
+                          onClick={() => removeFromCart(item.product.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   ))}
                   {cart.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">El carrito está vacío</p>
+                    <div className="flex flex-col items-center py-12 text-center text-muted-foreground">
+                      <span className="mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                        <ShoppingCart className="h-7 w-7 text-muted-foreground/50" />
+                      </span>
+                      <p>El carrito está vacío</p>
+                    </div>
                   )}
                 </div>
+                {cart.length > 0 && (
+                  <div className="border-t bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                    <div className="mb-3 flex items-baseline justify-between">
+                      <span className="text-sm text-muted-foreground">Total a pagar</span>
+                      <span className="text-3xl font-bold tracking-tight text-primary">${total.toFixed(2)}</span>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setIsCartOpen(false)
+                        setIsPaymentDialogOpen(true)
+                      }}
+                      className="h-14 w-full rounded-2xl text-lg font-bold shadow-sm"
+                    >
+                      <Banknote className="h-5 w-5 mr-2" />
+                      Cobrar
+                    </Button>
+                  </div>
+                )}
               </SheetContent>
             </Sheet>
             <Button
               onClick={() => (cart.length > 0 ? setIsPaymentDialogOpen(true) : setIsCartOpen(true))}
               disabled={cart.length === 0}
-              className="h-12 px-6 bg-gradient-to-r from-rose-800 to-red-900 text-white font-bold shrink-0"
+              className="h-14 shrink-0 rounded-2xl bg-white px-6 text-base font-bold text-primary shadow-sm hover:bg-white/90 disabled:opacity-60"
             >
-              <Receipt className="h-5 w-5 mr-1" />
-              ${total.toFixed(2)}
+              <Banknote className="h-5 w-5 mr-1.5" />
+              Cobrar
             </Button>
           </div>
         </div>
@@ -1885,33 +1909,141 @@ export default function POSPage() {
       <InstallPrompt />
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="border-rose-200 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent">
-              Procesar Pago
-            </DialogTitle>
-            <DialogDescription className="text-lg font-semibold">
-              Subtotal: <span className="text-rose-800">${subtotal.toFixed(2)}</span>
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-[28px] border-0 p-0 [&>button]:text-white! [&>button]:opacity-80">
+          <div className="bento-accent rounded-none px-6 pb-6 pt-6">
+            <DialogHeader className="space-y-0 text-left">
+              <DialogTitle className="text-sm font-medium text-white/75">Cobrar</DialogTitle>
+              <DialogDescription className="sr-only">Subtotal: ${subtotal.toFixed(2)}</DialogDescription>
+            </DialogHeader>
+            <p className="mt-1 text-5xl font-bold tracking-tight">${total.toFixed(2)}</p>
+            <p className="mt-1 text-sm text-white/70">
+              Subtotal ${subtotal.toFixed(2)}
+              {discountAmount > 0 && ` · Descuento -$${discountAmount.toFixed(2)}`}
+            </p>
+          </div>
 
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <Card className="border-orange-200 bg-orange-50/50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2 text-orange-700">
-                  <Tag className="h-4 w-4" />
-                  Aplicar Descuento
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+          <div className="space-y-5 max-h-[60vh] overflow-y-auto p-5 sm:p-6">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("efectivo")}
+                className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
+                  paymentMethod === "efectivo"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-transparent bg-muted text-muted-foreground hover:bg-muted/70"
+                }`}
+              >
+                <Banknote className="h-6 w-6" />
+                Efectivo
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("tarjeta")}
+                className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
+                  paymentMethod === "tarjeta"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-transparent bg-muted text-muted-foreground hover:bg-muted/70"
+                }`}
+              >
+                <CreditCard className="h-6 w-6" />
+                Tarjeta
+              </button>
+            </div>
+
+            {paymentMethod === "efectivo" && (
+              <div className="space-y-3">
+                <Label htmlFor="cashReceived" className="text-sm font-semibold">
+                  ¿Con cuánto paga?
+                </Label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-bold text-muted-foreground">
+                    $
+                  </span>
+                  <Input
+                    id="cashReceived"
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={cashReceived}
+                    onChange={(e) => setCashReceived(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        !processingPayment &&
+                        cashReceived &&
+                        Number.parseFloat(cashReceived) >= total
+                      ) {
+                        handlePayment()
+                      }
+                    }}
+                    placeholder="0.00"
+                    autoFocus
+                    className="h-16 rounded-2xl border-2 border-primary/20 pl-10 text-center text-3xl font-bold focus-visible:border-primary focus-visible:ring-primary/20"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCashReceived(total.toFixed(2))}
+                    className="h-10 rounded-full bg-primary/10 px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+                  >
+                    Exacto
+                  </button>
+                  {[20, 50, 100, 200, 500, 1000]
+                    .filter((bill) => bill > total)
+                    .slice(0, 4)
+                    .map((bill) => (
+                      <button
+                        key={bill}
+                        type="button"
+                        onClick={() => setCashReceived(String(bill))}
+                        className="h-10 rounded-full bg-muted px-4 text-sm font-semibold hover:bg-muted/70"
+                      >
+                        ${bill}
+                      </button>
+                    ))}
+                </div>
+                {cashReceived && Number.parseFloat(cashReceived) >= total && (
+                  <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-5 py-4 ring-1 ring-emerald-200">
+                    <span className="text-sm font-semibold text-emerald-700">Cambio</span>
+                    <span className="text-3xl font-bold text-emerald-600">${change.toFixed(2)}</span>
+                  </div>
+                )}
+                {cashReceived && Number.parseFloat(cashReceived) < total && (
+                  <div className="flex items-center justify-between rounded-2xl bg-red-50 px-5 py-3 text-red-600">
+                    <span className="text-sm font-semibold">Faltan</span>
+                    <span className="text-xl font-bold">
+                      ${(total - (Number.parseFloat(cashReceived) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <details className="group rounded-2xl bg-muted/50">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-primary" />
+                  Aplicar descuento
+                </span>
+                <span className="flex items-center gap-2">
+                  {discountAmount > 0 && (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs text-emerald-700">
+                      -${discountAmount.toFixed(2)}
+                    </span>
+                  )}
+                  <Plus className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-45" />
+                </span>
+              </summary>
+              <div className="space-y-3 px-4 pb-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Tipo</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground">Tipo</Label>
                     <Select
                       value={discountType}
                       onValueChange={(value: "percentage" | "fixed") => setDiscountType(value)}
                     >
-                      <SelectTrigger className="border-orange-200">
+                      <SelectTrigger className="h-11 rounded-xl border-0 bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1931,7 +2063,7 @@ export default function POSPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-semibold">Valor</Label>
+                    <Label className="text-xs font-semibold text-muted-foreground">Valor</Label>
                     <Input
                       type="number"
                       step="0.01"
@@ -1939,92 +2071,31 @@ export default function POSPage() {
                       value={discountValue}
                       onChange={(e) => setDiscountValue(e.target.value)}
                       placeholder={discountType === "percentage" ? "10" : "50.00"}
-                      className="border-orange-200"
+                      className="h-11 rounded-xl border-0 bg-white"
                     />
                   </div>
                 </div>
 
                 {discountAmount > 0 && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                    <div className="flex justify-between items-center text-green-700 font-semibold">
-                      <span>Descuento aplicado:</span>
-                      <span className="text-lg">-${discountAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="text-xs text-green-600 mt-1">
+                  <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                    <span>
                       {discountType === "percentage"
                         ? `${discountValue}% de descuento`
                         : `$${discountValue} de descuento`}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {discountAmount > 0 && (
-              <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
-                <div className="flex justify-between text-sm text-muted-foreground mb-1">
-                  <span>Subtotal:</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-green-600 font-semibold mb-2">
-                  <span>Descuento:</span>
-                  <span>-${discountAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold text-rose-900 border-t border-rose-200 pt-2">
-                  <span>Total a pagar:</span>
-                  <span>${total.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label className="text-base font-semibold">Método de pago</Label>
-              <Select value={paymentMethod} onValueChange={(value: "efectivo" | "tarjeta") => setPaymentMethod(value)}>
-                <SelectTrigger className="border-rose-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="efectivo">
-                    <div className="flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-green-600" />
-                      Efectivo
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="tarjeta">
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-rose-800" />
-                      Tarjeta
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {paymentMethod === "efectivo" && (
-              <div className="space-y-2">
-                <Label htmlFor="cashReceived" className="text-base font-semibold">
-                  Monto recibido
-                </Label>
-                <Input
-                  id="cashReceived"
-                  type="number"
-                  step="0.01"
-                  value={cashReceived}
-                  onChange={(e) => setCashReceived(e.target.value)}
-                  placeholder="0.00"
-                  className="border-green-200 focus:border-green-400 text-lg"
-                />
-                {cashReceived && Number.parseFloat(cashReceived) >= total && (
-                  <div className="text-xl font-bold text-green-600 bg-green-50 p-3 rounded-lg text-center">
-                    Cambio: ${change.toFixed(2)}
+                    </span>
+                    <span>-${discountAmount.toFixed(2)}</span>
                   </div>
                 )}
               </div>
-            )}
+            </details>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)} className="border-gray-300">
+          <DialogFooter className="gap-2 border-t bg-muted/30 p-4 sm:p-5">
+            <Button
+              variant="ghost"
+              onClick={() => setIsPaymentDialogOpen(false)}
+              className="h-12 rounded-2xl px-5"
+            >
               Cancelar
             </Button>
             <Button
@@ -2033,9 +2104,10 @@ export default function POSPage() {
                 processingPayment ||
                 (paymentMethod === "efectivo" && (!cashReceived || Number.parseFloat(cashReceived) < total))
               }
-              className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950 text-white font-bold"
+              className="h-12 rounded-2xl px-6 text-base font-bold shadow-sm sm:min-w-[200px]"
             >
-              {processingPayment ? "Procesando..." : "Confirmar Pago"}
+              <CheckCircle2 className="h-5 w-5 mr-2" />
+              {processingPayment ? "Procesando..." : `Cobrar $${total.toFixed(2)}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2051,7 +2123,7 @@ export default function POSPage() {
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md rounded-[28px] border-0">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">Escáner QR Avanzado</DialogTitle>
             <DialogDescription>
@@ -2165,10 +2237,12 @@ export default function POSPage() {
       </Dialog>
 
       <Dialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen}>
-        <DialogContent className="max-w-md border-rose-200">
+        <DialogContent className="max-w-md rounded-[28px] border-0">
           <DialogHeader>
-            <DialogTitle className="text-xl bg-gradient-to-r from-rose-800 to-red-900 bg-clip-text text-transparent flex items-center gap-2">
-              <Printer className="h-5 w-5 text-rose-800" />
+            <DialogTitle className="flex items-center gap-3 text-xl text-primary">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
+                <Printer className="h-5 w-5" />
+              </span>
               Exportar Inventario
             </DialogTitle>
             <DialogDescription>
@@ -2190,7 +2264,7 @@ export default function POSPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto border rounded-lg p-3 bg-gray-50">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto rounded-2xl p-3 bg-muted/60">
                 {getUniqueSections().map((section) => (
                   <div key={section} className="flex items-center space-x-2">
                     <Checkbox
@@ -2254,13 +2328,13 @@ export default function POSPage() {
           </div>
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsExportDialogOpen(false)} className="bg-transparent">
+            <Button variant="ghost" onClick={() => setIsExportDialogOpen(false)} className="rounded-2xl">
               Cancelar
             </Button>
             <Button
               onClick={generateStockReport}
               disabled={selectedSections.length === 0}
-              className="bg-gradient-to-r from-rose-800 to-red-900 hover:from-rose-900 hover:to-red-950"
+              className="rounded-2xl"
             >
               <Printer className="h-4 w-4 mr-2" />
               Imprimir Reporte
