@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,6 +29,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { formatMoney } from "@/lib/money"
 import { formatAlertLocation } from "@/lib/inventory-alerts"
 import { cn } from "@/lib/utils"
+import { CountUp, Magnetic, Reveal, SplitText, stagger } from "@/components/motion"
 import {
   ResponsiveContainer,
   PieChart,
@@ -98,22 +99,35 @@ function KpiCard({
   icon: Icon,
   tone = "default",
   href,
+  index = 0,
 }: {
   title: string
   value: ReactNode
   icon: LucideIcon
   tone?: Tone
   href?: string
+  index?: number
 }) {
   const styles = TONE_STYLES[tone]
   const body = (
-    <div className={cn("bento flex h-full flex-col justify-between gap-4 p-4 sm:p-5", href && "bento-hover")}>
+    <div
+      className={cn(
+        "group bento anim-rise flex h-full flex-col justify-between gap-4 p-4 sm:p-5",
+        href && "bento-hover",
+      )}
+      style={stagger(index)}
+    >
       <div className="flex items-center justify-between">
-        <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", styles.icon)}>
+        <span
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-2xl transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110 group-hover:-rotate-6",
+            styles.icon,
+          )}
+        >
           <Icon className="h-5 w-5" />
         </span>
         {href ? (
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground transition-all duration-300 group-hover:rotate-45 group-hover:bg-primary group-hover:text-primary-foreground">
             <ArrowUpRight className="h-4 w-4" />
           </span>
         ) : null}
@@ -153,6 +167,7 @@ function AlertListCard({
   count,
   children,
   empty,
+  index = 0,
 }: {
   href: string
   title: string
@@ -161,14 +176,21 @@ function AlertListCard({
   count: number
   children: ReactNode
   empty: boolean
+  index?: number
 }) {
   const styles = TONE_STYLES[tone]
   return (
+    <Reveal index={index} className="h-full">
     <Link href={href} className="block h-full">
-      <div className="bento bento-hover flex h-full flex-col p-5">
+      <div className="group bento bento-hover flex h-full flex-col p-5">
         <div className="mb-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", styles.icon)}>
+            <span
+              className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-2xl transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110 group-hover:-rotate-6",
+                styles.icon,
+              )}
+            >
               <Icon className="h-5 w-5" />
             </span>
             <div>
@@ -176,19 +198,22 @@ function AlertListCard({
               <p className="text-xs text-muted-foreground">Toca para ver todos</p>
             </div>
           </div>
-          <span className={cn("text-2xl font-bold", styles.value)}>{count}</span>
+          <span className={cn("text-2xl font-bold", styles.value)}>
+            <CountUp value={count} />
+          </span>
         </div>
         <div className="scrollbar-thin max-h-72 flex-1 space-y-2 overflow-y-auto pr-1">
           {empty ? <p className="rounded-2xl bg-muted/50 p-4 text-sm text-muted-foreground">Sin alertas</p> : children}
         </div>
       </div>
     </Link>
+    </Reveal>
   )
 }
 
 function AlertRow({ name, location, badge, badgeClass }: { name: string; location: string; badge: ReactNode; badgeClass: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm">
+    <div className="flex items-start justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm transition-colors hover:bg-muted">
       <div className="min-w-0">
         <p className="font-medium leading-tight">{name}</p>
         <p className="mt-1 truncate text-xs text-muted-foreground">{location}</p>
@@ -361,7 +386,7 @@ export default function AdminDashboard() {
   return (
     <div className="app-canvas flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 p-3 lg:block">
-        <div className="rail-dark flex h-full flex-col overflow-hidden rounded-[28px] shadow-xl shadow-black/10">
+        <div className="rail-dark anim-slide-left flex h-full flex-col overflow-hidden rounded-[28px] shadow-xl shadow-black/10">
           <div className="flex items-center gap-3 px-5 pb-4 pt-5">
             <img src="/logo.jpeg" alt="Farmacia Bienestar" className="h-11 w-11 rounded-2xl object-cover ring-2 ring-white/10" />
             <div className="min-w-0">
@@ -410,9 +435,12 @@ export default function AdminDashboard() {
               </Sheet>
               <div className="min-w-0">
                 <h1 className="truncate text-lg font-bold tracking-tight sm:text-2xl lg:text-3xl">
-                  Hola{firstName ? `, ${firstName}` : ""}
+                  <SplitText key={firstName} text={`Hola${firstName ? `, ${firstName}` : ""}`} />
                 </h1>
-                <p className="truncate text-xs capitalize text-muted-foreground sm:text-sm">
+                <p
+                  className="anim-rise-sm truncate text-xs capitalize text-muted-foreground sm:text-sm"
+                  style={{ "--d": "250ms" } as CSSProperties}
+                >
                   {todayLabel} · {selectedBranchName}
                 </p>
               </div>
@@ -432,12 +460,14 @@ export default function AdminDashboard() {
                   ))}
                 </SelectContent>
               </Select>
-              <Link href="/pos" className="hidden sm:block">
-                <Button className="h-10 rounded-full px-5 shadow-sm">
-                  <ShoppingCart className="mr-1.5 h-4 w-4" />
-                  POS
-                </Button>
-              </Link>
+              <Magnetic className="hidden sm:inline-block">
+                <Link href="/pos">
+                  <Button className="shine h-10 rounded-full px-5 shadow-sm">
+                    <ShoppingCart className="mr-1.5 h-4 w-4" />
+                    POS
+                  </Button>
+                </Link>
+              </Magnetic>
               <Button
                 onClick={handleLogout}
                 variant="ghost"
@@ -457,20 +487,23 @@ export default function AdminDashboard() {
           ) : null}
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            <div className="bento-accent relative flex flex-col justify-between gap-6 overflow-hidden p-6 lg:col-span-5">
-              <div className="flex items-start justify-between gap-3">
+            <div className="bento-accent anim-rise relative flex flex-col justify-between gap-6 overflow-hidden p-6 lg:col-span-5">
+              <div className="pattern-rings pointer-events-none absolute inset-0" aria-hidden="true" />
+              <div className="relative flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-white/70">Ingresos de hoy</p>
-                  <p className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">{formatMoney(stats?.totalRevenue || 0)}</p>
+                  <p className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
+                    <CountUp value={stats?.totalRevenue || 0} format={formatMoney} duration={1300} delay={150} />
+                  </p>
                 </div>
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 transition-transform duration-500 [transition-timing-function:var(--ease-back)] hover:rotate-12 hover:scale-110">
                   <DollarSign className="h-6 w-6" />
                 </span>
               </div>
 
               {pieToday.length > 0 ? (
-                <div className="space-y-2.5">
-                  {pieToday.slice(0, 4).map((b) => {
+                <div className="relative space-y-2.5">
+                  {pieToday.slice(0, 4).map((b, i) => {
                     const pct = todayTotalForPie > 0 ? Math.round((b.value / todayTotalForPie) * 100) : 0
                     return (
                       <div key={b.name} className="space-y-1">
@@ -479,7 +512,10 @@ export default function AdminDashboard() {
                           <span className="shrink-0 font-semibold">{formatMoney(b.value)}</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-                          <div className="h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+                          <div
+                            className="anim-grow-x h-full rounded-full bg-white"
+                            style={{ width: `${pct}%`, ...stagger(i) }}
+                          />
                         </div>
                       </div>
                     )
@@ -487,14 +523,20 @@ export default function AdminDashboard() {
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <p className="text-2xl font-bold">{stats?.todaySales ?? 0}</p>
+              <div className="relative grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
+                  <p className="text-2xl font-bold">
+                    <CountUp value={stats?.todaySales ?? 0} delay={250} />
+                  </p>
                   <p className="text-xs text-white/70">Ventas hoy</p>
                 </div>
-                <div className="rounded-2xl bg-white/10 p-3">
+                <div className="rounded-2xl bg-white/10 p-3 backdrop-blur-sm">
                   <p className="truncate text-2xl font-bold">
-                    {formatMoney(stats?.todaySales ? (stats.totalRevenue || 0) / stats.todaySales : 0)}
+                    <CountUp
+                      value={stats?.todaySales ? (stats.totalRevenue || 0) / stats.todaySales : 0}
+                      format={formatMoney}
+                      delay={300}
+                    />
                   </p>
                   <p className="text-xs text-white/70">Ticket promedio</p>
                 </div>
@@ -502,26 +544,29 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:col-span-7">
-              <KpiCard title="Cajeros activos" value={stats?.activeCashiers ?? 0} icon={Users} />
-              <KpiCard title="Productos" value={stats?.totalProducts ?? 0} icon={Package} />
-              <KpiCard title="Sucursales" value={branches.length} icon={Store} />
+              <KpiCard index={1} title="Cajeros activos" value={<CountUp value={stats?.activeCashiers ?? 0} />} icon={Users} />
+              <KpiCard index={2} title="Productos" value={<CountUp value={stats?.totalProducts ?? 0} />} icon={Package} />
+              <KpiCard index={3} title="Sucursales" value={<CountUp value={branches.length} />} icon={Store} />
               <KpiCard
+                index={4}
                 title="Stock bajo"
-                value={stats?.lowStockProducts ?? 0}
+                value={<CountUp value={stats?.lowStockProducts ?? 0} />}
                 icon={AlertTriangle}
                 tone="danger"
                 href={`/admin/alertas?type=low_stock${branchQuery}`}
               />
               <KpiCard
+                index={5}
                 title="Por vencer"
-                value={stats?.expiringProducts ?? 0}
+                value={<CountUp value={stats?.expiringProducts ?? 0} />}
                 icon={Calendar}
                 tone="warning"
                 href={`/admin/alertas?type=expiring${branchQuery}`}
               />
               <KpiCard
+                index={6}
                 title="Vencidos"
-                value={stats?.expiredProducts ?? 0}
+                value={<CountUp value={stats?.expiredProducts ?? 0} />}
                 icon={AlertTriangle}
                 tone="danger"
                 href={`/admin/alertas?type=expired${branchQuery}`}
@@ -531,7 +576,7 @@ export default function AdminDashboard() {
 
           {(branchFilter === "all" || branchSummaries.length > 0) && (
             <section className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-              <div className="bento p-5 xl:col-span-5">
+              <div className="bento anim-rise p-5 xl:col-span-5" style={stagger(4)}>
                 <div className="mb-2 flex items-center justify-between">
                   <div>
                     <p className="font-semibold">Dinero de hoy por sucursal</p>
@@ -556,6 +601,9 @@ export default function AdminDashboard() {
                             paddingAngle={3}
                             cornerRadius={8}
                             stroke="none"
+                            animationBegin={250}
+                            animationDuration={1100}
+                            animationEasing="ease-out"
                           >
                             {pieToday.map((_, index) => (
                               <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -566,12 +614,18 @@ export default function AdminDashboard() {
                       </ResponsiveContainer>
                       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                         <p className="text-[11px] text-muted-foreground">Total</p>
-                        <p className="text-sm font-bold">{formatMoney(todayTotalForPie)}</p>
+                        <p className="text-sm font-bold">
+                          <CountUp value={todayTotalForPie} format={formatMoney} delay={300} />
+                        </p>
                       </div>
                     </div>
                     <div className="w-full space-y-2 sm:w-1/2">
                       {pieToday.map((p, index) => (
-                        <div key={p.name} className="flex items-center justify-between gap-2 rounded-2xl bg-muted/50 px-3 py-2 text-sm">
+                        <div
+                          key={p.name}
+                          className="anim-slide-left flex items-center justify-between gap-2 rounded-2xl bg-muted/50 px-3 py-2 text-sm transition-colors hover:bg-muted"
+                          style={{ "--d": "400ms", ...stagger(index) } as CSSProperties}
+                        >
                           <span className="flex min-w-0 items-center gap-2">
                             <span
                               className="h-2.5 w-2.5 shrink-0 rounded-full"
@@ -587,7 +641,7 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              <div className="bento p-5 xl:col-span-7">
+              <div className="bento anim-rise p-5 xl:col-span-7" style={stagger(5)}>
                 <div className="mb-4">
                   <p className="font-semibold">Ingresos del mes por sucursal</p>
                   <p className="text-xs text-muted-foreground">Comparativo del mes actual</p>
@@ -614,7 +668,16 @@ export default function AdminDashboard() {
                             return row?.fullName || ""
                           }}
                         />
-                        <Bar dataKey="ingresos" name="Ingresos" fill="#8B1538" radius={[12, 12, 12, 12]} maxBarSize={48} />
+                        <Bar
+                          dataKey="ingresos"
+                          name="Ingresos"
+                          fill="#8B1538"
+                          radius={[12, 12, 12, 12]}
+                          maxBarSize={48}
+                          animationBegin={350}
+                          animationDuration={1000}
+                          animationEasing="ease-out"
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -628,10 +691,10 @@ export default function AdminDashboard() {
               <SectionTitle title="Sucursales" subtitle="Ventas, ingresos y alertas de inventario" />
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {branchSummaries.map((branch, index) => (
-                  <div key={branch.id} className="bento p-5">
+                  <Reveal key={branch.id} index={index} className="group bento bento-hover p-5">
                     <div className="mb-4 flex items-center gap-3">
                       <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110 group-hover:-rotate-6"
                         style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       >
                         <Store className="h-5 w-5" />
@@ -654,7 +717,7 @@ export default function AdminDashboard() {
                       <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">Stock bajo: {branch.lowStock}</span>
                       <span className="rounded-full bg-red-100 px-3 py-1 text-red-700">Agotados: {branch.outOfStock}</span>
                     </div>
-                  </div>
+                  </Reveal>
                 ))}
               </div>
             </section>
@@ -681,17 +744,18 @@ export default function AdminDashboard() {
                   </div>
                 </Link>
               ) : (
-                topByBranch.map(([branchId, group]) => (
-                  <Link key={branchId} href={`/admin/mas-vendidos?period=month&branch_id=${branchId}`} className="block h-full">
-                    <div className="bento bento-hover flex h-full flex-col p-5">
+                topByBranch.map(([branchId, group], groupIndex) => (
+                  <Reveal key={branchId} index={groupIndex} className="h-full">
+                  <Link href={`/admin/mas-vendidos?period=month&branch_id=${branchId}`} className="block h-full">
+                    <div className="group bento bento-hover flex h-full flex-col p-5">
                       <div className="mb-4 flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110 group-hover:-rotate-12">
                             <Trophy className="h-5 w-5" />
                           </span>
                           <p className="truncate font-semibold">{group.name}</p>
                         </div>
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground transition-all duration-300 group-hover:rotate-45 group-hover:bg-primary group-hover:text-primary-foreground">
                           <ArrowUpRight className="h-4 w-4" />
                         </span>
                       </div>
@@ -699,7 +763,7 @@ export default function AdminDashboard() {
                         {group.items.map((item) => (
                           <div
                             key={`${item.branch_id}-${item.product_id}`}
-                            className="flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5 text-sm"
+                            className="flex items-center gap-3 rounded-2xl bg-muted/50 px-3 py-2.5 text-sm transition-colors hover:bg-muted"
                           >
                             <span
                               className={cn(
@@ -722,6 +786,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </Link>
+                  </Reveal>
                 ))
               )}
             </div>
@@ -740,16 +805,17 @@ export default function AdminDashboard() {
               }
             />
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="min-h-[220px] [&>div]:h-full [&>div]:rounded-3xl">
+              <Reveal index={0} className="min-h-[220px] [&>div]:h-full [&>div]:rounded-3xl">
                 <NotificationManager userRole="admin" />
                 <AdminAlertListener enabled />
-              </div>
+              </Reveal>
 
               <AlertListCard
                 href={`/admin/alertas?type=low_stock${branchQuery}`}
                 title="Stock bajo"
                 icon={AlertTriangle}
                 tone="danger"
+                index={1}
                 count={stats?.lowStockProducts ?? lowStockItems.length}
                 empty={lowStockItems.length === 0}
               >
@@ -769,6 +835,7 @@ export default function AdminDashboard() {
                 title="Agotados"
                 icon={PackageX}
                 tone="danger"
+                index={0}
                 count={outOfStockItems.length}
                 empty={outOfStockItems.length === 0}
               >
@@ -788,6 +855,7 @@ export default function AdminDashboard() {
                 title="Por vencer"
                 icon={Calendar}
                 tone="warning"
+                index={1}
                 count={stats?.expiringProducts ?? expiringItems.length}
                 empty={expiringItems.length === 0}
               >
@@ -812,6 +880,7 @@ export default function AdminDashboard() {
                 title="Vencidos"
                 icon={AlertTriangle}
                 tone="danger"
+                index={0}
                 count={stats?.expiredProducts ?? expiredItems.length}
                 empty={expiredItems.length === 0}
               >
@@ -832,7 +901,7 @@ export default function AdminDashboard() {
                 })}
               </AlertListCard>
 
-              <div className="bento p-5 lg:col-span-2">
+              <Reveal className="bento p-5 lg:col-span-2">
                 <div className="mb-4 flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                     <ShoppingCart className="h-5 w-5" />
@@ -847,7 +916,10 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     {recentSales.map((sale) => (
-                      <div key={sale.id} className="flex items-center justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm">
+                      <div
+                        key={sale.id}
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-muted/50 px-3.5 py-3 text-sm transition-colors hover:bg-muted"
+                      >
                         <div className="flex min-w-0 items-center gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-primary">
                             <Receipt className="h-4 w-4" />
@@ -867,7 +939,7 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 )}
-              </div>
+              </Reveal>
             </div>
           </section>
         </main>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import Link from "next/link"
 import {
   Package,
@@ -106,7 +106,17 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
 
 type NavVariant = "light" | "dark"
 
-function NavLink({ item, onNavigate, variant }: { item: NavItem; onNavigate?: () => void; variant: NavVariant }) {
+function NavLink({
+  item,
+  onNavigate,
+  variant,
+  index,
+}: {
+  item: NavItem
+  onNavigate?: () => void
+  variant: NavVariant
+  index: number
+}) {
   const Icon = item.icon
   const dark = variant === "dark"
   return (
@@ -114,13 +124,14 @@ function NavLink({ item, onNavigate, variant }: { item: NavItem; onNavigate?: ()
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "group flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition-colors",
+        "anim-slide-left group flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition-[background-color,color,transform] duration-300 hover:translate-x-1",
         dark ? "text-white/80 hover:bg-white/10 hover:text-white" : "hover:bg-primary/5",
       )}
+      style={{ "--i": index } as CSSProperties}
     >
       <span
         className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-[background-color,color,transform] duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110",
           dark
             ? "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white"
             : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
@@ -169,8 +180,8 @@ function NavGroupBlock({
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-0.5 pb-3 pt-0.5">
-        {group.items.map((item) => (
-          <NavLink key={item.href + item.title} item={item} onNavigate={onNavigate} variant={variant} />
+        {group.items.map((item, i) => (
+          <NavLink key={item.href + item.title} item={item} onNavigate={onNavigate} variant={variant} index={i} />
         ))}
       </CollapsibleContent>
     </Collapsible>
@@ -194,10 +205,17 @@ export function AdminDashboardNav({
           href="/admin/dashboard"
           onClick={onNavigate}
           className={cn(
-            "flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold",
+            "relative flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold",
             dark ? "bg-white text-primary shadow-sm" : "bg-primary text-primary-foreground shadow-sm",
           )}
         >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full",
+              dark ? "bg-white" : "bg-primary",
+            )}
+          />
           <span
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-xl",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, type CSSProperties } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -42,6 +42,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
+import { CountUp, Magnetic, SplitText, stagger } from "@/components/motion"
 
 const PRODUCTS_PER_PAGE = 30
 
@@ -129,6 +130,7 @@ export default function POSPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const barcodeInputRef = useRef<HTMLInputElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   const router = useRouter()
   const supabase = createClient()
@@ -162,6 +164,21 @@ export default function POSPage() {
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [])
+
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      if (e.key === "F2") {
+        e.preventDefault()
+        if (cart.length > 0 && !isPaymentDialogOpen) setIsPaymentDialogOpen(true)
+      } else if (e.key === "F3") {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
+      }
+    }
+    document.addEventListener("keydown", handleShortcut)
+    return () => document.removeEventListener("keydown", handleShortcut)
+  }, [cart.length, isPaymentDialogOpen])
 
   useEffect(() => {
     if (!authReady) return
@@ -1253,12 +1270,12 @@ export default function POSPage() {
   return (
     <div className="app-canvas min-h-screen overflow-x-hidden">
       <header className="z-30 px-3 pt-3 sm:px-4 lg:sticky lg:top-0 lg:px-6">
-        <div className="bento flex flex-col gap-3 px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="bento anim-rise-sm flex flex-col gap-3 px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <img
               src="/logo.jpeg"
               alt="Farmacia Bienestar"
-              className="h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-black/5"
+              className="h-11 w-11 shrink-0 rounded-2xl object-cover ring-1 ring-black/5 transition-transform duration-500 [transition-timing-function:var(--ease-back)] hover:rotate-6 hover:scale-110"
             />
             <div className="min-w-0">
               <h1 className="truncate text-lg font-bold tracking-tight text-primary lg:text-xl">
@@ -1345,8 +1362,8 @@ export default function POSPage() {
       </header>
 
       {quickOrderNotice && (
-        <div className="fixed top-20 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center gap-3 rounded-2xl border-2 border-emerald-400 bg-emerald-50 px-5 py-4 shadow-xl">
+        <div className="fixed top-20 left-1/2 z-50 -translate-x-1/2">
+          <div className="anim-pop flex items-center gap-3 rounded-2xl border-2 border-emerald-400 bg-emerald-50 px-5 py-4 shadow-xl">
             <CheckCircle2 className="h-7 w-7 shrink-0 text-emerald-600" />
             <div>
               <p className="font-black text-emerald-900">¡Pedido confirmado!</p>
@@ -1362,26 +1379,31 @@ export default function POSPage() {
       <div className="flex flex-col lg:flex-row min-h-[calc(100vh-5rem)] pb-28 lg:pb-0">
         <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-5 overflow-auto">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-            <div className="bento-accent flex flex-col justify-between gap-5 p-5 sm:p-6 xl:col-span-2">
-              <div className="flex items-start justify-between gap-3">
+            <div className="bento-accent anim-rise relative flex flex-col justify-between gap-5 overflow-hidden p-5 sm:p-6 xl:col-span-2">
+              <div className="pattern-rings pointer-events-none absolute inset-0" aria-hidden="true" />
+              <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-white/70">Tu salud es nuestro compromiso</p>
-                  <h2 className="mt-0.5 truncate text-xl font-bold sm:text-2xl">¡Hola {currentUser?.full_name}!</h2>
+                  <h2 className="mt-0.5 truncate text-xl font-bold sm:text-2xl">
+                    <SplitText key={currentUser?.full_name || ""} text={`¡Hola ${currentUser?.full_name || ""}!`} delay={120} stagger={18} />
+                  </h2>
                 </div>
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 transition-transform duration-500 [transition-timing-function:var(--ease-back)] hover:rotate-12 hover:scale-110">
                   <Wallet className="h-5 w-5" />
                 </span>
               </div>
-              <div className="flex items-end justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3">
+              <div className="relative flex items-end justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3 backdrop-blur-sm">
                 <div>
                   <p className="text-xs text-white/70">Efectivo en caja</p>
-                  <p className="text-3xl font-bold tracking-tight sm:text-4xl">${boxBalance.toFixed(2)}</p>
+                  <p className="text-3xl font-bold tracking-tight sm:text-4xl">
+                    <CountUp value={boxBalance} format={(n) => `$${n.toFixed(2)}`} duration={900} delay={200} />
+                  </p>
                 </div>
                 <Banknote className="mb-1 h-7 w-7 text-white/60" />
               </div>
             </div>
 
-            <div className="bento space-y-3 p-4 sm:p-5 xl:col-span-3">
+            <div className="bento anim-rise space-y-3 p-4 sm:p-5 xl:col-span-3" style={stagger(1)}>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Scan className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-primary" />
@@ -1395,38 +1417,46 @@ export default function POSPage() {
                     autoFocus
                   />
                 </div>
-                <Button onClick={handleBarcodeSearch} className="h-14 rounded-2xl px-5 text-base font-semibold shadow-sm">
+                <Button onClick={handleBarcodeSearch} className="press h-14 rounded-2xl px-5 text-base font-semibold shadow-sm">
                   <Plus className="h-5 w-5 sm:mr-1" />
                   <span className="hidden sm:inline">Agregar</span>
                 </Button>
                 <Button
                   onClick={() => setIsQRScannerOpen(true)}
                   variant="ghost"
-                  className="h-14 w-14 shrink-0 rounded-2xl bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  className="press group h-14 w-14 shrink-0 rounded-2xl bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
                   title="Abrir escáner QR avanzado"
                 >
-                  <Camera className="h-5 w-5" />
+                  <Camera className="h-5 w-5 transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-125" />
                 </Button>
               </div>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   placeholder="Buscar medicamento por nombre o código..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value)
                     setCurrentPage(1)
                   }}
-                  className="h-12 rounded-2xl border-0 bg-muted pl-11 text-base"
+                  className="h-12 rounded-2xl border-0 bg-muted pl-11 pr-14 text-base transition-shadow focus-visible:bg-white focus-visible:ring-primary/20"
                 />
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-lg bg-white px-2 py-0.5 text-[11px] font-semibold text-muted-foreground shadow-sm sm:block">
+                  F3
+                </kbd>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Tip: Si el producto no existe en activos, te mostrará si está en eliminados
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Tip: Si el producto no existe en activos, te mostrará si está en eliminados</span>
+                <span className="hidden items-center gap-1.5 lg:flex">
+                  <kbd className="rounded-md bg-muted px-1.5 py-0.5 font-semibold">F2</kbd> Cobrar
+                  <kbd className="ml-2 rounded-md bg-muted px-1.5 py-0.5 font-semibold">F3</kbd> Buscar
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+          <div className="anim-rise-sm flex flex-wrap items-baseline justify-between gap-2 px-1" style={stagger(4)}>
             <h3 className="text-lg font-semibold tracking-tight">Productos</h3>
             <p className="text-xs text-muted-foreground">
               Mostrando {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} de {filteredProducts.length}{" "}
@@ -1436,7 +1466,7 @@ export default function POSPage() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3 lg:gap-4">
-            {paginatedProducts.map((product) => {
+            {paginatedProducts.map((product, index) => {
               const promo = getProductPromotion(product.id)
               const discountedPrice = getDiscountedPrice(product)
               const hasDiscount = promo !== null
@@ -1445,7 +1475,8 @@ export default function POSPage() {
               return (
                 <div
                   key={product.id}
-                  className={`bento bento-hover flex flex-col overflow-hidden p-2.5 sm:p-3 ${hasDiscount ? "ring-2 ring-emerald-400" : ""}`}
+                  className={`group bento bento-hover anim-rise-sm flex flex-col overflow-hidden p-2.5 sm:p-3 ${hasDiscount ? "ring-2 ring-emerald-400" : ""}`}
+                  style={{ "--d": "120ms", ...stagger(Math.min(index, 12)) } as CSSProperties}
                 >
                   <div className="flex flex-1 flex-col">
                     <div className="flex flex-1 flex-col gap-2.5">
@@ -1464,10 +1495,12 @@ export default function POSPage() {
                           <img
                             src={product.image_url || "/placeholder.svg"}
                             alt={product.name}
-                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover transition-transform duration-700 [transition-timing-function:var(--ease-out-3)] group-hover:scale-110"
                           />
                         ) : (
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 sm:h-14 sm:w-14">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 transition-transform duration-500 [transition-timing-function:var(--ease-back)] group-hover:-rotate-12 group-hover:scale-110 sm:h-14 sm:w-14">
                             <span className="text-2xl">{'💊'}</span>
                           </div>
                         )}
@@ -1548,7 +1581,7 @@ export default function POSPage() {
                         <div className="space-y-1.5">
                           <Button
                             onClick={() => addToCart(product)}
-                            className={`h-11 w-full rounded-2xl text-sm font-semibold text-white shadow-sm ${hasDiscount ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary hover:bg-primary/90"}`}
+                            className={`press h-11 w-full rounded-2xl text-sm font-semibold text-white shadow-sm ${hasDiscount ? "bg-emerald-600 hover:bg-emerald-700" : "bg-primary hover:bg-primary/90"}`}
                           >
                             <Plus className="h-4 w-4 mr-1.5" />
                             <span className="sm:hidden">Agregar</span>
@@ -1647,11 +1680,19 @@ export default function POSPage() {
         </div>
 
         <aside className="hidden lg:block lg:w-[380px] xl:w-[420px] shrink-0 py-6 pr-6">
-          <div className="bento sticky top-28 flex h-[calc(100vh-8.5rem)] flex-col p-5">
+          <div className="bento anim-rise sticky top-28 flex h-[calc(100vh-8.5rem)] flex-col p-5" style={stagger(2)}>
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <ShoppingCart className="h-5 w-5" />
+              <span className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <ShoppingCart key={`cart-icon-${cart.length}`} className="anim-bump h-5 w-5" />
+                {cart.length > 0 && (
+                  <span
+                    key={`cart-badge-${cart.length}`}
+                    className="anim-bump absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+                  >
+                    {cart.length}
+                  </span>
+                )}
               </span>
               <div>
                 <h2 className="text-lg font-bold leading-tight">Carrito</h2>
@@ -1678,7 +1719,7 @@ export default function POSPage() {
             {cart.map((item) => (
               <div
                 key={item.product.id}
-                className={`rounded-2xl p-3 ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/50"}`}
+                className={`anim-slide-right rounded-2xl p-3 transition-colors ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/50 hover:bg-muted"}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1724,18 +1765,20 @@ export default function POSPage() {
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
-                    <span className="w-8 text-center text-base font-bold">{item.quantity}</span>
+                    <span className="w-8 text-center text-base font-bold">
+                      <span key={item.quantity} className="anim-tick">{item.quantity}</span>
+                    </span>
                     <Button
                       size="sm"
                       onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                      className="h-8 w-8 rounded-full p-0"
+                      className="press h-8 w-8 rounded-full p-0"
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
                   <div className="text-right">
                     <span className={`block text-base font-bold ${item.hasPromotion ? "text-emerald-600" : "text-foreground"}`}>
-                      ${item.subtotal.toFixed(2)}
+                      <span key={item.subtotal.toFixed(2)} className="anim-tick">${item.subtotal.toFixed(2)}</span>
                     </span>
                     {item.hasPromotion && (
                       <span className="text-[11px] text-emerald-600">
@@ -1748,9 +1791,9 @@ export default function POSPage() {
             ))}
 
             {cart.length === 0 && (
-              <div className="flex h-full flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                <span className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-muted">
-                  <ShoppingCart className="h-9 w-9 text-muted-foreground/50" />
+              <div className="anim-pop flex h-full flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <span className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-muted pattern-hatch">
+                  <ShoppingCart className="h-9 w-9 text-muted-foreground/60" />
                 </span>
                 <p className="font-semibold text-foreground">El carrito está vacío</p>
                 <p className="text-sm">Escanea o agrega productos para comenzar</p>
@@ -1778,22 +1821,28 @@ export default function POSPage() {
                     <span className="font-bold">-${promoSavings.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="bento-accent p-4">
-                  <div className="flex items-end justify-between gap-3">
+                <div className="bento-accent anim-pop relative overflow-hidden p-4">
+                  <div className="pattern-rings pointer-events-none absolute inset-0" aria-hidden="true" />
+                  <div className="relative flex items-end justify-between gap-3">
                     <div>
                       <p className="text-xs text-white/70">Total a pagar</p>
-                      <p className="text-4xl font-bold tracking-tight">${total.toFixed(2)}</p>
+                      <p className="text-4xl font-bold tracking-tight">
+                        <CountUp value={total} format={(n) => `$${n.toFixed(2)}`} duration={350} />
+                      </p>
                     </div>
                     <Receipt className="mb-1 h-7 w-7 text-white/50" />
                   </div>
-                  <Button
-                    onClick={() => setIsPaymentDialogOpen(true)}
-                    className="mt-4 h-14 w-full rounded-2xl bg-white text-lg font-bold text-primary shadow-sm hover:bg-white/90"
-                    size="lg"
-                  >
-                    <Banknote className="h-5 w-5 mr-2" />
-                    Cobrar
-                  </Button>
+                  <Magnetic className="relative mt-4 block w-full" strength={0.12}>
+                    <Button
+                      onClick={() => setIsPaymentDialogOpen(true)}
+                      className="shine shine-primary press h-14 w-full rounded-2xl bg-white text-lg font-bold text-primary shadow-sm hover:bg-white/90"
+                      size="lg"
+                    >
+                      <Banknote className="h-5 w-5 mr-2" />
+                      Cobrar
+                      <kbd className="ml-2 rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold">F2</kbd>
+                    </Button>
+                  </Magnetic>
                 </div>
               </div>
             )
@@ -1803,24 +1852,29 @@ export default function POSPage() {
 
         {/* Mobile sticky cart bar */}
         <div className="lg:hidden fixed inset-x-3 bottom-3 z-40">
-          <div className="bento-accent mx-auto flex max-w-screen-sm items-center gap-2 p-2">
+          <div className="bento-accent anim-bar-up mx-auto flex max-w-screen-sm items-center gap-2 p-2">
             <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="h-14 flex-1 justify-start gap-3 rounded-2xl bg-white/10 px-3 text-white hover:bg-white/15 hover:text-white"
+                  className="press h-14 flex-1 justify-start gap-3 rounded-2xl bg-white/10 px-3 text-white hover:bg-white/15 hover:text-white"
                 >
                   <span className="relative">
-                    <ShoppingCart className="h-6 w-6" />
+                    <ShoppingCart key={`m-cart-${cart.length}`} className="anim-bump h-6 w-6" />
                     {cart.length > 0 && (
-                      <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-primary">
+                      <span
+                        key={`m-badge-${cart.length}`}
+                        className="anim-bump absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-primary"
+                      >
                         {cart.length}
                       </span>
                     )}
                   </span>
                   <span className="flex flex-col items-start leading-tight">
                     <span className="text-[11px] font-normal text-white/70">Ver carrito</span>
-                    <span className="text-lg font-bold">${total.toFixed(2)}</span>
+                    <span className="text-lg font-bold">
+                      <CountUp value={total} format={(n) => `$${n.toFixed(2)}`} duration={350} />
+                    </span>
                   </span>
                 </Button>
               </SheetTrigger>
@@ -1835,7 +1889,7 @@ export default function POSPage() {
                   {cart.map((item) => (
                     <div
                       key={item.product.id}
-                      className={`rounded-2xl p-3 ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/60"}`}
+                      className={`anim-rise-sm rounded-2xl p-3 ${item.hasPromotion ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-muted/60"}`}
                     >
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0">
@@ -1849,8 +1903,10 @@ export default function POSPage() {
                           <Button variant="ghost" size="sm" className="h-10 w-10 rounded-full p-0" onClick={() => updateQuantity(item.product.id, item.quantity - 1)}>
                             <Minus className="h-4 w-4" />
                           </Button>
-                          <span className="w-8 text-center font-bold text-lg">{item.quantity}</span>
-                          <Button size="sm" className="h-10 w-10 rounded-full p-0" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
+                          <span className="w-8 text-center font-bold text-lg">
+                            <span key={item.quantity} className="anim-tick">{item.quantity}</span>
+                          </span>
+                          <Button size="sm" className="press h-10 w-10 rounded-full p-0" onClick={() => updateQuantity(item.product.id, item.quantity + 1)}>
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1885,7 +1941,7 @@ export default function POSPage() {
                         setIsCartOpen(false)
                         setIsPaymentDialogOpen(true)
                       }}
-                      className="h-14 w-full rounded-2xl text-lg font-bold shadow-sm"
+                      className="shine press h-14 w-full rounded-2xl text-lg font-bold shadow-sm"
                     >
                       <Banknote className="h-5 w-5 mr-2" />
                       Cobrar
@@ -1897,7 +1953,7 @@ export default function POSPage() {
             <Button
               onClick={() => (cart.length > 0 ? setIsPaymentDialogOpen(true) : setIsCartOpen(true))}
               disabled={cart.length === 0}
-              className="h-14 shrink-0 rounded-2xl bg-white px-6 text-base font-bold text-primary shadow-sm hover:bg-white/90 disabled:opacity-60"
+              className={`press h-14 shrink-0 rounded-2xl bg-white px-6 text-base font-bold text-primary shadow-sm hover:bg-white/90 disabled:opacity-60 ${cart.length > 0 ? "shine shine-primary" : ""}`}
             >
               <Banknote className="h-5 w-5 mr-1.5" />
               Cobrar
@@ -1910,13 +1966,16 @@ export default function POSPage() {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
         <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-[28px] border-0 p-0 [&>button]:text-white! [&>button]:opacity-80">
-          <div className="bento-accent rounded-none px-6 pb-6 pt-6">
-            <DialogHeader className="space-y-0 text-left">
+          <div className="bento-accent relative overflow-hidden rounded-none px-6 pb-6 pt-6">
+            <div className="pattern-rings pointer-events-none absolute inset-0" aria-hidden="true" />
+            <DialogHeader className="relative space-y-0 text-left">
               <DialogTitle className="text-sm font-medium text-white/75">Cobrar</DialogTitle>
               <DialogDescription className="sr-only">Subtotal: ${subtotal.toFixed(2)}</DialogDescription>
             </DialogHeader>
-            <p className="mt-1 text-5xl font-bold tracking-tight">${total.toFixed(2)}</p>
-            <p className="mt-1 text-sm text-white/70">
+            <p className="relative mt-1 text-5xl font-bold tracking-tight">
+              <CountUp value={total} format={(n) => `$${n.toFixed(2)}`} duration={650} />
+            </p>
+            <p className="relative mt-1 text-sm text-white/70">
               Subtotal ${subtotal.toFixed(2)}
               {discountAmount > 0 && ` · Descuento -$${discountAmount.toFixed(2)}`}
             </p>
@@ -1927,31 +1986,37 @@ export default function POSPage() {
               <button
                 type="button"
                 onClick={() => setPaymentMethod("efectivo")}
-                className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
+                className={`press anim-rise-sm flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
                   paymentMethod === "efectivo"
                     ? "border-primary bg-primary/5 text-primary"
                     : "border-transparent bg-muted text-muted-foreground hover:bg-muted/70"
                 }`}
+                style={{ "--d": "120ms", ...stagger(0) } as CSSProperties}
               >
-                <Banknote className="h-6 w-6" />
+                <Banknote
+                  className={`h-6 w-6 transition-transform duration-500 [transition-timing-function:var(--ease-back)] ${paymentMethod === "efectivo" ? "scale-125" : ""}`}
+                />
                 Efectivo
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentMethod("tarjeta")}
-                className={`flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
+                className={`press anim-rise-sm flex h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 text-sm font-semibold transition-colors ${
                   paymentMethod === "tarjeta"
                     ? "border-primary bg-primary/5 text-primary"
                     : "border-transparent bg-muted text-muted-foreground hover:bg-muted/70"
                 }`}
+                style={{ "--d": "120ms", ...stagger(1) } as CSSProperties}
               >
-                <CreditCard className="h-6 w-6" />
+                <CreditCard
+                  className={`h-6 w-6 transition-transform duration-500 [transition-timing-function:var(--ease-back)] ${paymentMethod === "tarjeta" ? "scale-125" : ""}`}
+                />
                 Tarjeta
               </button>
             </div>
 
             {paymentMethod === "efectivo" && (
-              <div className="space-y-3">
+              <div className="anim-rise-sm space-y-3" style={{ "--d": "120ms", ...stagger(2) } as CSSProperties}>
                 <Label htmlFor="cashReceived" className="text-sm font-semibold">
                   ¿Con cuánto paga?
                 </Label>
@@ -1985,32 +2050,36 @@ export default function POSPage() {
                   <button
                     type="button"
                     onClick={() => setCashReceived(total.toFixed(2))}
-                    className="h-10 rounded-full bg-primary/10 px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+                    className="press anim-pop h-10 rounded-full bg-primary/10 px-4 text-sm font-semibold text-primary hover:bg-primary/15"
+                    style={{ animationDelay: "250ms" }}
                   >
                     Exacto
                   </button>
                   {[20, 50, 100, 200, 500, 1000]
                     .filter((bill) => bill > total)
                     .slice(0, 4)
-                    .map((bill) => (
+                    .map((bill, i) => (
                       <button
                         key={bill}
                         type="button"
                         onClick={() => setCashReceived(String(bill))}
-                        className="h-10 rounded-full bg-muted px-4 text-sm font-semibold hover:bg-muted/70"
+                        className="press anim-pop h-10 rounded-full bg-muted px-4 text-sm font-semibold hover:bg-muted/70"
+                        style={{ animationDelay: `${300 + i * 50}ms` }}
                       >
                         ${bill}
                       </button>
                     ))}
                 </div>
                 {cashReceived && Number.parseFloat(cashReceived) >= total && (
-                  <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-5 py-4 ring-1 ring-emerald-200">
+                  <div className="anim-pop flex items-center justify-between rounded-2xl bg-emerald-50 px-5 py-4 ring-1 ring-emerald-200">
                     <span className="text-sm font-semibold text-emerald-700">Cambio</span>
-                    <span className="text-3xl font-bold text-emerald-600">${change.toFixed(2)}</span>
+                    <span className="text-3xl font-bold text-emerald-600">
+                      <CountUp value={change} format={(n) => `$${n.toFixed(2)}`} duration={300} />
+                    </span>
                   </div>
                 )}
                 {cashReceived && Number.parseFloat(cashReceived) < total && (
-                  <div className="flex items-center justify-between rounded-2xl bg-red-50 px-5 py-3 text-red-600">
+                  <div className="anim-pop flex items-center justify-between rounded-2xl bg-red-50 px-5 py-3 text-red-600">
                     <span className="text-sm font-semibold">Faltan</span>
                     <span className="text-xl font-bold">
                       ${(total - (Number.parseFloat(cashReceived) || 0)).toFixed(2)}
@@ -2020,7 +2089,10 @@ export default function POSPage() {
               </div>
             )}
 
-            <details className="group rounded-2xl bg-muted/50">
+            <details
+              className="anim-rise-sm group rounded-2xl bg-muted/50"
+              style={{ "--d": "120ms", ...stagger(3) } as CSSProperties}
+            >
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold [&::-webkit-details-marker]:hidden">
                 <span className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-primary" />
@@ -2035,7 +2107,7 @@ export default function POSPage() {
                   <Plus className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-45" />
                 </span>
               </summary>
-              <div className="space-y-3 px-4 pb-4">
+              <div className="anim-rise-sm space-y-3 px-4 pb-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label className="text-xs font-semibold text-muted-foreground">Tipo</Label>
@@ -2104,7 +2176,7 @@ export default function POSPage() {
                 processingPayment ||
                 (paymentMethod === "efectivo" && (!cashReceived || Number.parseFloat(cashReceived) < total))
               }
-              className="h-12 rounded-2xl px-6 text-base font-bold shadow-sm sm:min-w-[200px]"
+              className="shine press h-12 rounded-2xl px-6 text-base font-bold shadow-sm sm:min-w-[200px]"
             >
               <CheckCircle2 className="h-5 w-5 mr-2" />
               {processingPayment ? "Procesando..." : `Cobrar $${total.toFixed(2)}`}
