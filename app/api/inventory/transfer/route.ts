@@ -4,7 +4,7 @@ import { resolveBranchContext } from "@/lib/branch"
 
 export const dynamic = "force-dynamic"
 
-type TransferItem = { barcode: string; name?: string; quantity: number }
+type TransferItem = { barcode: string; name?: string; quantity: number; price?: number }
 
 function normalizeBarcode(value: unknown): string {
   if (value == null) return ""
@@ -40,8 +40,16 @@ function validateItems(items: unknown): { ok: true; items: TransferItem[] } | { 
     if (seen.has(barcode)) {
       return { ok: false, error: `Código duplicado: ${barcode}` }
     }
+    let price: number | undefined
+    if (row?.price != null && row.price !== "") {
+      price = Number(row.price)
+      if (!Number.isFinite(price) || price < 0) {
+        return { ok: false, error: `Fila ${i + 1} (${barcode}): precio inválido` }
+      }
+      price = Math.round(price * 100) / 100
+    }
     seen.set(barcode, i)
-    normalized.push({ barcode, name, quantity })
+    normalized.push(price === undefined ? { barcode, name, quantity } : { barcode, name, quantity, price })
   }
 
   return { ok: true, items: normalized }
@@ -101,7 +109,9 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.rpc("apply_inventory_transfer", {
       p_from_branch_id: fromBranchId,
       p_to_branch_id: toBranchId,
-      p_items: applyItems.items.map(({ barcode, quantity }) => ({ barcode, quantity })),
+      p_items: applyItems.items.map(({ barcode, quantity, price }) =>
+        price === undefined ? { barcode, quantity } : { barcode, quantity, price },
+      ),
     })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
