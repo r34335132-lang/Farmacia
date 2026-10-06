@@ -87,22 +87,33 @@ export function ImageUpload({ onImageUploaded, currentImage, className }: ImageU
             <img
               src={preview || "/placeholder.svg"}
               alt="Preview"
-              className="w-32 h-32 object-cover rounded-lg border"
+              className="h-36 w-36 rounded-2xl border object-cover shadow-sm"
             />
+            {uploading && (
+              <div className="absolute inset-0 grid place-items-center rounded-2xl bg-background/70 text-xs font-medium">
+                Subiendo...
+              </div>
+            )}
             <Button
               type="button"
               variant="destructive"
               size="sm"
-              className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+              className="absolute -top-2 -right-2 h-7 w-7 rounded-full p-0 shadow-md"
               onClick={removeImage}
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         ) : (
-          <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
-            <ImageIcon className="h-8 w-8 text-gray-400" />
-          </div>
+          <button
+            type="button"
+            onClick={handleButtonClick}
+            disabled={uploading}
+            className="flex h-36 w-36 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed border-foreground/15 bg-muted/40 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/[0.04] hover:text-primary"
+          >
+            <ImageIcon className="h-8 w-8" />
+            <span className="text-xs font-medium">{uploading ? "Subiendo..." : "Agregar foto"}</span>
+          </button>
         )}
 
         <div className="mt-2">
@@ -119,10 +130,10 @@ export function ImageUpload({ onImageUploaded, currentImage, className }: ImageU
             variant="outline"
             disabled={uploading}
             onClick={handleButtonClick}
-            className="cursor-pointer bg-transparent"
+            className="w-36 cursor-pointer rounded-xl bg-transparent"
           >
             <Upload className="h-4 w-4 mr-2" />
-            {uploading ? "Subiendo..." : "Seleccionar Imagen"}
+            {uploading ? "Subiendo..." : preview ? "Cambiar" : "Subir imagen"}
           </Button>
         </div>
       </div>
