@@ -21,7 +21,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  ArrowLeft,
   Plus,
   Search,
   Edit,
@@ -38,8 +37,8 @@ import {
   MoreHorizontal,
   ShoppingCart,
 } from "lucide-react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { AdminPageHeader } from "@/components/admin-page-header"
 import { ImageUpload } from "@/components/image-upload"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -1051,20 +1050,13 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
-            </Link>
-            <Package className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Gestión de Productos</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" onClick={() => router.push("/admin/products/agregado-rapido")}>
+      <AdminPageHeader
+        title="Gestión de Productos"
+        subtitle="Catálogo, precios por sucursal y pedidos"
+        icon={Package}
+        actions={
+          <>
+            <Button size="sm" className="shine press rounded-xl" onClick={() => router.push("/admin/products/agregado-rapido")}>
               <QrCode className="h-4 w-4 mr-1" />
               Agregado rápido
             </Button>
@@ -1080,11 +1072,11 @@ export default function ProductsPage() {
               <Truck className="h-3 w-3 mr-1" />
               {suppliers.length} proveedores
             </Badge>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <div className={`p-6 space-y-6 ${orderDraft.length > 0 ? "pb-36" : ""}`}>
+      <div className={`p-4 sm:p-6 lg:px-8 space-y-6 ${orderDraft.length > 0 ? "pb-36" : ""}`}>
         <Card className="border-emerald-200 bg-emerald-50/40">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">

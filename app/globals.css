@@ -350,7 +350,38 @@
   }
 }
 
+/* Admin shell: pantallas internas sobre el lienzo del dashboard (sin capa para ganar a utilidades heredadas) */
+.admin-main > * {
+  background: transparent;
+}
+.admin-main [data-slot="card"] {
+  animation: rise-in 0.6s var(--ease-out-3) backwards;
+}
+.admin-main [data-slot="card"]:nth-child(2) {
+  animation-delay: 60ms;
+}
+.admin-main [data-slot="card"]:nth-child(3) {
+  animation-delay: 120ms;
+}
+.admin-main [data-slot="card"]:nth-child(4) {
+  animation-delay: 180ms;
+}
+.admin-main [data-slot="card"]:nth-child(n + 5) {
+  animation-delay: 240ms;
+}
+@media (min-width: 1024px) {
+  .admin-main .fixed.inset-x-0.bottom-0 {
+    left: 292px;
+    right: 12px;
+    bottom: 12px;
+    border-radius: 1.5rem;
+    border: 1px solid color-mix(in oklch, var(--foreground) 8%, transparent);
+    box-shadow: 0 18px 40px -18px rgb(60 10 30 / 0.35);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .admin-main [data-slot="card"],
   .anim-rise,
   .anim-rise-sm,
   .anim-slide-left,

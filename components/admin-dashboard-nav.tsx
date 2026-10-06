@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   Package,
   ScanBarcode,
@@ -106,16 +107,31 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
 
 type NavVariant = "light" | "dark"
 
+function findActiveHref(pathname: string | null): string | null {
+  if (!pathname) return null
+  let best: string | null = null
+  for (const group of DASHBOARD_NAV_GROUPS) {
+    for (const item of group.items) {
+      if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+        if (!best || item.href.length > best.length) best = item.href
+      }
+    }
+  }
+  return best
+}
+
 function NavLink({
   item,
   onNavigate,
   variant,
   index,
+  active,
 }: {
   item: NavItem
   onNavigate?: () => void
   variant: NavVariant
   index: number
+  active: boolean
 }) {
   const Icon = item.icon
   const dark = variant === "dark"
@@ -123,18 +139,30 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "anim-slide-left group flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition-[background-color,color,transform] duration-300 hover:translate-x-1",
+        "anim-slide-left group relative flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm transition-[background-color,color,transform] duration-300 hover:translate-x-1",
         dark ? "text-white/80 hover:bg-white/10 hover:text-white" : "hover:bg-primary/5",
+        active && (dark ? "bg-white/12 text-white" : "bg-primary/10 text-primary"),
       )}
       style={{ "--i": index } as CSSProperties}
     >
+      {active ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute -left-2 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full",
+            dark ? "bg-white" : "bg-primary",
+          )}
+        />
+      ) : null}
       <span
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-[background-color,color,transform] duration-500 [transition-timing-function:var(--ease-back)] group-hover:scale-110",
           dark
             ? "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white"
             : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
+          active && (dark ? "bg-white text-primary" : "bg-primary text-primary-foreground"),
         )}
       >
         <Icon className="h-4 w-4" />
@@ -160,12 +188,16 @@ function NavGroupBlock({
   group,
   onNavigate,
   variant,
+  activeHref,
 }: {
   group: NavGroup
   onNavigate?: () => void
   variant: NavVariant
+  activeHref: string | null
 }) {
-  const [open, setOpen] = useState(Boolean(group.defaultOpen))
+  const [open, setOpen] = useState(
+    Boolean(group.defaultOpen) || group.items.some((item) => item.href === activeHref),
+  )
   const dark = variant === "dark"
 
   return (
@@ -181,7 +213,14 @@ function NavGroupBlock({
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-0.5 pb-3 pt-0.5">
         {group.items.map((item, i) => (
-          <NavLink key={item.href + item.title} item={item} onNavigate={onNavigate} variant={variant} index={i} />
+          <NavLink
+            key={item.href + item.title}
+            item={item}
+            onNavigate={onNavigate}
+            variant={variant}
+            index={i}
+            active={item.href === activeHref}
+          />
         ))}
       </CollapsibleContent>
     </Collapsible>
@@ -198,28 +237,40 @@ export function AdminDashboardNav({
   variant?: NavVariant
 }) {
   const dark = variant === "dark"
+  const pathname = usePathname()
+  const onDashboard = !pathname || pathname.startsWith("/admin/dashboard")
+  const activeHref = findActiveHref(pathname)
   return (
     <nav className={cn("flex h-full flex-col", className)}>
       <div className="space-y-1.5 px-3 pb-3 pt-2">
         <Link
           href="/admin/dashboard"
           onClick={onNavigate}
+          aria-current={onDashboard ? "page" : undefined}
           className={cn(
-            "relative flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold",
-            dark ? "bg-white text-primary shadow-sm" : "bg-primary text-primary-foreground shadow-sm",
+            "relative flex items-center gap-3 rounded-2xl px-2.5 py-2 text-sm font-semibold transition-colors",
+            onDashboard
+              ? dark
+                ? "bg-white text-primary shadow-sm"
+                : "bg-primary text-primary-foreground shadow-sm"
+              : dark
+                ? "text-white/80 hover:bg-white/10 hover:text-white"
+                : "hover:bg-primary/5",
           )}
         >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full",
-              dark ? "bg-white" : "bg-primary",
-            )}
-          />
+          {onDashboard ? (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full",
+                dark ? "bg-white" : "bg-primary",
+              )}
+            />
+          ) : null}
           <span
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-xl",
-              dark ? "bg-primary/10" : "bg-white/15",
+              onDashboard ? (dark ? "bg-primary/10" : "bg-white/15") : dark ? "bg-white/5" : "bg-muted",
             )}
           >
             <LayoutDashboard className="h-4 w-4" />
@@ -250,7 +301,13 @@ export function AdminDashboardNav({
 
       <div className={cn("scrollbar-thin flex-1 space-y-1 overflow-y-auto px-2 py-2", dark && "[scrollbar-color:rgb(255_255_255/0.15)_transparent]")}>
         {DASHBOARD_NAV_GROUPS.map((group) => (
-          <NavGroupBlock key={group.id} group={group} onNavigate={onNavigate} variant={variant} />
+          <NavGroupBlock
+            key={group.id}
+            group={group}
+            onNavigate={onNavigate}
+            variant={variant}
+            activeHref={onDashboard ? null : activeHref}
+          />
         ))}
       </div>
     </nav>

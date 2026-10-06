@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { AdminPageHeader } from "@/components/admin-page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,6 @@ import {
   Plus,
   Pencil,
   Trash2,
-  ArrowLeft,
   Search,
   Percent,
   DollarSign,
@@ -294,43 +293,24 @@ export default function PromotionsPage() {
   return (
     <Suspense fallback={<Loading />}>
       <div className="min-h-screen bg-muted/30">
-        {/* Header */}
-        <header className="sticky top-0 z-50 bg-background border-b">
-          <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <Link href="/admin/dashboard">
-                  <Button variant="ghost" size="icon">
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                </Link>
-                <Image
-                  src="/logo.jpeg"
-                  alt="Farmacia Bienestar"
-                  width={40}
-                  height={40}
-                  className="rounded-full"
-                />
-                <div>
-                  <h1 className="font-bold text-lg text-primary">Promociones</h1>
-                  <p className="text-xs text-muted-foreground">Gestiona ofertas y descuentos</p>
-                </div>
-              </div>
+        <AdminPageHeader
+          title="Promociones"
+          subtitle="Gestiona ofertas y descuentos"
+          icon={Sparkles}
+          actions={
+            <>
+              <Button variant="outline" size="icon" className="press rounded-xl" onClick={loadData}>
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+              <Button className="shine press rounded-xl" onClick={openCreateDialog}>
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva Promoción
+              </Button>
+            </>
+          }
+        />
 
-              <div className="flex items-center gap-3">
-                <Button variant="outline" size="icon" onClick={loadData}>
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                </Button>
-                <Button onClick={openCreateDialog}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nueva Promocion
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="container mx-auto px-4 py-6">
+        <main className="p-4 sm:p-6 lg:px-8">
           {/* Search */}
           <div className="mb-6">
             <div className="relative max-w-md">

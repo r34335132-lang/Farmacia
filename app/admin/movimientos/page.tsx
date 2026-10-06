@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft } from "lucide-react";
+import { History } from "lucide-react";
+import { AdminPageHeader } from "@/components/admin-page-header";
 
 export default function MovimientosPage() {
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -75,22 +75,13 @@ export default function MovimientosPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
-          <Link href="/admin/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Volver
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-lg font-bold text-primary sm:text-xl">Historial de Movimientos</h1>
-            <p className="text-xs text-muted-foreground">Entradas, salidas y ajustes de inventario</p>
-          </div>
-        </div>
-      </header>
+      <AdminPageHeader
+        title="Historial de Movimientos"
+        subtitle="Entradas, salidas y ajustes de inventario"
+        icon={History}
+      />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 lg:px-8 space-y-6">
       {/* Controles de Filtros y Búsqueda */}
       <div className="flex flex-col md:flex-row gap-4">
         <Input

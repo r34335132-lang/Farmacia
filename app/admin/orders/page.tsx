@@ -1,9 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import Image from "next/image"
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { AdminPageHeader } from "@/components/admin-page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import {
   Search,
-  ArrowLeft,
   RefreshCw,
   User,
   Phone,
@@ -194,39 +192,18 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <Link href="/admin/dashboard">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Image
-                src="/logo.jpeg"
-                alt="Farmacia Bienestar"
-                width={40}
-                height={40}
-                className="rounded-full"
-              />
-              <div>
-                <h1 className="font-bold text-lg text-primary">Pedidos Online</h1>
-                <p className="text-xs text-muted-foreground">Administracion de pedidos</p>
-              </div>
-            </div>
+      <AdminPageHeader
+        title="Pedidos Online"
+        subtitle="Administración de pedidos"
+        icon={ShoppingBag}
+        actions={
+          <Button variant="outline" size="icon" className="press rounded-xl" onClick={loadOrders}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        }
+      />
 
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={loadOrders}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-6 space-y-6">
+      <main className="space-y-6 p-4 sm:p-6 lg:px-8">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>

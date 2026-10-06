@@ -3,7 +3,6 @@
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,7 +18,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { ArrowLeft, Plus, Edit, Store, MapPin, Phone } from "lucide-react"
+import { Plus, Edit, Store, MapPin, Phone } from "lucide-react"
+import { AdminPageHeader } from "@/components/admin-page-header"
 import { useToast } from "@/hooks/use-toast"
 
 interface Branch {
@@ -180,18 +180,11 @@ export default function BranchesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-white">
-        <div className="flex h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Volver
-              </Button>
-            </Link>
-            <Store className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold">Gestionar Sucursales</h1>
-          </div>
+      <AdminPageHeader
+        title="Gestionar Sucursales"
+        subtitle="Farmacias y puntos de venta"
+        icon={Store}
+        actions={
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={openCreateDialog}>
@@ -246,10 +239,10 @@ export default function BranchesPage() {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 lg:px-8 space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>Sucursales registradas</CardTitle>
