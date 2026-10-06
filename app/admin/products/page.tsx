@@ -1196,6 +1196,8 @@ export default function ProductsPage() {
   const startIndexActive = (currentPageActive - 1) * PRODUCTS_PER_PAGE
   const endIndexActive = startIndexActive + PRODUCTS_PER_PAGE
   const paginatedActiveProducts = displayProducts.slice(startIndexActive, endIndexActive)
+  const totalPagesGrouped = Math.ceil(groupedByBarcode.length / PRODUCTS_PER_PAGE)
+  const paginatedGroups = groupedByBarcode.slice(startIndexActive, endIndexActive)
 
   const totalPagesDeleted = Math.ceil(filteredDeletedProducts.length / PRODUCTS_PER_PAGE)
   const startIndexDeleted = (currentPageDeleted - 1) * PRODUCTS_PER_PAGE
@@ -1236,7 +1238,13 @@ export default function ProductsPage() {
   const renderThumb = (product: Product, size = "h-12 w-12") => (
     <div className={cn("grid shrink-0 place-items-center overflow-hidden rounded-xl bg-muted/70", size)}>
       {product.image_url ? (
-        <img src={product.image_url || "/placeholder.svg"} alt={product.name} className="h-full w-full object-cover" />
+        <img
+          src={product.image_url || "/placeholder.svg"}
+          alt={product.name}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+        />
       ) : (
         <Package className="h-5 w-5 text-muted-foreground/60" />
       )}
@@ -1264,6 +1272,8 @@ export default function ProductsPage() {
             <img
               src={product.image_url || "/placeholder.svg"}
               alt={product.name}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -1604,7 +1614,10 @@ export default function ProductsPage() {
               {branchFilter === "all" && (
                 <Segmented
                   value={viewMode}
-                  onChange={setViewMode}
+                  onChange={(mode) => {
+                    setCurrentPageActive(1)
+                    setViewMode(mode)
+                  }}
                   options={[
                     { value: "list", label: "Por fila", icon: Package },
                     { value: "grouped", label: "Agrupado", icon: Layers },
@@ -1729,7 +1742,12 @@ export default function ProductsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
               {isGrouped ? (
                 <span>
-                  {groupedByBarcode.length} productos agrupados · {displayProducts.length} registros por sucursal
+                  Mostrando{" "}
+                  <b className="text-foreground">
+                    {groupedByBarcode.length === 0 ? 0 : startIndexActive + 1}-
+                    {Math.min(endIndexActive, groupedByBarcode.length)}
+                  </b>{" "}
+                  de {groupedByBarcode.length} productos agrupados · {displayProducts.length} registros por sucursal
                 </span>
               ) : (
                 <span>
@@ -1753,14 +1771,17 @@ export default function ProductsPage() {
                 />
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {groupedByBarcode.map(({ key, items }, i) => {
+                  {paginatedGroups.map(({ key, items }, i) => {
                     const first = items[0]
                     const totalStock = items.reduce((sum, p) => sum + (p.stock_quantity || 0), 0)
                     return (
                       <div
                         key={key}
-                        className="bento bento-hover anim-rise-sm flex flex-col gap-3 p-4"
-                        style={stagger(Math.min(i, 14))}
+                        className={cn(
+                          "bento bento-hover flex flex-col gap-3 p-4 [contain-intrinsic-size:auto_260px] [content-visibility:auto]",
+                          i < 12 && "anim-rise-sm",
+                        )}
+                        style={i < 12 ? stagger(i) : undefined}
                       >
                         <div className="flex items-start gap-3">
                           {renderThumb(first, "h-14 w-14")}
@@ -1973,9 +1994,13 @@ export default function ProductsPage() {
               </div>
             )}
 
-            {!isGrouped && displayProducts.length > PRODUCTS_PER_PAGE && (
-              <Pager page={currentPageActive} totalPages={totalPagesActive} onChange={setCurrentPageActive} />
-            )}
+            {isGrouped
+              ? groupedByBarcode.length > PRODUCTS_PER_PAGE && (
+                  <Pager page={currentPageActive} totalPages={totalPagesGrouped} onChange={setCurrentPageActive} />
+                )
+              : displayProducts.length > PRODUCTS_PER_PAGE && (
+                  <Pager page={currentPageActive} totalPages={totalPagesActive} onChange={setCurrentPageActive} />
+                )}
           </TabsContent>
 
           <TabsContent value="deleted" className="mt-4 space-y-4">
