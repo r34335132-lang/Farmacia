@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { AdminPageHeader } from "@/components/admin-page-header"
@@ -117,15 +118,14 @@ export default function DistribuidoraPage() {
   const loadData = async () => {
     setLoading(true)
     const query = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
-    const [productsRes, alertsRes, entriesRes] = await Promise.all([
-      fetch(`/api/products${query}`),
+    const [productsList, alertsRes, entriesRes] = await Promise.all([
+      fetchAllProducts<Product & { is_active?: boolean }>(branchFilter !== "all" ? branchFilter : null).catch(() => []),
       fetch(`/api/inventory/alerts${query}`),
       fetch(`/api/inventory/entries${query}`),
     ])
-    const productsJson = await productsRes.json()
     const alertsJson = await alertsRes.json()
     const entriesJson = await entriesRes.json()
-    setProducts((productsJson.products || []).filter((p: Product & { is_active?: boolean }) => p.is_active !== false))
+    setProducts(productsList.filter((p) => p.is_active !== false))
     setAlerts(alertsJson.error ? null : alertsJson)
     setEntries(entriesJson.entries || [])
     setLoading(false)

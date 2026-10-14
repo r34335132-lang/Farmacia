@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 
 import { useEffect, useState, useMemo, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
@@ -415,11 +416,7 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     try {
-      const branchQuery = branchFilter !== "all" ? `?branch_id=${branchFilter}` : ""
-      const response = await fetch(`/api/products${branchQuery}`)
-      const { products: data } = await response.json()
-
-      const allProducts = data || []
+      const allProducts = await fetchAllProducts<Product>(branchFilter !== "all" ? branchFilter : null)
       const activeProds = allProducts.filter((p: any) => p.is_active !== false)
       const inactiveProds = allProducts.filter((p: any) => p.is_active === false)
 

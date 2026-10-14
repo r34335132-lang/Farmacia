@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef, type CSSProperties } from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -368,11 +369,9 @@ export default function POSPage() {
     try {
       setLoading(true)
       const branchId = isAdmin ? selectedBranchId : activeBranch?.id
-      const branchQuery = branchId ? `?branch_id=${branchId}` : ""
-      const response = await fetch(`/api/products${branchQuery}`)
-      const { products: data } = await response.json()
+      const data = await fetchAllProducts<Product>(branchId)
 
-      const activeProducts = (data || []).filter((p: Product) => p.is_active !== false)
+      const activeProducts = data.filter((p: Product) => p.is_active !== false)
       setProducts(activeProducts)
       setCurrentPage(1)
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -65,13 +66,12 @@ export default function CajeroFaltantesPage() {
 
   const loadData = async () => {
     setLoading(true)
-    const [productsRes, shortagesRes] = await Promise.all([
-      fetch("/api/products"),
+    const [productsList, shortagesRes] = await Promise.all([
+      fetchAllProducts<Product & { is_active?: boolean }>().catch(() => []),
       fetch("/api/shortages"),
     ])
-    const productsJson = await productsRes.json()
     const shortagesJson = await shortagesRes.json()
-    setProducts((productsJson.products || []).filter((p: Product & { is_active?: boolean }) => p.is_active !== false))
+    setProducts(productsList.filter((p) => p.is_active !== false))
     setItems(shortagesJson.shortages || [])
     setLoading(false)
   }

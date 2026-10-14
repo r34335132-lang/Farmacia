@@ -15,6 +15,40 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: context.error }, { status: context.status })
     }
 
+    const effectiveBranchId = resolveEffectiveBranchId(context, requestedBranchId)
+    const pageParam = searchParams.get("page")
+
+    // Vercel limita cada respuesta a ~4.5 MB: con catálogos grandes el cliente pide bloque por bloque.
+    if (pageParam !== null) {
+      const page = Math.max(0, Number.parseInt(pageParam) || 0)
+      const pageSize = Math.min(1000, Math.max(1, Number.parseInt(searchParams.get("page_size") || "1000") || 1000))
+      const from = page * pageSize
+
+      let query = supabase
+        .from("products")
+        .select("*, branches(id, name)", { count: page === 0 ? "exact" : undefined })
+        .order("name")
+        .order("id")
+        .range(from, from + pageSize - 1)
+
+      query = applyBranchFilter(query, { ...context, activeBranchId: effectiveBranchId })
+
+      const { data, error, count } = await query
+      if (error) {
+        console.error("Error fetching products page:", error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      return NextResponse.json({
+        products: data || [],
+        page,
+        pageSize,
+        total: count ?? null,
+        branchId: effectiveBranchId,
+        isAdmin: context.isAdmin,
+      })
+    }
+
     let allProducts: Record<string, unknown>[] = []
     let start = 0
     const pageSize = 1000
@@ -25,6 +59,7 @@ export async function GET(request: Request) {
         .from("products")
         .select("*, branches(id, name)")
         .order("name")
+        .order("id")
         .range(start, start + pageSize - 1)
 
       query = applyBranchFilter(query, {

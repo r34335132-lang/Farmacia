@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 import { useState, useEffect, useRef, useCallback } from "react"
 import Image from "next/image"
 import Link from "next/link"
@@ -271,9 +272,8 @@ function CajeroContent() {
   async function loadProducts() {
     setLoading(true)
     try {
-      const response = await fetch("/api/products")
-      const { products: data } = await response.json()
-      const activeProducts = (data || []).filter((p: Product) => p.is_active !== false)
+      const data = await fetchAllProducts<Product>()
+      const activeProducts = data.filter((p: Product) => p.is_active !== false)
       setProducts(activeProducts)
       setFilteredProducts(activeProducts)
     } catch (error) {

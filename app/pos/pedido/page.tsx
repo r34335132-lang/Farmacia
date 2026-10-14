@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { fetchAllProducts } from "@/lib/fetch-all-products"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
@@ -176,9 +177,8 @@ export default function PedidoCajaPage() {
   useEffect(() => {
     if (!branch) return
     const loadProducts = async () => {
-      const res = await fetch(`/api/products${branchQuery(branch.id)}`)
-      const data = await res.json().catch(() => ({}))
-      const list = ((data.products || []) as Product[]).filter((p) => p.is_active !== false)
+      const data = await fetchAllProducts<Product>(branch.id).catch(() => [] as Product[])
+      const list = data.filter((p) => p.is_active !== false)
       setProducts(list)
     }
     loadProducts()
