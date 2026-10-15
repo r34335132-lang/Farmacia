@@ -26,6 +26,7 @@ import {
   ChevronDown,
   AlertTriangle,
   Trophy,
+  Tags,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -54,6 +55,7 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/products", title: "Productos", description: "Catálogo y precios", icon: Package },
       { href: "/admin/products/agregado-rapido", title: "Agregado rápido", description: "Escanear y sumar stock", icon: ScanBarcode },
+      { href: "/admin/precios-lista", title: "Lista de precios", description: "Revisar y ajustar", icon: Tags },
       { href: "/admin/inventario", title: "Conteo", description: "Excel vs stock real", icon: ClipboardPenLine },
       { href: "/admin/inventario/pedido", title: "Pedir stock", description: "Proveedor y sucursal", icon: Package },
       { href: "/admin/revision-inventario", title: "Revisión", description: "Escanear y contar", icon: ClipboardCheck },
