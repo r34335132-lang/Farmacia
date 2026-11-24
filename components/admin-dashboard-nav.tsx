@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Trophy,
   Tags,
+  Timer,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -72,6 +73,7 @@ export const DASHBOARD_NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [
       { href: "/admin/sales", title: "Ventas", description: "Reportes e historial", icon: TrendingUp },
+      { href: "/admin/sesiones-caja", title: "Sesiones de caja", description: "Tiempo activo cajeras", icon: Timer },
       { href: "/admin/mas-vendidos", title: "Más vendidos", description: "Ranking por periodo", icon: Trophy },
       { href: "/admin/finanzas", title: "Finanzas", description: "Utilidad y márgenes", icon: DollarSign },
       { href: "/admin/inversion", title: "Inversión", description: "Valor del inventario", icon: PiggyBank },

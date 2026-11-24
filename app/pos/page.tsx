@@ -38,12 +38,14 @@ import {
   ExternalLink,
   Search,
   Wallet,
+  Clock,
 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useRouter } from "next/navigation"
 import { InstallPrompt } from "@/components/install-prompt"
 import { CountUp, Magnetic, SplitText, stagger } from "@/components/motion"
+import { formatSessionDuration, type CashSession } from "@/lib/cash-session"
 
 const PRODUCTS_PER_PAGE = 30
 
@@ -119,6 +121,9 @@ export default function POSPage() {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [authReady, setAuthReady] = useState(false)
   const [branchConfirmed, setBranchConfirmed] = useState(false)
+  const [cashSession, setCashSession] = useState<CashSession | null>(null)
+  const [sessionTick, setSessionTick] = useState(0)
+  const [sessionBusy, setSessionBusy] = useState(false)
   const [pendingBranchId, setPendingBranchId] = useState<string | null>(null)
   const [quickOrderingId, setQuickOrderingId] = useState<string | null>(null)
   const [quickOrderedIds, setQuickOrderedIds] = useState<Set<string>>(new Set())
@@ -195,7 +200,38 @@ export default function POSPage() {
     }
 
     loadProducts()
+    openCashSession()
   }, [authReady, selectedBranchId, activeBranch?.id, isAdmin, branchConfirmed])
+
+  useEffect(() => {
+    if (!cashSession || cashSession.status !== "open") return
+    const id = window.setInterval(() => setSessionTick((n) => n + 1), 30000)
+    return () => window.clearInterval(id)
+  }, [cashSession?.id, cashSession?.status])
+
+  const openCashSession = async () => {
+    const branchId = isAdmin ? selectedBranchId : activeBranch?.id
+    if (!branchId || sessionBusy) return
+    setSessionBusy(true)
+    try {
+      const res = await fetch("/api/cash-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branch_id: branchId, opening_float: boxBalance }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error("No se pudo abrir la sesión de caja:", json.error)
+        return
+      }
+      setCashSession(json.session || null)
+      setSessionTick(0)
+    } catch (error) {
+      console.error("Error abriendo sesión de caja:", error)
+    } finally {
+      setSessionBusy(false)
+    }
+  }
 
   const confirmAdminBranch = () => {
     if (!pendingBranchId) return
@@ -800,7 +836,7 @@ export default function POSPage() {
     }
   }
 
-  // NUEVA FUNCIÓN: Corte de turno ciego (sin totales visibles)
+  // Corte de turno ciego (sin totales visibles) + cierre de sesión de caja
   const handleCorteTurno = async () => {
     try {
       setProcessingPayment(true)
@@ -808,21 +844,35 @@ export default function POSPage() {
       const startOfDay = new Date(now)
       startOfDay.setHours(0, 0, 0, 0)
 
-      let startTime = startOfDay
+      let startTime = cashSession?.opened_at ? new Date(cashSession.opened_at) : startOfDay
       const lastCutStr = localStorage.getItem(`lastCutTime_${currentUser.id}`)
-
-      if (lastCutStr) {
+      if (!cashSession?.opened_at && lastCutStr) {
         const lastCutDate = new Date(lastCutStr)
-        if (lastCutDate > startOfDay) {
-          startTime = lastCutDate
+        if (lastCutDate > startOfDay) startTime = lastCutDate
+      }
+
+      let closedSession: CashSession | null = null
+      let durationLabel = formatSessionDuration(startTime, now)
+
+      if (cashSession?.id && cashSession.status === "open") {
+        const res = await fetch("/api/cash-sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: cashSession.id }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.session) {
+          closedSession = json.session
+          startTime = new Date(closedSession!.opened_at)
+          durationLabel = formatSessionDuration(closedSession!.opened_at, closedSession!.closed_at)
+        } else if (!res.ok) {
+          console.error("No se pudo cerrar la sesión de caja:", json.error)
         }
       }
 
-      const formatTime = (date: Date) => {
-        return date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
-      }
+      const formatTime = (date: Date) =>
+        date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })
 
-      // Ticket de Corte Ciego - Obliga al cajero a reportar sus propios totales contados
       const ticketContent = `
 <!DOCTYPE html>
 <html>
@@ -845,7 +895,9 @@ export default function POSPage() {
     <div class="line"></div>
     <div class="row"><span>FECHA:</span><span>${now.toLocaleDateString("es-ES")}</span></div>
     <div class="row"><span>PERIODO:</span><span>${formatTime(startTime)} - ${formatTime(now)}</span></div>
-    <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name}</span></div>
+    <div class="row"><span>TIEMPO ACTIVA:</span><span>${durationLabel}</span></div>
+    <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name || ""}</span></div>
+    <div class="row"><span>SUCURSAL:</span><span>${activeBranch?.name || ""}</span></div>
     <div class="line"></div>
 
     <div class="center bold mt-10">DECLARACIÓN DE VALORES</div>
@@ -881,6 +933,7 @@ export default function POSPage() {
     <div class="line mt-10"></div>
     <div class="center" style="font-size: 9px;">
         Documento de control interno.<br>
+        Tiempo de caja activa: ${durationLabel}.<br>
         Las diferencias seran reportadas por el administrador.
     </div>
 </body>
@@ -894,12 +947,17 @@ export default function POSPage() {
         setTimeout(() => {
           printWindow.print()
           printWindow.close()
-          
-          // Guardamos la hora actual como el último corte
           localStorage.setItem(`lastCutTime_${currentUser.id}`, now.toISOString())
-          
-          alert("✅ Formato de corte ciego impreso correctamente. Llena los datos y entrega en administración.")
+          setCashSession(null)
+          alert(
+            `✅ Corte impreso. Caja activa: ${durationLabel}.\nLlena los datos y entrega en administración.`,
+          )
+          // Si siguen en el POS, abre una sesión nueva para el siguiente turno
+          openCashSession()
         }, 250)
+      } else if (closedSession) {
+        setCashSession(null)
+        openCashSession()
       }
     } catch (error) {
       console.error("Error al generar corte:", error)
@@ -1319,6 +1377,22 @@ export default function POSPage() {
                 {activeBranch.name}
               </Badge>
             )}
+            {cashSession?.status === "open" && (
+              <div
+                className="flex h-10 items-center gap-2 rounded-full bg-emerald-100 px-3 text-emerald-800 sm:px-4"
+                title={`Abierta desde ${new Date(cashSession.opened_at).toLocaleString("es-MX")}`}
+              >
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </span>
+                <Clock className="hidden h-4 w-4 sm:block" />
+                <span className="text-xs font-bold sm:text-sm">
+                  Caja activa · {formatSessionDuration(cashSession.opened_at)}
+                  <span className="sr-only">{sessionTick}</span>
+                </span>
+              </div>
+            )}
             {promotions.length > 0 && (
               <div className="hidden h-10 items-center gap-2 rounded-full bg-emerald-100 px-4 sm:flex">
                 <Tag className="h-4 w-4 text-emerald-600" />
@@ -1397,6 +1471,16 @@ export default function POSPage() {
                   <p className="text-3xl font-bold tracking-tight sm:text-4xl">
                     <CountUp value={boxBalance} format={(n) => `$${n.toFixed(2)}`} duration={900} delay={200} />
                   </p>
+                  {cashSession?.status === "open" && (
+                    <p className="mt-1 text-[11px] text-white/75">
+                      Activa desde{" "}
+                      {new Date(cashSession.opened_at).toLocaleTimeString("es-MX", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}{" "}
+                      · {formatSessionDuration(cashSession.opened_at)}
+                    </p>
+                  )}
                 </div>
                 <Banknote className="mb-1 h-7 w-7 text-white/60" />
               </div>
