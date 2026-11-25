@@ -124,6 +124,10 @@ export default function POSPage() {
   const [cashSession, setCashSession] = useState<CashSession | null>(null)
   const [sessionTick, setSessionTick] = useState(0)
   const [sessionBusy, setSessionBusy] = useState(false)
+  const [sessionChecked, setSessionChecked] = useState(false)
+  const [openingFloatInput, setOpeningFloatInput] = useState("500")
+  const [startPromptReason, setStartPromptReason] = useState<"entry" | "after_cut">("entry")
+  const cashSessionRef = useRef<CashSession | null>(null)
   const [pendingBranchId, setPendingBranchId] = useState<string | null>(null)
   const [quickOrderingId, setQuickOrderingId] = useState<string | null>(null)
   const [quickOrderedIds, setQuickOrderedIds] = useState<Set<string>>(new Set())
@@ -199,9 +203,17 @@ export default function POSPage() {
       return
     }
 
+    setSessionChecked(false)
+    setCashSession(null)
+    cashSessionRef.current = null
+    setStartPromptReason("entry")
     loadProducts()
-    openCashSession()
+    checkExistingCashSession()
   }, [authReady, selectedBranchId, activeBranch?.id, isAdmin, branchConfirmed])
+
+  useEffect(() => {
+    cashSessionRef.current = cashSession
+  }, [cashSession])
 
   useEffect(() => {
     if (!cashSession || cashSession.status !== "open") return
@@ -209,27 +221,91 @@ export default function POSPage() {
     return () => window.clearInterval(id)
   }, [cashSession?.id, cashSession?.status])
 
-  const openCashSession = async () => {
+  const checkExistingCashSession = async () => {
+    const branchId = isAdmin ? selectedBranchId : activeBranch?.id
+    if (!branchId) {
+      setSessionChecked(true)
+      return
+    }
+    try {
+      const res = await fetch(`/api/cash-sessions?mine=1&branch_id=${encodeURIComponent(branchId)}`)
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json.session?.status === "open") {
+        setCashSession(json.session)
+        cashSessionRef.current = json.session
+        const float = Number(json.session.opening_float)
+        if (Number.isFinite(float) && float >= 0) {
+          setBoxBalance(float)
+          setOpeningFloatInput(String(float))
+        }
+        setSessionTick(0)
+      } else {
+        setCashSession(null)
+        cashSessionRef.current = null
+        setStartPromptReason("entry")
+      }
+    } catch (error) {
+      console.error("Error consultando sesión de caja:", error)
+      setCashSession(null)
+      cashSessionRef.current = null
+    } finally {
+      setSessionChecked(true)
+    }
+  }
+
+  const startCashSession = async () => {
     const branchId = isAdmin ? selectedBranchId : activeBranch?.id
     if (!branchId || sessionBusy) return
+    const amount = Number(openingFloatInput)
+    if (!Number.isFinite(amount) || amount < 0) {
+      alert("Ingresa un saldo de caja válido (0 o más)")
+      return
+    }
     setSessionBusy(true)
     try {
       const res = await fetch("/api/cash-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch_id: branchId, opening_float: boxBalance }),
+        body: JSON.stringify({ branch_id: branchId, opening_float: amount }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        console.error("No se pudo abrir la sesión de caja:", json.error)
+        alert(json.error || "No se pudo iniciar la caja")
         return
       }
-      setCashSession(json.session || null)
+      const session = json.session as CashSession
+      setCashSession(session)
+      cashSessionRef.current = session
+      setBoxBalance(Number(session.opening_float) || amount)
+      setOpeningFloatInput(String(Number(session.opening_float) || amount))
       setSessionTick(0)
+      setStartPromptReason("entry")
     } catch (error) {
-      console.error("Error abriendo sesión de caja:", error)
+      console.error("Error iniciando sesión de caja:", error)
+      alert("Error al iniciar la caja")
     } finally {
       setSessionBusy(false)
+    }
+  }
+
+  const closeCashSessionQuietly = async (session?: CashSession | null) => {
+    const active = session || cashSessionRef.current
+    if (!active?.id || active.status !== "open") return null
+    try {
+      const res = await fetch("/api/cash-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: active.id, notes: "Cierre automático al cerrar sesión" }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        console.error("No se pudo cerrar la sesión de caja:", json.error)
+        return null
+      }
+      return (json.session as CashSession) || null
+    } catch (error) {
+      console.error("Error cerrando sesión de caja:", error)
+      return null
     }
   }
 
@@ -838,6 +914,11 @@ export default function POSPage() {
 
   // Corte de turno ciego (sin totales visibles) + cierre de sesión de caja
   const handleCorteTurno = async () => {
+    if (!cashSession?.id || cashSession.status !== "open") {
+      alert("No hay una caja activa. Inicia el turno primero.")
+      setStartPromptReason("entry")
+      return
+    }
     try {
       setProcessingPayment(true)
       const now = new Date()
@@ -898,6 +979,7 @@ export default function POSPage() {
     <div class="row"><span>TIEMPO ACTIVA:</span><span>${durationLabel}</span></div>
     <div class="row"><span>CAJERO:</span><span>${currentUser?.full_name || ""}</span></div>
     <div class="row"><span>SUCURSAL:</span><span>${activeBranch?.name || ""}</span></div>
+    <div class="row"><span>SALDO INICIO:</span><span>$${(Number(cashSession?.opening_float) || boxBalance).toFixed(2)}</span></div>
     <div class="line"></div>
 
     <div class="center bold mt-10">DECLARACIÓN DE VALORES</div>
@@ -919,8 +1001,8 @@ export default function POSPage() {
     </div>
     
     <div class="box">
-        <div>FONDO DE CAJA FIJO:</div>
-        <div style="margin-top: 8px; font-size: 14px;">$__${boxBalance.toFixed(2)}_____________</div>
+        <div>FONDO / SALDO AL INICIO:</div>
+        <div style="margin-top: 8px; font-size: 14px;">$${(Number(cashSession?.opening_float) || boxBalance).toFixed(2)}</div>
     </div>
 
     <div class="mt-20 center">
@@ -939,6 +1021,17 @@ export default function POSPage() {
 </body>
 </html>`
 
+      const finishCutAndRestart = () => {
+        localStorage.setItem(`lastCutTime_${currentUser.id}`, now.toISOString())
+        setCashSession(null)
+        cashSessionRef.current = null
+        setOpeningFloatInput(String(boxBalance))
+        setStartPromptReason("after_cut")
+        alert(
+          `✅ Corte impreso. Tiempo activa: ${durationLabel}.\nLlena los datos y entrega en administración.\nAhora inicia el siguiente turno con el saldo de caja.`,
+        )
+      }
+
       const printWindow = window.open("", "_blank", "width=400,height=600")
       if (printWindow) {
         printWindow.document.write(ticketContent)
@@ -947,17 +1040,10 @@ export default function POSPage() {
         setTimeout(() => {
           printWindow.print()
           printWindow.close()
-          localStorage.setItem(`lastCutTime_${currentUser.id}`, now.toISOString())
-          setCashSession(null)
-          alert(
-            `✅ Corte impreso. Caja activa: ${durationLabel}.\nLlena los datos y entrega en administración.`,
-          )
-          // Si siguen en el POS, abre una sesión nueva para el siguiente turno
-          openCashSession()
+          finishCutAndRestart()
         }, 250)
-      } else if (closedSession) {
-        setCashSession(null)
-        openCashSession()
+      } else {
+        finishCutAndRestart()
       }
     } catch (error) {
       console.error("Error al generar corte:", error)
@@ -968,6 +1054,13 @@ export default function POSPage() {
   }
 
   const handleLogout = async () => {
+    if (cashSessionRef.current?.status === "open") {
+      const ok = confirm("Al cerrar sesión también se cierra la caja. ¿Continuar?")
+      if (!ok) return
+      await closeCashSessionQuietly()
+      setCashSession(null)
+      cashSessionRef.current = null
+    }
     await supabase.auth.signOut()
     router.push("/auth/login")
   }
@@ -1324,6 +1417,85 @@ export default function POSPage() {
     )
   }
 
+  if (authReady && (isAdmin ? branchConfirmed : !!activeBranch) && !sessionChecked) {
+    return (
+      <div className="app-canvas flex min-h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Revisando sesión de caja...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (authReady && sessionChecked && !cashSession) {
+    return (
+      <div className="app-canvas flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md rounded-3xl border-0 shadow-xl shadow-black/5">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-2 w-fit rounded-2xl bg-emerald-600 p-3">
+              <Wallet className="h-8 w-8 text-white" />
+            </div>
+            <CardTitle className="text-2xl">
+              {startPromptReason === "after_cut" ? "Iniciar siguiente turno" : "Iniciar caja"}
+            </CardTitle>
+            <CardDescription>
+              {startPromptReason === "after_cut"
+                ? "El corte cerró el turno anterior. Indica el saldo con el que empieza el nuevo turno."
+                : "Antes de vender, indica cuánto efectivo hay en caja al iniciar el turno."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+              <p className="text-muted-foreground">Sucursal</p>
+              <p className="font-semibold">{activeBranch?.name || "—"}</p>
+              <p className="mt-1 text-muted-foreground">Cajera</p>
+              <p className="font-semibold">{currentUser?.full_name || "—"}</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="opening-float">Saldo en caja al iniciar</Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="opening-float"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  autoFocus
+                  className="h-12 rounded-2xl border-0 bg-muted pl-7 text-lg font-semibold"
+                  value={openingFloatInput}
+                  onChange={(e) => setOpeningFloatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      startCashSession()
+                    }
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Cuenta el efectivo del fondo y escríbelo aquí para registrar el inicio del turno.
+              </p>
+            </div>
+            <Button
+              onClick={startCashSession}
+              disabled={sessionBusy}
+              className="shine press h-12 w-full rounded-2xl bg-emerald-600 text-base hover:bg-emerald-700"
+            >
+              {sessionBusy ? "Iniciando..." : "Iniciar caja"}
+            </Button>
+            <Button variant="ghost" className="w-full rounded-2xl" onClick={handleLogout}>
+              Cerrar sesión
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="app-canvas min-h-screen overflow-x-hidden">
       <header className="z-30 px-3 pt-3 sm:px-4 lg:sticky lg:top-0 lg:px-6">
@@ -1473,7 +1645,8 @@ export default function POSPage() {
                   </p>
                   {cashSession?.status === "open" && (
                     <p className="mt-1 text-[11px] text-white/75">
-                      Activa desde{" "}
+                      Inicio $
+                      {Number(cashSession.opening_float || boxBalance).toFixed(2)} · desde{" "}
                       {new Date(cashSession.opened_at).toLocaleTimeString("es-MX", {
                         hour: "2-digit",
                         minute: "2-digit",

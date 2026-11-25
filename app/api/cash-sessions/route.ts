@@ -127,7 +127,12 @@ export async function POST(request: Request) {
     }
 
     if (existing) {
+      // Si ya hay caja abierta, se reanuda; el saldo de inicio no se cambia
       return NextResponse.json({ session: existing, resumed: true })
+    }
+
+    if (!Number.isFinite(openingFloat) || openingFloat < 0) {
+      return NextResponse.json({ error: "Saldo de caja inválido" }, { status: 400 })
     }
 
     const { data: created, error: createError } = await supabase
