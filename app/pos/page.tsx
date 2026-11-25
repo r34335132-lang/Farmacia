@@ -48,6 +48,10 @@ import { CountUp, Magnetic, SplitText, stagger } from "@/components/motion"
 import { formatSessionDuration, type CashSession } from "@/lib/cash-session"
 
 const PRODUCTS_PER_PAGE = 30
+/** Sin actividad: pregunta si la caja sigue abierta. */
+const IDLE_WARN_MS = 30 * 60 * 1000
+/** Sin respuesta al aviso: cierra caja y sesión. */
+const IDLE_CLOSE_MS = 5 * 60 * 1000
 
 interface BranchInfo {
   id: string
@@ -127,7 +131,13 @@ export default function POSPage() {
   const [sessionChecked, setSessionChecked] = useState(false)
   const [openingFloatInput, setOpeningFloatInput] = useState("500")
   const [startPromptReason, setStartPromptReason] = useState<"entry" | "after_cut">("entry")
+  const [idlePromptOpen, setIdlePromptOpen] = useState(false)
+  const [idleSecondsLeft, setIdleSecondsLeft] = useState(Math.floor(IDLE_CLOSE_MS / 1000))
   const cashSessionRef = useRef<CashSession | null>(null)
+  const lastActivityRef = useRef(Date.now())
+  const idlePromptOpenRef = useRef(false)
+  const idleDeadlineRef = useRef<number | null>(null)
+  const idleClosingRef = useRef(false)
   const [pendingBranchId, setPendingBranchId] = useState<string | null>(null)
   const [quickOrderingId, setQuickOrderingId] = useState<string | null>(null)
   const [quickOrderedIds, setQuickOrderedIds] = useState<Set<string>>(new Set())
@@ -221,6 +231,95 @@ export default function POSPage() {
     return () => window.clearInterval(id)
   }, [cashSession?.id, cashSession?.status])
 
+  useEffect(() => {
+    idlePromptOpenRef.current = idlePromptOpen
+  }, [idlePromptOpen])
+
+  useEffect(() => {
+    if (!cashSession || cashSession.status !== "open") {
+      setIdlePromptOpen(false)
+      idlePromptOpenRef.current = false
+      idleDeadlineRef.current = null
+      return
+    }
+
+    lastActivityRef.current = Date.now()
+
+    const markActivity = () => {
+      if (idlePromptOpenRef.current || idleClosingRef.current) return
+      lastActivityRef.current = Date.now()
+    }
+
+    const events: Array<keyof WindowEventMap> = [
+      "pointerdown",
+      "keydown",
+      "touchstart",
+      "mousemove",
+      "scroll",
+      "click",
+    ]
+    for (const event of events) {
+      window.addEventListener(event, markActivity, { passive: true })
+    }
+
+    const checkIdle = () => {
+      if (idleClosingRef.current) return
+      const now = Date.now()
+
+      if (idlePromptOpenRef.current) {
+        const deadline = idleDeadlineRef.current ?? now
+        const left = Math.max(0, Math.ceil((deadline - now) / 1000))
+        setIdleSecondsLeft(left)
+        if (now >= deadline) {
+          void forceCloseForInactivity()
+        }
+        return
+      }
+
+      if (now - lastActivityRef.current >= IDLE_WARN_MS) {
+        idleDeadlineRef.current = now + IDLE_CLOSE_MS
+        idlePromptOpenRef.current = true
+        setIdlePromptOpen(true)
+        setIdleSecondsLeft(Math.floor(IDLE_CLOSE_MS / 1000))
+      }
+    }
+
+    const watchId = window.setInterval(checkIdle, 1000)
+    return () => {
+      for (const event of events) {
+        window.removeEventListener(event, markActivity)
+      }
+      window.clearInterval(watchId)
+    }
+  }, [cashSession?.id, cashSession?.status])
+
+  const stayActiveOnIdlePrompt = () => {
+    lastActivityRef.current = Date.now()
+    idleDeadlineRef.current = null
+    idlePromptOpenRef.current = false
+    setIdlePromptOpen(false)
+    setIdleSecondsLeft(Math.floor(IDLE_CLOSE_MS / 1000))
+  }
+
+  const forceCloseForInactivity = async () => {
+    if (idleClosingRef.current) return
+    idleClosingRef.current = true
+    try {
+      await closeCashSessionQuietly(cashSessionRef.current, "Cierre automático por inactividad (sin respuesta)")
+      setCashSession(null)
+      cashSessionRef.current = null
+      setIdlePromptOpen(false)
+      idlePromptOpenRef.current = false
+      idleDeadlineRef.current = null
+      setCart([])
+      await supabase.auth.signOut()
+      router.push("/auth/login")
+    } catch (error) {
+      console.error("Error cerrando por inactividad:", error)
+      idleClosingRef.current = false
+    }
+  }
+
   const checkExistingCashSession = async () => {
     const branchId = isAdmin ? selectedBranchId : activeBranch?.id
     if (!branchId) {
@@ -239,6 +338,8 @@ export default function POSPage() {
           setOpeningFloatInput(String(float))
         }
         setSessionTick(0)
+        lastActivityRef.current = Date.now()
+        idleClosingRef.current = false
       } else {
         setCashSession(null)
         cashSessionRef.current = null
@@ -280,6 +381,11 @@ export default function POSPage() {
       setOpeningFloatInput(String(Number(session.opening_float) || amount))
       setSessionTick(0)
       setStartPromptReason("entry")
+      lastActivityRef.current = Date.now()
+      idleClosingRef.current = false
+      idlePromptOpenRef.current = false
+      idleDeadlineRef.current = null
+      setIdlePromptOpen(false)
     } catch (error) {
       console.error("Error iniciando sesión de caja:", error)
       alert("Error al iniciar la caja")
@@ -288,14 +394,18 @@ export default function POSPage() {
     }
   }
 
-  const closeCashSessionQuietly = async (session?: CashSession | null) => {
+  const closeCashSessionQuietly = async (
+    session?: CashSession | null,
+    notes = "Cierre automático al cerrar sesión",
+  ) => {
     const active = session || cashSessionRef.current
     if (!active?.id || active.status !== "open") return null
     try {
       const res = await fetch("/api/cash-sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: active.id, notes: "Cierre automático al cerrar sesión" }),
+        body: JSON.stringify({ id: active.id, notes }),
+        keepalive: true,
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -1496,8 +1606,55 @@ export default function POSPage() {
     )
   }
 
+  const idleMinutes = Math.floor(idleSecondsLeft / 60)
+  const idleSecs = idleSecondsLeft % 60
+  const idleCountdown = `${idleMinutes}:${String(idleSecs).padStart(2, "0")}`
+
   return (
     <div className="app-canvas min-h-screen overflow-x-hidden">
+      <Dialog
+        open={idlePromptOpen}
+        onOpenChange={(open) => {
+          if (!open) stayActiveOnIdlePrompt()
+        }}
+      >
+        <DialogContent
+          className="rounded-3xl sm:max-w-md"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Clock className="h-5 w-5 text-amber-600" />
+              ¿La caja sigue abierta?
+            </DialogTitle>
+            <DialogDescription>
+              Llevas más de 30 minutos sin actividad. Confirma que sigues en el turno. Si no respondes, se cerrará la
+              caja y la sesión automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Se cierra en</p>
+            <p className="mt-1 text-5xl font-bold tabular-nums text-amber-900">{idleCountdown}</p>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              className="shine press h-12 w-full rounded-2xl bg-emerald-600 text-base hover:bg-emerald-700"
+              onClick={stayActiveOnIdlePrompt}
+            >
+              Sí, sigo aquí
+            </Button>
+            <Button
+              variant="outline"
+              className="h-11 w-full rounded-2xl"
+              onClick={() => void forceCloseForInactivity()}
+            >
+              Cerrar caja y sesión
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <header className="z-30 px-3 pt-3 sm:px-4 lg:sticky lg:top-0 lg:px-6">
         <div className="bento anim-rise-sm flex flex-col gap-3 px-3 py-2.5 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3 min-w-0">
